@@ -39,6 +39,7 @@ public static class DependencyInjection
 
         services.AddScoped<ILookupRepository, LookupRepository>();
         services.AddSingleton<ITenantDbNameProvider, TenantDbNameProvider>();
+        services.AddScoped<ILedgerRepository, LedgerRepository>();
         return services;
     }
 }

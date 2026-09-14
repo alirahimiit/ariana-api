@@ -23,17 +23,17 @@ public class SanadRepository : ISanadRepository
     // ═══════════════════════════════════════════════════
 
     public async Task<IEnumerable<SanadListDto>> GetListAsync(
-    long orgId,
-    long fyId,
-    string? fromDate = null,
-    string? toDate = null,
-    int? noFrom = null,
-    int? noTo = null,
-    int? vazeit = null,
-    int? kindSanad = null,
-    int page = 1,
-    int pageSize = 100,
-    CancellationToken ct = default)
+        long orgId,
+        long fyId,
+        string? fromDate = null,
+        string? toDate = null,
+        int? noFrom = null,
+        int? noTo = null,
+        int? vazeit = null,
+        int? kindSanad = null,
+        int page = 1,
+        int pageSize = 100,
+        CancellationToken ct = default)
     {
         // ساخت WHERE دینامیک
         var where = new StringBuilder(" WHERE 1=1 ");
@@ -77,38 +77,38 @@ public class SanadRepository : ISanadRepository
 
         // صفحه‌بندی
         if (page < 1) page = 1;
-        if (pageSize < 1 || pageSize > 1000) pageSize = 100;
+        if (pageSize < 1 || pageSize > 100000) pageSize = 100;
         var offset = (page - 1) * pageSize;
 
         parameters.Add("startRow", offset + 1);
         parameters.Add("endRow", offset + pageSize);
 
         // ⚠️ استفاده از ROW_NUMBER به جای OFFSET/FETCH
-        // چون SQL Server 2008 یا قدیمی‌تر OFFSET/FETCH رو پشتیبانی نمی‌کنه
+        // چون SQL Server 2008 R2 OFFSET/FETCH رو پشتیبانی نمی‌کنه
         var sql = $@"
-        SELECT * FROM (
-            SELECT 
-                P.ParentSanadID,
-                P.NO_Sanad,
-                P.Date_IN,
-                P.OtherParentSharh,
-                P.Vazeit,
-                P.KindSanad,
-                ISNULL(S.SumBed, 0) AS Mab_Bed,
-                ISNULL(S.SumBes, 0) AS Mab_Bes,
-                ROW_NUMBER() OVER (ORDER BY P.NO_Sanad DESC) AS RowNum
-            FROM ParentSanad P
-            LEFT JOIN (
-                SELECT ParentSanadCode,
-                       SUM(Mab_Bed) AS SumBed,
-                       SUM(Mab_Bes) AS SumBes
-                FROM Sanad
-                GROUP BY ParentSanadCode
-            ) S ON S.ParentSanadCode = P.ParentSanadID
-            {where}
-        ) AS T
-        WHERE T.RowNum BETWEEN @startRow AND @endRow
-        ORDER BY T.RowNum";
+            SELECT * FROM (
+                SELECT 
+                    P.ParentSanadID,
+                    P.NO_Sanad,
+                    P.Date_IN,
+                    P.OtherParentSharh,
+                    P.Vazeit,
+                    P.KindSanad,
+                    ISNULL(S.SumBed, 0) AS Mab_Bed,
+                    ISNULL(S.SumBes, 0) AS Mab_Bes,
+                    ROW_NUMBER() OVER (ORDER BY P.NO_Sanad DESC) AS RowNum
+                FROM ParentSanad P
+                LEFT JOIN (
+                    SELECT ParentSanadCode,
+                           SUM(Mab_Bed) AS SumBed,
+                           SUM(Mab_Bes) AS SumBes
+                    FROM Sanad
+                    GROUP BY ParentSanadCode
+                ) S ON S.ParentSanadCode = P.ParentSanadID
+                {where}
+            ) AS T
+            WHERE T.RowNum BETWEEN @startRow AND @endRow
+            ORDER BY T.RowNum";
 
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         return await conn.QueryAsync<SanadListDto>(
@@ -139,7 +139,7 @@ public class SanadRepository : ISanadRepository
     }
 
     // ═══════════════════════════════════════════════════
-    //  آیتم‌های سند
+    //  آیتم‌های سند (ردیف‌ها)
     // ═══════════════════════════════════════════════════
 
     public async Task<IEnumerable<SanadItemDto>> GetItemsAsync(
@@ -159,7 +159,11 @@ public class SanadRepository : ISanadRepository
                 S.Code_Tafzili2,
                 S.Mab_Bed,
                 S.Mab_Bes,
-                S.Meghdar,
+                CASE 
+                    WHEN S.Mab_Bed > 0 THEN ISNULL(S.Meghdar, 0)
+                    WHEN S.Mab_Bes > 0 THEN -1 * ISNULL(S.Meghdar, 0)
+                    ELSE 0
+                END AS Meghdar,
                 S.OtherSharh,
                 S.TikRow,
                 S.Code_Sharh,
