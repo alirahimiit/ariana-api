@@ -1,0 +1,30 @@
+# ===== .NET =====
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# ===== Secrets (خیلی مهم) =====
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Local.json
+*.secrets.json
+.env
+.env.*
+
+# ===== Logs =====
+Logs/
+*.log
+
+# ===== Build/Test =====
+TestResults/
+*.trx
+
+# ===== OS =====
+Thumbs.db
+.DS_Store
+
+# ===== Rider/VS Code =====
+.idea/
+.vscode/

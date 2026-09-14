@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>آریانا - سیستم حسابداری</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ═══════════════ صفحه ورود ═══════════════ -->
+<div id="loginView" class="login-wrapper">
+    <div class="login-card">
+        <div class="login-header">
+            <div class="logo-circle">آ</div>
+            <h1>سیستم حسابداری آریانا</h1>
+            <p class="muted">برای ادامه وارد شوید</p>
+        </div>
+
+        <form id="loginForm" class="login-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>سازمان</label>
+                    <select id="orgId" required>
+                        <option value="">در حال بارگذاری...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>دوره مالی</label>
+                    <select id="fyId" required>
+                        <option value="">-- ابتدا سازمان --</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>نام کاربری</label>
+                <input type="text" id="username" autocomplete="username" required>
+            </div>
+
+            <div class="form-group">
+                <label>رمز عبور</label>
+                <input type="password" id="password" autocomplete="current-password" required>
+            </div>
+
+            <div class="form-group">
+                <label>API Key</label>
+                <input type="text" id="apiKey" value="dev-api-key-change-in-production" required>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block">
+                <span id="loginBtnText">ورود</span>
+            </button>
+
+            <div id="loginError" class="error-box hidden"></div>
+        </form>
+    </div>
+</div>
+
+<!-- ═══════════════ اپلیکیشن اصلی ═══════════════ -->
+<div id="appView" class="app-wrapper hidden">
+    
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo-mini">آ</div>
+            <span>آریانا</span>
+        </div>
+
+        <nav class="nav">
+            <a class="nav-item active" data-page="dashboard">
+                <span class="nav-icon">📊</span>
+                <span>داشبورد</span>
+            </a>
+            <a class="nav-item" data-page="sanad">
+                <span class="nav-icon">📄</span>
+                <span>اسناد</span>
+            </a>
+            <a class="nav-item" data-page="hesab">
+                <span class="nav-icon">🏦</span>
+                <span>حساب‌ها</span>
+            </a>
+            <a class="nav-item" data-page="sharh">
+                <span class="nav-icon">📝</span>
+                <span>شرح‌ها</span>
+            </a>
+            <a class="nav-item" data-page="kind">
+                <span class="nav-icon">🏷️</span>
+                <span>انواع سند</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <button id="logoutBtn" class="btn btn-ghost btn-block">
+                <span>🚪</span> خروج
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main">
+        <header class="topbar">
+            <h2 id="pageTitle">داشبورد</h2>
+            <div class="user-info">
+                <div class="user-avatar" id="userAvatar">م</div>
+                <div>
+                    <div class="user-name" id="userName">-</div>
+                    <div class="user-meta" id="userMeta">-</div>
+                </div>
+            </div>
+        </header>
+
+        <section id="content" class="content"></section>
+    </main>
+</div>
+
+<!-- ═══════════════ Modal ═══════════════ -->
+<div id="modal" class="modal hidden">
+    <div class="modal-overlay" data-close></div>
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3 id="modalTitle">جزئیات</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div id="modalBody" class="modal-body"></div>
+    </div>
+</div>
+
+<!-- ═══════════════ Toast ═══════════════ -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
