@@ -40,6 +40,8 @@ public static class DependencyInjection
         services.AddScoped<ILookupRepository, LookupRepository>();
         services.AddSingleton<ITenantDbNameProvider, TenantDbNameProvider>();
         services.AddScoped<ILedgerRepository, LedgerRepository>();
+        services.AddScoped<ITarazRepository, TarazRepository>();
+        services.AddScoped<IFactorRepository, FactorRepository>();
         return services;
     }
 }

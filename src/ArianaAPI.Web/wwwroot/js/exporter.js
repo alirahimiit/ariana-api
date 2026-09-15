@@ -90,15 +90,24 @@ const Exporter = {
             btn.textContent = 'در حال تهیه...';
 
             try {
-                let table;
-                if (options.getFullTable) {
-                    table = await options.getFullTable();
+                let content;
+                if (typeof options.customHtml === 'function') {
+                    content = await options.customHtml();
+                } else if (options.customHtml) {
+                    content = options.customHtml;
                 } else {
-                    table = this._resolveTable(el, options);
+                    let table;
+                    if (options.getFullTable) {
+                        table = await options.getFullTable();
+                    } else {
+                        table = this._resolveTable(el, options);
+                    }
+                    if (!table) { alert('جدولی یافت نشد'); return; }
+                    content = table.outerHTML;
                 }
-                if (!table) { alert('جدولی یافت نشد'); return; }
-                this.toExcel({
-                    table,
+
+                this.toExcelHtml({
+                    content,
                     title: options.title || 'گزارش',
                     subtitle: options.subtitle || '',
                     filename: options.filename || 'Report'
@@ -118,15 +127,24 @@ const Exporter = {
             btn.textContent = 'در حال تهیه...';
 
             try {
-                let table;
-                if (options.getFullTable) {
-                    table = await options.getFullTable();
+                let content;
+                if (typeof options.customHtml === 'function') {
+                    content = await options.customHtml();
+                } else if (options.customHtml) {
+                    content = options.customHtml;
                 } else {
-                    table = this._resolveTable(el, options);
+                    let table;
+                    if (options.getFullTable) {
+                        table = await options.getFullTable();
+                    } else {
+                        table = this._resolveTable(el, options);
+                    }
+                    if (!table) { alert('جدولی یافت نشد'); return; }
+                    content = table.outerHTML;
                 }
-                if (!table) { alert('جدولی یافت نشد'); return; }
-                this.print({
-                    table,
+
+                this.printHtml({
+                    content,
                     title: options.title || 'گزارش',
                     subtitle: options.subtitle || ''
                 });
@@ -150,7 +168,221 @@ const Exporter = {
         if (el.tagName === 'TABLE') return el;
         return el.querySelector('table');
     },
+    // ═══════════════════════════════════════════
+    //  Excel از HTML کامل
+    // ═══════════════════════════════════════════
+    toExcelHtml({ content, title = 'گزارش', subtitle = '', filename = 'Report' }) {
+        const now = new Date().toLocaleString('fa-IR');
 
+        const html = `
+            <html xmlns:x="urn:schemas-microsoft-com:office:excel" dir="rtl">
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: Tahoma; direction: rtl; }
+                    table { border-collapse: collapse; direction: rtl; font-family: Tahoma; width: 100%; }
+                    td, th {
+                        border: 1px solid #999;
+                        padding: 6px 10px;
+                        font-size: 12px;
+                        text-align: center;
+                    }
+                    th { background: #4F46E5; color: white; font-weight: bold; }
+                    .title { font-size: 16px; font-weight: bold; color: #4F46E5; background: #EEF2FF; }
+                    .meta  { font-size: 12px; color: #444; background: #F9FAFB; }
+                    .num { text-align: left; direction: ltr; }
+                    .text-left { text-align: left; }
+                    .text-center { text-align: center; }
+                    .section-title {
+                        font-size: 13px;
+                        font-weight: bold;
+                        color: #4F46E5;
+                        background: #EEF2FF;
+                        padding: 8px;
+                        margin-top: 12px;
+                    }
+                    tfoot td { font-weight: bold; background: #EEF2FF; }
+                </style>
+            </head>
+            <body>
+                <table>
+                    <tr><td class="title" colspan="20">${this._esc(title)}</td></tr>
+                    ${subtitle ? `<tr><td class="meta" colspan="20">${this._esc(subtitle)}</td></tr>` : ''}
+                    <tr><td class="meta" colspan="20">تاریخ تهیه: ${now}</td></tr>
+                </table>
+                ${content}
+            </body>
+            </html>
+        `;
+
+        const blob = new Blob(['\ufeff' + html], {
+            type: 'application/vnd.ms-excel;charset=utf-8'
+        });
+
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `${filename}_${new Date().toISOString().slice(0, 10)}.xls`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+    },
+
+    // ═══════════════════════════════════════════
+    //  چاپ از HTML کامل
+    // ═══════════════════════════════════════════
+    printHtml({ content, title = 'گزارش', subtitle = '' }) {
+        const now = new Date().toLocaleString('fa-IR');
+
+        const printWin = window.open('', '_blank', 'width=1200,height=800');
+        if (!printWin) { alert('لطفاً پاپ‌آپ را فعال کنید'); return; }
+
+        printWin.document.write(`
+            <!DOCTYPE html>
+            <html lang="fa" dir="rtl">
+            <head>
+                <meta charset="UTF-8">
+                <title>${this._esc(title)}</title>
+                <style>
+                    @page { size: A4 landscape; margin: 8mm 6mm; }
+                    * { box-sizing: border-box; }
+                    body {
+                        font-family: Tahoma, Arial, sans-serif;
+                        direction: rtl;
+                        margin: 0;
+                        padding: 12px;
+                        color: #111;
+                        font-size: 12px;
+                    }
+                    .header {
+                        text-align: center;
+                        margin-bottom: 12px;
+                        padding-bottom: 8px;
+                        border-bottom: 2px solid #4F46E5;
+                    }
+                    .header h1 {
+                        font-size: 17px;
+                        margin: 0 0 4px;
+                        color: #4F46E5;
+                    }
+                    .header .meta {
+                        font-size: 11px;
+                        color: #666;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-size: 11px;
+                    }
+                    th {
+                        background: #4F46E5 !important;
+                        color: white !important;
+                        padding: 6px 6px;
+                        border: 1px solid #333;
+                        font-weight: bold;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                    td {
+                        padding: 5px 6px;
+                        border: 1px solid #999;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                    tbody tr:nth-child(even) { background: #F9FAFB; }
+                    tfoot td {
+                        background: #EEF2FF !important;
+                        font-weight: bold;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                    .num { text-align: left; direction: ltr; font-variant-numeric: tabular-nums; }
+                    .text-left { text-align: left; }
+                    .text-center { text-align: center; }
+
+                    /* فاکتور هدر */
+                    .factor-info-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-bottom: 10px;
+                    }
+                    .factor-info-table td {
+                        border: 1px solid #ccc;
+                        padding: 6px 8px;
+                        font-size: 11px;
+                    }
+                    .factor-info-table .label {
+                        background: #EEF2FF !important;
+                        font-weight: bold;
+                        color: #4338CA;
+                        width: 110px;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                    .section-title {
+                        font-size: 13px;
+                        font-weight: bold;
+                        color: #4F46E5;
+                        background: #EEF2FF !important;
+                        padding: 6px 10px;
+                        margin: 12px 0 6px;
+                        border-right: 4px solid #4F46E5;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                    .totals-table {
+                        width: 100%;
+                        margin-top: 10px;
+                        border-collapse: collapse;
+                    }
+                    .totals-table td {
+                        border: 1px solid #999;
+                        padding: 6px 10px;
+                        font-size: 11px;
+                    }
+                    .totals-table .label {
+                        background: #F9FAFB !important;
+                        font-weight: bold;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                    .totals-table .final-row td {
+                        background: #EEF2FF !important;
+                        font-weight: bold;
+                        color: #4F46E5;
+                        font-size: 13px;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+
+                    button, .export-bar { display: none !important; }
+
+                    @media print {
+                        body { padding: 0; font-size: 10.5px; }
+                        .header h1 { font-size: 15px; }
+                        th, td { padding: 4px 5px; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>${this._esc(title)}</h1>
+                    <div class="meta">
+                        ${subtitle ? `<span>${this._esc(subtitle)}</span> | ` : ''}
+                        <span>تاریخ تهیه: ${now}</span>
+                    </div>
+                </div>
+                ${content}
+            </body>
+            </html>
+        `);
+
+        printWin.document.close();
+        setTimeout(() => {
+            printWin.focus();
+            printWin.print();
+        }, 500);
+    },
     // ═══════════════════════════════════════════
     //  Excel
     // ═══════════════════════════════════════════
