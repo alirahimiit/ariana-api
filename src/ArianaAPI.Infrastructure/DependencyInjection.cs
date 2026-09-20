@@ -51,6 +51,7 @@ public static class DependencyInjection
         services.AddScoped<ITafziliRepository, TafziliRepository>();
         services.AddScoped<IProfitLossRepository, ProfitLossRepository>();
         services.AddScoped<IBilanRepository, BilanRepository>();
+        services.AddScoped<IDayBookRepository, DayBookRepository>();
 
 
         return services;
