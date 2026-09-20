@@ -12,6 +12,8 @@
     <!-- ═══════════════ صفحه ورود ═══════════════ -->
     <div id="loginView" class="login-wrapper">
         <div class="login-card">
+            <div id="licenseWarning" class="license-warning hidden"></div>
+
             <div class="login-header">
                 <div class="logo-circle" id="loginLogo">
                     <span class="logo-text">آ</span>
@@ -81,42 +83,98 @@
                 </button>
             </div>
 
-            <nav class="nav">
-                <a class="nav-item" data-page="dashboard">
-                    <span class="nav-icon">📊</span>
-                    <span class="nav-label">داشبورد</span>
-                </a>
-                <a class="nav-item" data-page="sanad">
-                    <span class="nav-icon">📄</span>
-                    <span class="nav-label">اسناد</span>
-                </a>
-                <a class="nav-item" data-page="ledger">
-                    <span class="nav-icon">📒</span>
-                    <span class="nav-label">دفتر حساب</span>
-                </a>
-                <a class="nav-item" data-page="taraz">
-                    <span class="nav-icon">⚖️</span>
-                    <span class="nav-label">تراز حساب‌ها</span>
-                </a>
-                <a class="nav-item" data-page="factor">
-                    <span class="nav-icon">🧾</span>
-                    <span class="nav-label">فاکتورها</span>
-                </a>
+            <nav class="nav" id="appNav">
+                <div class="nav-group" data-group="main">
+                    <div class="nav-group-header" data-toggle-group="main">
+                        <span class="nav-group-icon">🏠</span>
+                        <span class="nav-group-label">اصلی</span>
+                        <span class="nav-group-arrow">▼</span>
+                    </div>
+                    <div class="nav-group-items">
+                        <a class="nav-item" data-page="dashboard">
+                            <span class="nav-icon">📊</span>
+                            <span class="nav-label">داشبورد</span>
+                        </a>
+                    </div>
+                </div>
 
-                <div class="nav-divider"></div>
+                <div class="nav-group" data-group="accounting">
+                    <div class="nav-group-header" data-toggle-group="accounting">
+                        <span class="nav-group-icon">📚</span>
+                        <span class="nav-group-label">حسابداری</span>
+                        <span class="nav-group-arrow">▼</span>
+                    </div>
+                    <div class="nav-group-items">
+                        <a class="nav-item" data-page="sanad">
+                            <span class="nav-icon">📄</span>
+                            <span class="nav-label">اسناد</span>
+                        </a>
+                        <a class="nav-item" data-page="ledger">
+                            <span class="nav-icon">📒</span>
+                            <span class="nav-label">دفتر حساب</span>
+                        </a>
+                        <a class="nav-item" data-page="taraz">
+                            <span class="nav-icon">⚖️</span>
+                            <span class="nav-label">تراز حساب‌ها</span>
+                        </a>
+                    </div>
+                </div>
 
-                <a class="nav-item" data-page="hesab">
-                    <span class="nav-icon">🏦</span>
-                    <span class="nav-label">حساب‌ها</span>
-                </a>
-                <a class="nav-item" data-page="sharh">
-                    <span class="nav-icon">📝</span>
-                    <span class="nav-label">شرح‌ها</span>
-                </a>
-                <a class="nav-item" data-page="kind">
-                    <span class="nav-icon">🏷️</span>
-                    <span class="nav-label">انواع سند</span>
-                </a>
+                <div class="nav-group" data-group="reports">
+                    <div class="nav-group-header" data-toggle-group="reports">
+                        <span class="nav-group-icon">📈</span>
+                        <span class="nav-group-label">گزارش‌ها</span>
+                        <span class="nav-group-arrow">▼</span>
+                    </div>
+                    <div class="nav-group-items">
+                        <a class="nav-item" data-page="profitloss">
+                            <span class="nav-icon">💰</span>
+                            <span class="nav-label">سود و زیان</span>
+                        </a>
+                        <a class="nav-item" data-page="bilan">
+                            <span class="nav-icon">⚖️</span>
+                            <span class="nav-label">بیلان</span>
+                        </a>
+                        <a class="nav-item" data-page="daybook">
+                            <span class="nav-icon">📘</span>
+                            <span class="nav-label">دفتر روزنامه</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="nav-group" data-group="base">
+                    <div class="nav-group-header" data-toggle-group="base">
+                        <span class="nav-group-icon">🗂️</span>
+                        <span class="nav-group-label">اطلاعات پایه</span>
+                        <span class="nav-group-arrow">▼</span>
+                    </div>
+                    <div class="nav-group-items">
+                        <a class="nav-item" data-page="factor">
+                            <span class="nav-icon">🧾</span>
+                            <span class="nav-label">فاکتورها</span>
+                        </a>
+                        <a class="nav-item" data-page="hesab">
+                            <span class="nav-icon">🏦</span>
+                            <span class="nav-label">حساب‌ها</span>
+                        </a>
+                        <a class="nav-item" data-page="tafzili">
+                            <span class="nav-icon">👥</span>
+                            <span class="nav-label">تفضیلی‌ها</span>
+                        </a>
+                        <a class="nav-item" data-page="article">
+                            <span class="nav-icon">🏷️</span>
+                            <span class="nav-label">کالاها</span>
+                        </a>
+                        <a class="nav-item" data-page="sharh">
+                            <span class="nav-icon">📝</span>
+                            <span class="nav-label">شرح‌ها</span>
+                        </a>
+                        <a class="nav-item" data-page="kind">
+                            <span class="nav-icon">🔖</span>
+                            <span class="nav-label">انواع سند</span>
+                        </a>
+                    </div>
+                </div>
             </nav>
 
             <div class="sidebar-footer">
@@ -175,7 +233,28 @@
     <!-- ═══════════════ Toast ═══════════════ -->
     <div id="toast" class="toast hidden"></div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
     <script src="js/exporter.js"></script>
+    <script src="js/form-builder.js"></script>
+    <script src="js/filter-panel.js"></script>
+    <script src="js/table-enhancer.js"></script>
+    <script src="js/core/helpers.js"></script>
+    <script src="js/core/state.js"></script>
+    <script src="js/core/http.js"></script>
+    <script src="js/features/sanad.js"></script>
+    <script src="js/features/sharh.js"></script>
+    <script src="js/features/kind.js"></script>
+    <script src="js/features/profitloss.js"></script>
+    <script src="js/features/bilan.js"></script>
+    <script src="js/features/article.js"></script>
+    <script src="js/features/factor.js"></script>
+    <script src="js/features/tafzili.js"></script>
+    <script src="js/features/daybook.js"></script>
+    <script src="js/features/dashboard.js"></script>
+    <script src="js/features/hesab.js"></script>
+    <script src="js/features/ledger.js"></script>
+    <script src="js/features/taraz.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

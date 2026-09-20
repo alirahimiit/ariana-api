@@ -184,10 +184,12 @@ public class TarazRepository : ITarazRepository
                 T.Code_Moein    AS CodeMoein,
                 T.Code_Tafzil   AS CodeTafzil,
                 T.Code_Tafzili2 AS CodeTafzili2,
-                ISNULL(H1.Name, '') AS ColName,
-                ISNULL(H2.Name, '') AS MoeinName,
-                ISNULL(H3.Name, '') AS TafzilName,
-                ISNULL(T2.Name, '') AS Tafzili2Name,
+                MAX(ISNULL(H1.Name, '')) AS ColName,
+                MAX(ISNULL(H2.Name, '')) AS MoeinName,
+                MAX(ISNULL(H3.Name, '')) AS TafzilName,
+                ''                       AS Tafzili2Name,
+                MAX(ISNULL(H2.HasTafzili, 0))  AS HasTafzili,
+                MAX(ISNULL(H2.HasTafzili2, 0)) AS HasTafzili2,
                 SUM(T.Mab_Bed)  AS MabBed,
                 SUM(T.Mab_Bes)  AS MabBes,
                 SUM(T.Meghdar)  AS Meghdar
@@ -239,11 +241,23 @@ public class TarazRepository : ITarazRepository
             }
 
             // ساخت نام کامل حساب
+            // ⭐ نام بر اساس سطح (بدون ترکیب)
+            // ⭐ نام ترکیبی بر اساس سطح
             var parts = new List<string>();
-            if (!string.IsNullOrWhiteSpace(it.ColName)) parts.Add(it.ColName);
-            if (!string.IsNullOrWhiteSpace(it.MoeinName)) parts.Add(it.MoeinName);
-            if (!string.IsNullOrWhiteSpace(it.TafzilName)) parts.Add(it.TafzilName);
-            if (!string.IsNullOrWhiteSpace(it.Tafzili2Name)) parts.Add(it.Tafzili2Name);
+
+            if (!string.IsNullOrWhiteSpace(it.ColName))
+                parts.Add(it.ColName);
+
+            if (level != "col" && !string.IsNullOrWhiteSpace(it.MoeinName))
+                parts.Add(it.MoeinName);
+
+            if ((level == "tafzil" || level == "tafzil2")
+                && !string.IsNullOrWhiteSpace(it.TafzilName))
+                parts.Add(it.TafzilName);
+
+            if (level == "tafzil2" && !string.IsNullOrWhiteSpace(it.Tafzili2Name))
+                parts.Add(it.Tafzili2Name);
+
             it.HesabName = string.Join(" - ", parts);
         }
 
@@ -408,4 +422,91 @@ public class TarazRepository : ITarazRepository
 
         return (sb.ToString(), p);
     }
+    // ═══════════════════════════════════════════
+    //  اسناد یک حساب خاص (برای Drill-Down)
+    // ═══════════════════════════════════════════
+    public async Task<IEnumerable<TarazSanadItemDto>> GetAccountSanadsAsync(
+    long orgId, long fyId, TarazSanadRequestDto req, CancellationToken ct = default)
+    {
+        var sb = new StringBuilder(" WHERE S.Code_Col > 0 ");
+        var p = new DynamicParameters();
+
+        if (req.CodeCol is > 0)
+        {
+            sb.Append(" AND S.Code_Col = @codeCol ");
+            p.Add("codeCol", req.CodeCol.Value);
+        }
+        if (req.CodeMoein is > 0)
+        {
+            sb.Append(" AND S.Code_Moein = @codeMoein ");
+            p.Add("codeMoein", req.CodeMoein.Value);
+        }
+        if (req.CodeTafzil is > 0)
+        {
+            sb.Append(" AND S.Code_Tafzil = @codeTafzil ");
+            p.Add("codeTafzil", req.CodeTafzil.Value);
+        }
+        if (req.CodeTafzili2 is > 0)
+        {
+            sb.Append(" AND S.Code_Tafzili2 = @codeTafzili2 ");
+            p.Add("codeTafzili2", req.CodeTafzili2.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(req.FromDate))
+        {
+            sb.Append(" AND P.Date_In >= @fromDate ");
+            p.Add("fromDate", req.FromDate);
+        }
+        if (!string.IsNullOrWhiteSpace(req.ToDate))
+        {
+            sb.Append(" AND P.Date_In <= @toDate ");
+            p.Add("toDate", req.ToDate);
+        }
+
+        // ⭐ استفاده از Subquery به جای JOIN برای نام‌ها
+        // تا از هر خطای احتمالی جلوگیری بشه
+        var sql = $@"
+            SELECT 
+                S.SanadID               AS SanadId,
+                S.ParentSanadCode       AS ParentSanadId,
+                P.No_Sanad              AS NoSanad,
+                P.Date_In               AS DateIn,
+                P.OtherParentSharh      AS OtherParentSharh,
+                S.OtherSharh            AS OtherSharh,
+                S.Code_Col              AS CodeCol,
+                S.Code_Moein            AS CodeMoein,
+                S.Code_Tafzil           AS CodeTafzil,
+                S.Code_Tafzili2         AS CodeTafzili2,
+                S.Mab_Bed               AS MabBed,
+                S.Mab_Bes               AS MabBes,
+                S.Meghdar               AS Meghdar,
+
+                ISNULL((SELECT TOP 1 Name FROM Hesab 
+                        WHERE Code_Col = S.Code_Col 
+                          AND Code_Moein = 0 
+                          AND Code_Tafzil = 0), '') AS ColName,
+
+                ISNULL((SELECT TOP 1 Name FROM Hesab 
+                        WHERE Code_Col = S.Code_Col 
+                          AND Code_Moein = S.Code_Moein 
+                          AND Code_Tafzil = 0), '') AS MoeinName,
+
+                ISNULL((SELECT TOP 1 Name FROM Hesab 
+                        WHERE Code_Col = -1 
+                          AND Code_Tafzil = S.Code_Tafzil), '') AS TafzilName,
+
+                '' AS Tafzili2Name
+
+            FROM Sanad S
+            INNER JOIN ParentSanad P ON P.ParentSanadID = S.ParentSanadCode
+            {sb}
+            ORDER BY P.No_Sanad, P.Date_In, S.RowNum";
+
+        _logger.LogDebug("Account Sanads SQL:\n{Sql}", sql);
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        return await conn.QueryAsync<TarazSanadItemDto>(
+            new CommandDefinition(sql, p, cancellationToken: ct));
+    }
+
 }

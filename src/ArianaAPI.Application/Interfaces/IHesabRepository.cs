@@ -22,4 +22,7 @@ public interface IHesabRepository
     /// <summary>همه حساب‌ها (برای tree کامل)</summary>
     Task<IEnumerable<HesabDto>> GetAllAsync(
         long orgId, long fyId, CancellationToken ct = default);
+    /// <summary>درخت کامل: کل → معین → تفصیلی</summary>
+    Task<IEnumerable<HesabTreeDto>> GetTreeAsync(
+        long orgId, long fyId, CancellationToken ct = default);
 }

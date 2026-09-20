@@ -15,11 +15,13 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+  
         // ═══ تنظیمات ═══
         services.Configure<AppSettings>(configuration);
         services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
         services.Configure<ApiKeySettings>(configuration.GetSection(ApiKeySettings.SectionName));
-
+//===========داشبورد===========
+        services.AddScoped<IDashboardRepository, DashboardRepository>();
         // ═══ Data Layer ═══
         services.AddSingleton<ITenantConnectionFactory, TenantConnectionFactory>();
 
@@ -36,12 +38,22 @@ public static class DependencyInjection
         services.AddScoped<IHesabRepository, HesabRepository>();
         services.AddScoped<ISharhRepository, SharhRepository>();
         services.AddScoped<IKindSanadRepository, KindSanadRepository>();
+       
+        services.AddSingleton<ILicenseService, LicenseService>();
+        services.AddScoped<ILookupRepository, LookupRepository>();
 
         services.AddScoped<ILookupRepository, LookupRepository>();
         services.AddSingleton<ITenantDbNameProvider, TenantDbNameProvider>();
         services.AddScoped<ILedgerRepository, LedgerRepository>();
         services.AddScoped<ITarazRepository, TarazRepository>();
         services.AddScoped<IFactorRepository, FactorRepository>();
+        services.AddScoped<IArticleRepository, ArticleRepository>();
+        services.AddScoped<ITafziliRepository, TafziliRepository>();
+        services.AddScoped<IProfitLossRepository, ProfitLossRepository>();
+        services.AddScoped<IBilanRepository, BilanRepository>();
+        services.AddScoped<IDayBookRepository, DayBookRepository>();
+
+
         return services;
     }
 }

@@ -50,6 +50,9 @@ public class TarazItemDto
     public string? Tafzili2Name { get; set; }
     public string? HesabName { get; set; }
 
+    public bool HasTafzili { get; set; }       // ← جدید
+    public bool HasTafzili2 { get; set; }      // ← جدید
+
     public decimal MabBed { get; set; }
     public decimal MabBes { get; set; }
     public decimal MabManBed { get; set; }
@@ -72,4 +75,51 @@ public class TarazResultDto
     public int PageSize { get; set; }
     public int TotalCount { get; set; }
     public int TotalPages { get; set; }
+}
+
+public class TarazSanadRequestDto
+{
+    public int? CodeCol { get; set; }
+    public int? CodeMoein { get; set; }
+    public int? CodeTafzil { get; set; }
+    public int? CodeTafzili2 { get; set; }
+
+    public string? FromDate { get; set; }
+    public string? ToDate { get; set; }
+}
+
+public class TarazSanadItemDto
+{
+    public long SanadId { get; set; }
+    public long ParentSanadId { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("noSanad")]
+    public int? NoSanad { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("dateIn")]
+    public string? DateIn { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("otherParentSharh")]
+    public string? OtherParentSharh { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("otherSharh")]
+    public string? OtherSharh { get; set; }
+
+    public int? CodeCol { get; set; }
+    public int? CodeMoein { get; set; }
+    public int? CodeTafzil { get; set; }
+    public int? CodeTafzili2 { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("mabBed")]
+    public decimal MabBed { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("mabBes")]
+    public decimal MabBes { get; set; }
+
+    public decimal? Meghdar { get; set; }
+
+    public string? ColName { get; set; }
+    public string? MoeinName { get; set; }
+    public string? TafzilName { get; set; }
+    public string? Tafzili2Name { get; set; }
 }

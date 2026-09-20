@@ -29,6 +29,7 @@ public class ApiKeyMiddleware
             path.StartsWith("/health") ||
             path.StartsWith("/api/auth/login") ||
             path.StartsWith("/api/auth/refresh") ||
+            path.StartsWith("/api/license") ||
             path.StartsWith("/api/lookup") ||
             path.StartsWith("/css") ||
             path.StartsWith("/js") ||

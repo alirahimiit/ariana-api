@@ -30,4 +30,17 @@ public class TarazController : ControllerBase
         var result = await _repo.GetTarazAsync(orgId, fyId, request, ct);
         return Ok(result);
     }
+    /// <summary>اسناد یک حساب خاص (برای Drill-Down)</summary>
+    [HttpPost("account-sanads")]
+    public async Task<ActionResult<IEnumerable<TarazSanadItemDto>>> GetAccountSanads(
+        [FromBody] TarazSanadRequestDto request,
+        CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        var result = await _repo.GetAccountSanadsAsync(orgId, fyId, request, ct);
+        return Ok(result);
+    }
+
 }
