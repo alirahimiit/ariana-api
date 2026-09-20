@@ -9,4 +9,7 @@ public interface ITarazRepository
         long fyId,
         TarazRequestDto request,
         CancellationToken ct = default);
+    // ⭐ جدید
+    Task<IEnumerable<TarazSanadItemDto>> GetAccountSanadsAsync(
+        long orgId, long fyId, TarazSanadRequestDto request, CancellationToken ct = default);
 }

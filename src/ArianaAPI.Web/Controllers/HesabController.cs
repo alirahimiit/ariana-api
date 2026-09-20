@@ -58,4 +58,13 @@ public class HesabController : ControllerBase
 
         return Ok(await _repo.GetAllAsync(orgId, fyId, ct));
     }
+    /// <summary>درخت کامل حساب‌ها</summary>
+    [HttpGet("tree")]
+    public async Task<ActionResult<IEnumerable<HesabTreeDto>>> GetTree(CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        return Ok(await _repo.GetTreeAsync(orgId, fyId, ct));
+    }
 }
