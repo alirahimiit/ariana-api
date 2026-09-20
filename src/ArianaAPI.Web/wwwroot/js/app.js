@@ -15,6 +15,17 @@ window.App = Object.assign(window.App || {}, {
     fmtSigned: (n) => window.App.Helpers.fmtSigned(n),
     api: (p, o) => window.App.Http.api(p, o),
 
+
+    toast: (msg, type) => window.App.UI.Toast.show(msg, type),
+    openModal: (title, body) => window.App.UI.Modal.open(title, body),
+    closeModal: () => window.App.UI.Modal.close(),
+    checkLicense: () => window.App.Auth.checkLicense(),
+    loadOrganizations: () => window.App.Auth.loadOrganizations(),
+    loadFiscalYears: (orgId) => window.App.Auth.loadFiscalYears(orgId),
+    handleLogin: (e) => window.App.Auth.handleLogin(e),
+    handleLogout: () => window.App.Auth.handleLogout(),
+    showLogin: () => window.App.Auth.showLogin(),
+    showApp: () => window.App.Auth.showApp(),
     // ═══════════════════════════════════════════
     //  INIT
     // ═══════════════════════════════════════════
@@ -164,39 +175,7 @@ window.App = Object.assign(window.App || {}, {
     isMobile() {
         return window.matchMedia('(max-width: 768px)').matches;
     },
-    async checkLicense() {
-        try {
-            const res = await fetch(`${this.baseUrl}/api/license/status`);
-            const data = await res.json();
-
-            const warningEl = document.getElementById('licenseWarning');
-
-            if (!data.isValid) {
-                warningEl.className = 'license-warning';
-                warningEl.innerHTML = `
-                <div>
-                    <strong>لایسنس نامعتبر است</strong><br>
-                    <small>${this.esc(data.errorMessage || '')}</small>
-                </div>
-            `;
-                warningEl.classList.remove('hidden');
-            } else {
-                warningEl.className = 'license-valid-info';
-                const custName = data.customerName && data.customerName.trim()
-                    ? data.customerName
-                    : '(بدون نام)';
-                warningEl.innerHTML = `
-                ✅ لایسنس معتبر | 
-                <strong>${this.esc(custName)}</strong>
-                | سازمان‌های مجاز: ${data.authorizedOrgs.length}
-                | انقضا: ${this.esc(data.expiresAt)}
-            `;
-                warningEl.classList.remove('hidden');
-            }
-        } catch (err) {
-            console.error('License check failed:', err);
-        }
-    },
+    
     // ═══════════════════════════════════════════
     //  DEVICE DETECTION
     // ═══════════════════════════════════════════
@@ -218,154 +197,9 @@ window.App = Object.assign(window.App || {}, {
             }
         });
     },
-    // ═══════════════════════════════════════════
-    //  LOOKUPS (سازمان / دوره مالی)
-    // ═══════════════════════════════════════════
-    async loadOrganizations() {
-        const select = document.getElementById('orgId');
-        if (!select) return;
 
-        select.innerHTML = '<option value="">در حال بارگذاری...</option>';
 
-        try {
-            const res = await fetch(`${this.baseUrl}/api/lookup/organizations`);
-            if (!res.ok) throw new Error('خطا در بارگذاری سازمان‌ها');
-
-            const list = await res.json();
-
-            if (!list || list.length === 0) {
-                select.innerHTML = '<option value="">سازمانی یافت نشد</option>';
-                return;
-            }
-
-            select.innerHTML = '<option value="">-- انتخاب کنید --</option>' +
-                list.map(o => `<option value="${o.code}">${this.esc(o.name)}</option>`).join('');
-
-            const savedOrg = this.state.user?.orgId;
-            if (savedOrg) {
-                select.value = savedOrg;
-                await this.loadFiscalYears(savedOrg);
-            }
-        } catch (err) {
-            console.error(err);
-            select.innerHTML = '<option value="">خطا در بارگذاری</option>';
-        }
-    },
-
-    async loadFiscalYears(orgId) {
-        const select = document.getElementById('fyId');
-        if (!select) return;
-
-        if (!orgId) {
-            select.innerHTML = '<option value="">-- ابتدا سازمان --</option>';
-            return;
-        }
-
-        select.innerHTML = '<option value="">در حال بارگذاری...</option>';
-
-        try {
-            const res = await fetch(`${this.baseUrl}/api/lookup/organizations/${orgId}/fiscal-years`);
-            if (!res.ok) throw new Error('خطا در بارگذاری دوره‌ها');
-
-            const list = await res.json();
-
-            if (!list || list.length === 0) {
-                select.innerHTML = '<option value="">دوره‌ای یافت نشد</option>';
-                return;
-            }
-
-            select.innerHTML = '<option value="">-- انتخاب کنید --</option>' +
-                list.map(f => {
-                    const label = (f.beginDate && f.endDate)
-                        ? `${f.name} (${f.beginDate} - ${f.endDate})`
-                        : f.name;
-                    return `<option value="${f.id}">${this.esc(label)}</option>`;
-                }).join('');
-
-            const savedFy = this.state.user?.fyId;
-            if (savedFy) select.value = savedFy;
-        } catch (err) {
-            console.error(err);
-            select.innerHTML = '<option value="">خطا در بارگذاری</option>';
-        }
-    },
-
-    // ═══════════════════════════════════════════
-    //  LOGIN / LOGOUT
-    // ═══════════════════════════════════════════
-    async handleLogin(e) {
-        e.preventDefault();
-
-        const btn = document.getElementById('loginBtnText');
-        const errBox = document.getElementById('loginError');
-        errBox.classList.add('hidden');
-
-        const orgVal = document.getElementById('orgId').value;
-        const fyVal = document.getElementById('fyId').value;
-
-        if (!orgVal || !fyVal) {
-            errBox.textContent = 'لطفاً سازمان و دوره مالی را انتخاب کنید';
-            errBox.classList.remove('hidden');
-            return;
-        }
-
-        btn.textContent = 'در حال ورود...';
-
-        const payload = {
-            orgId: parseInt(orgVal),
-            fyId: parseInt(fyVal),
-            username: document.getElementById('username').value,
-            password: document.getElementById('password').value
-        };
-        const apiKey = document.getElementById('apiKey').value;
-
-        try {
-            const res = await fetch(`${this.baseUrl}/api/auth/login`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Api-Key': apiKey
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({ error: 'خطای ناشناخته' }));
-                throw new Error(err.error || `خطا (${res.status})`);
-            }
-
-            const data = await res.json();
-            this.state.token = data.accessToken;
-            this.state.refreshToken = data.refreshToken;
-            this.state.user = data.user;
-            this.state.apiKey = apiKey;
-
-            window.App.State.persistAuth();  // ← ساده‌تر
-
-            localStorage.setItem('ariana_auth', JSON.stringify({
-                token: this.state.token,
-                refreshToken: this.state.refreshToken,
-                user: this.state.user,
-                apiKey: this.state.apiKey
-            }));
-
-            this.showApp();
-            this.navigate('dashboard');
-            this.toast('خوش آمدید!', 'success');
-        } catch (err) {
-            errBox.textContent = err.message;
-            errBox.classList.remove('hidden');
-        } finally {
-            btn.textContent = 'ورود';
-        }
-    },
-
-    handleLogout() {
-        window.App.State.clearAuth();
-        this.showLogin();
-        this.loadOrganizations();
-        this.toast('از سیستم خارج شدید');
-    },
+ 
     // ═══════════════════════════════════════════
     //  LOGO
     // ═══════════════════════════════════════════
@@ -695,37 +529,7 @@ window.App = Object.assign(window.App || {}, {
         });
     },
 
-    showLogin() {
-        document.getElementById('loginView').classList.remove('hidden');
-        document.getElementById('appView').classList.add('hidden');
-        const pw = document.getElementById('password');
-        if (pw) pw.value = '';
-    },
-
-    showApp() {
-        document.getElementById('loginView').classList.add('hidden');
-        document.getElementById('appView').classList.remove('hidden');
-
-        const u = this.state.user || {};
-        const initial = (u.fullName || u.username || '?').charAt(0);
-
-        // Topbar user
-        document.getElementById('userAvatar').textContent = initial;
-        document.getElementById('userName').textContent = u.fullName || u.username || '-';
-        document.getElementById('userMeta').textContent =
-            `${u.orgName || ''} - ${u.fyName || ''}`;
-
-        // ⭐ Sidebar user mini
-        const sidebarAvatar = document.getElementById('sidebarUserAvatar');
-        const sidebarName = document.getElementById('sidebarUserName');
-        const sidebarOrg = document.getElementById('sidebarUserOrg');
-        const sidebarSubtitle = document.getElementById('sidebarSubtitle');
-
-        if (sidebarAvatar) sidebarAvatar.textContent = initial;
-        if (sidebarName) sidebarName.textContent = u.fullName || u.username || '-';
-        if (sidebarOrg) sidebarOrg.textContent = u.orgName || '';
-        if (sidebarSubtitle && u.dbName) sidebarSubtitle.textContent = u.dbName;
-    },
+    
 
     // ═══════════════════════════════════════════
     //  API HELPER
@@ -806,27 +610,7 @@ window.App = Object.assign(window.App || {}, {
         }
     },
 
- 
-    // ═══════════════════════════════════════════
-    //  MODAL & TOAST
-    // ═══════════════════════════════════════════
-    openModal(title, bodyHtml) {
-        document.getElementById('modalTitle').textContent = title;
-        document.getElementById('modalBody').innerHTML = bodyHtml;
-        document.getElementById('modal').classList.remove('hidden');
-    },
 
-    closeModal() {
-        document.getElementById('modal').classList.add('hidden');
-    },
-
-    toast(message, type = '') {
-        const el = document.getElementById('toast');
-        el.textContent = message;
-        el.className = 'toast ' + type;
-        el.classList.remove('hidden');
-        setTimeout(() => el.classList.add('hidden'), 3000);
-    },
 
     // ═══════════════════════════════════════════
     //  HELPERS
