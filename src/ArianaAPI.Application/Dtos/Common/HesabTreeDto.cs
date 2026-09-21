@@ -11,6 +11,7 @@ public class HesabTreeDto
     public int? Vaziat { get; set; }
     public bool HasTafzili { get; set; }
     public bool HasTafzili2 { get; set; }
+    public bool IsStock { get; set; }
 
     public decimal SumBed { get; set; }
     public decimal SumBes { get; set; }

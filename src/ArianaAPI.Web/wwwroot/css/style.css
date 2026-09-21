@@ -1,3 +1,28 @@
+/* ═══════════════════════════════════════════════
+   Font: Vazirmatn (Local — بدون نیاز به اینترنت)
+   ═══════════════════════════════════════════════ */
+@font-face {
+    font-family: 'Vazirmatn';
+    src: url('/fonts/Vazirmatn/Vazirmatn-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    src: url('/fonts/Vazirmatn/Vazirmatn-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* ─── اعمال روی کل برنامه ─── */
+body, input, button, select, textarea {
+    font-family: 'Vazirmatn', Tahoma, Arial, sans-serif;
+}
+
+
 /* ═══════════════ متغیرها ═══════════════ */
 :root {
     --primary: #4F46E5;
@@ -2384,4 +2409,501 @@ table .code-col {
 
 .fb-section.collapsed .fb-section-body {
     display: none;
+}
+/* ═══════════════ SanadForm (Clean) ═══════════════ */
+.sanad-form {
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(90vh - 80px);
+}
+
+/* ═══ Modal پهن ═══ */
+.modal-box.wide-modal {
+    max-width: 1400px;
+}
+
+/* ═══ Header ═══ */
+.sanad-form-header {
+    display: grid;
+    grid-template-columns: 1.2fr 1.2fr 1fr 1fr;
+    gap: 10px;
+    padding: 12px;
+    background: #F9FAFB;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+}
+
+    .sanad-form-header .sf-field-wide {
+        grid-column: 1 / -1;
+    }
+
+/* ═══ Field ═══ */
+.sf-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+    .sf-field label {
+        font-size: 11px;
+        color: #6B7280;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .sf-field .req {
+        color: var(--danger);
+    }
+
+    .sf-field input,
+    .sf-field select {
+        padding: 6px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-family: inherit;
+        font-size: 13px;
+        background: #fff;
+        min-height: 34px;
+        transition: all 0.15s;
+    }
+
+        .sf-field input:focus,
+        .sf-field select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-light);
+        }
+
+.sf-hint {
+    color: var(--primary);
+    font-weight: 400;
+    font-size: 10.5px;
+}
+
+/* ═══ Rows header ═══ */
+.sanad-form-rows-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+    .sanad-form-rows-header h4 {
+        margin: 0;
+        font-size: 14px;
+        color: var(--text);
+    }
+
+/* ═══ Rows wrapper (scroll) ═══ */
+#sfRowsWrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px;
+    min-height: 100px;
+}
+
+/* ═══ Row (2-line) ═══ */
+.sf-row {
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    background: #fff;
+    align-items: flex-start;
+    transition: all 0.15s;
+}
+
+    .sf-row:hover {
+        border-color: var(--primary);
+        box-shadow: 0 2px 8px rgba(79,70,229,0.08);
+    }
+
+.sf-row-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--primary-light);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 12px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.sf-row-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.sf-line {
+    display: grid;
+    gap: 8px;
+}
+
+.sf-line-codes {
+    grid-template-columns: 1.3fr 1.3fr 1fr 1fr;
+}
+
+.sf-line-values {
+    grid-template-columns: 1fr 1fr 1fr 2fr;
+}
+
+.sf-row-del {
+    background: transparent;
+    border: 1px solid #FECACA;
+    color: var(--danger);
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    flex-shrink: 0;
+    margin-top: 18px;
+    transition: all 0.15s;
+}
+
+    .sf-row-del:hover {
+        background: #FEF2F2;
+        border-color: var(--danger);
+        transform: scale(1.05);
+    }
+
+.num-input {
+    text-align: left;
+    direction: ltr;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ═══ Sticky footer ═══ */
+.sanad-form-sticky {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    border-top: 2px solid var(--border);
+    padding-top: 8px;
+    margin-top: 8px;
+    z-index: 5;
+    box-shadow: 0 -4px 8px rgba(0,0,0,0.04);
+    flex-shrink: 0;
+}
+
+.sanad-form-totals {
+    display: flex;
+    gap: 20px;
+    justify-content: flex-end;
+    padding: 12px 16px;
+    background: #F9FAFB;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    border: 1px solid var(--border);
+}
+
+.sf-total-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 13px;
+}
+
+    .sf-total-item strong {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+
+.sanad-form-footer {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding-bottom: 4px;
+}
+
+.kbd-hint {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 6px;
+    background: rgba(0,0,0,0.08);
+    border-radius: 4px;
+    margin-right: 4px;
+    font-family: monospace;
+    color: #4B5563;
+}
+
+.sanad-row-count {
+    margin-right: auto;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* ═══ Row ناتراز ═══ */
+tr.row-unbalanced {
+    background: #FEF2F2 !important;
+    border-right: 3px solid #DC2626;
+}
+
+    tr.row-unbalanced:hover {
+        background: #FEE2E2 !important;
+    }
+
+/* ═══ هدر سورت‌پذیر ═══ */
+th.sortable-th {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+
+    th.sortable-th:hover {
+        background: #E0E7FF !important;
+    }
+
+/* ═══ Responsive ═══ */
+@media (max-width: 900px) {
+    .sanad-form-header {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .sf-line-codes {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .sf-line-values {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .sanad-form-header {
+        grid-template-columns: 1fr;
+    }
+
+    .sf-line-codes {
+        grid-template-columns: 1fr;
+    }
+
+    .sf-line-values {
+        grid-template-columns: 1fr;
+    }
+
+    .sf-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .sf-row-num {
+        align-self: flex-start;
+    }
+
+    .sf-row-del {
+        margin-top: 0;
+        align-self: flex-end;
+    }
+}
+/* ═══ Tafzil picker — input with button ═══ */
+.sf-input-with-btn {
+    display: flex;
+    gap: 4px;
+    align-items: stretch;
+}
+
+    .sf-input-with-btn input {
+        flex: 1;
+    }
+
+.sf-pick-btn {
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+    .sf-pick-btn:hover {
+        background: var(--primary-light);
+        border-color: var(--primary);
+    }
+
+/* ═══ Tafzil picker — overlay modal ═══ */
+.sf-picker-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+    padding: 20px;
+}
+
+.sf-picker-box {
+    background: #fff;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    overflow: hidden;
+}
+
+.sf-picker-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 14px;
+    background: #F9FAFB;
+}
+
+.sf-picker-close {
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 0 8px;
+    border-radius: 6px;
+}
+
+    .sf-picker-close:hover {
+        background: var(--bg);
+    }
+
+.sf-picker-search {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+    .sf-picker-search input {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 13px;
+    }
+
+        .sf-picker-search input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-light);
+        }
+
+.sf-picker-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.sf-picker-item {
+    display: flex;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.1s;
+}
+
+    .sf-picker-item:hover {
+        background: var(--primary-light);
+    }
+
+    .sf-picker-item.selected {
+        background: var(--primary);
+        color: white;
+    }
+
+.sf-picker-code {
+    font-family: 'Consolas', monospace;
+    font-weight: 700;
+    color: var(--primary);
+    min-width: 50px;
+    direction: ltr;
+}
+
+.sf-picker-item.selected .sf-picker-code {
+    color: white;
+}
+
+.sf-picker-name {
+    flex: 1;
+}
+
+.sf-picker-empty {
+    padding: 30px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+/* ═══ Picker — badges ═══ */
+.sf-picker-badges {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.sf-badge-mini {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #DBEAFE;
+    color: #1E40AF;
+    font-weight: 500;
+}
+
+.sf-badge-stock {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+.sf-picker-parent {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* ═══ meghdar اجباری برای انبار ═══ */
+.sf-required-stock {
+    background: #FFFBEB !important;
+    border-color: #F59E0B !important;
+}
+
+    .sf-required-stock:focus {
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2) !important;
+    }
+
+.sf-stock-req {
+    color: #92400E !important;
+    font-weight: 600;
+    font-size: 10px;
+}
+
+/* ═══ input disabled ═══ */
+.sf-field input:disabled {
+    background: #F3F4F6;
+    color: #9CA3AF;
+    cursor: not-allowed;
 }

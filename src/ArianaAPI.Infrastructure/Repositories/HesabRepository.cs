@@ -115,6 +115,7 @@ public class HesabRepository : IHesabRepository
                 H.Vaziat      AS Vaziat,
                 ISNULL(H.HasTafzili, 0)  AS HasTafzili,
                 ISNULL(H.HasTafzili2, 0) AS HasTafzili2,
+                ISNULL(IsStock, 0) AS IsStock,
 
                 -- ⭐ محاسبه‌ی پویا از Sanad
                 CASE 

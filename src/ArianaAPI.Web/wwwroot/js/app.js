@@ -45,6 +45,8 @@ window.App = Object.assign(window.App || {}, {
 
         // ⭐ اعمال لوگو
         this.applyLogo();
+        // ⭐ Nav groups (تاشو)
+        this.initNavGroups();
         // ⭐ Sidebar موبایل
         this.initSidebar();
 

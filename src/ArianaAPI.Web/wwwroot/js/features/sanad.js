@@ -19,11 +19,27 @@ window.App.Features.Sanad = (function () {
 
     // ─── state محلی این feature ───
     let _filters = {};
-
+    let _sort = { by: 'noSanad', dir: 'desc' };
     // ─── shortcut ها ───
     const H = window.App.Helpers;
     const S = window.App.State;
 
+    function sortIcon(field) {
+        if (_sort.by !== field) return '<span style="opacity:0.3;font-size:10px;">⇅</span>';
+        return _sort.dir === 'asc'
+            ? '<span style="color:#4F46E5;font-size:10px;">▲</span>'
+            : '<span style="color:#4F46E5;font-size:10px;">▼</span>';
+    }
+    function sortBy(field) {
+        if (_sort.by === field) {
+            _sort.dir = _sort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            _sort.by = field;
+            _sort.dir = 'asc';
+        }
+        window.App.state.sanadPage = 1;
+        loadList();
+    }
     // ═══════════════════════════════════════════
     //  RENDER — صفحه لیست
     // ═══════════════════════════════════════════
@@ -122,11 +138,13 @@ window.App.Features.Sanad = (function () {
                 filename: 'SanadList'
             });
 
-            window.App.enhanceTables(container);
+           // window.App.enhanceTables(container);
+
         } catch (err) {
             container.innerHTML = `<div class="error-box">${err.message}</div>`;
         }
     }
+
 
     function buildUrl() {
         const f = _filters || {};
@@ -140,6 +158,10 @@ window.App.Features.Sanad = (function () {
         if (f.noTo != null && f.noTo !== '') url += `&noTo=${parseInt(f.noTo)}`;
         if (f.vazeit != null && f.vazeit !== '') url += `&vazeit=${parseInt(f.vazeit)}`;
         if (f.kindSanad != null && f.kindSanad !== '') url += `&kindSanad=${parseInt(f.kindSanad)}`;
+        // ⭐ سورت
+        if (_sort.by) {
+            url += `&sortBy=${_sort.by}&sortDir=${_sort.dir}`;
+        }
         return url;
     }
 
@@ -147,8 +169,14 @@ window.App.Features.Sanad = (function () {
         const pageSize = S.getSettings().pageSize;
         const page = window.App.state.sanadPage;
 
-        const rows = items.map(s => `
-            <tr>
+        const rows = items.map(s => {
+            const bed = s.mabBed || 0;
+            const bes = s.mabBes || 0;
+            const diff = Math.abs(bed - bes);
+            const isUnbalanced = diff > 0.01;
+
+            return `
+            <tr class="${isUnbalanced ? 'row-unbalanced' : ''}">
                 <td class="num">${H.fmt(s.noSanad)}</td>
                 <td class="num">${H.esc(s.dateIn || '-')}</td>
                 <td>${H.esc(s.otherParentSharh || '-')}</td>
@@ -156,28 +184,42 @@ window.App.Features.Sanad = (function () {
                 <td>${kindSanadText(s.kindSanad)}</td>
                 <td class="num text-left">${H.fmt(s.mabBed)}</td>
                 <td class="num text-left">${H.fmt(s.mabBes)}</td>
-                <td>
+                <td class="text-center">
                     <button class="btn btn-sm btn-ghost"
-                            onclick="App.Features.Sanad.showDetail(${s.parentSanadID})">
-                        مشاهده
-                    </button>
+                            onclick="App.Features.Sanad.showDetail(${s.parentSanadID})"
+                            title="مشاهده">👁️</button>
+                    ${s.vazeit !== 2 ? `
+                        <button class="btn btn-sm btn-ghost"
+                                onclick="event.stopPropagation(); App.Features.SanadForm.openEdit(${s.parentSanadID})"
+                                title="ویرایش">✏️</button>
+                        <button class="btn btn-sm btn-ghost"
+                                onclick="event.stopPropagation(); App.Features.SanadForm.delete(${s.parentSanadID})"
+                                title="حذف" style="color:var(--danger);">🗑️</button>
+                    ` : ''}
                 </td>
-            </tr>
-        `).join('');
+            </tr>`;
+        }).join('');
 
         return `
             <div class="card">
+                <div class="card-title">
+                    <span>📄 اسناد حسابداری</span>
+                    <button class="btn btn-primary btn-sm"
+                        onclick="App.Features.SanadForm.openCreate()">
+                          ➕ سند جدید
+                    </button>
+                </div>
                 <div class="table-wrapper">
                     <table>
-                        <thead>
+                      <thead>
                             <tr>
-                                <th>شماره</th>
-                                <th>تاریخ</th>
-                                <th>شرح</th>
-                                <th>وضعیت</th>
-                                <th>نوع</th>
-                                <th class="text-left">بدهکار</th>
-                                <th class="text-left">بستانکار</th>
+                                <th class="sortable-th" onclick="App.Features.Sanad.sortBy('noSanad')">شماره ${sortIcon('noSanad')}</th>
+                                <th class="sortable-th" onclick="App.Features.Sanad.sortBy('dateIn')">تاریخ ${sortIcon('dateIn')}</th>
+                                <th class="sortable-th" onclick="App.Features.Sanad.sortBy('sharh')">شرح ${sortIcon('sharh')}</th>
+                                <th class="sortable-th" onclick="App.Features.Sanad.sortBy('vazeit')">وضعیت ${sortIcon('vazeit')}</th>
+                                <th class="sortable-th" onclick="App.Features.Sanad.sortBy('kindSanad')">نوع ${sortIcon('kindSanad')}</th>
+                                <th class="sortable-th text-left" onclick="App.Features.Sanad.sortBy('mabBed')">بدهکار ${sortIcon('mabBed')}</th>
+                                <th class="sortable-th text-left" onclick="App.Features.Sanad.sortBy('mabBes')">بستانکار ${sortIcon('mabBes')}</th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -408,7 +450,9 @@ window.App.Features.Sanad = (function () {
         render,
         loadList,
         gotoPage,
-        showDetail
+        showDetail,
+        buildUrl,
+        sortBy
     };
 })();
 
