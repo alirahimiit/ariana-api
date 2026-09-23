@@ -510,13 +510,14 @@ window.App = Object.assign(window.App || {}, {
             this.toast('تنظیمات ذخیره شد', 'success');
 
             // رفرش صفحه فعلی
+            const page = this.state.currentPage;
             if (this.state.currentPage === 'sanad') {
                 this.state.sanadPage = 1;
                 window.App.Features.Sanad.loadList();
             } else if (this.state.currentPage === 'article') {
-                this.runArticleList(1);
+                window.App.Features.Article.runList(1);
             } else if (this.state.currentPage === 'factor') {
-                this.runFactorList(1);
+                window.App.Features.Factor.runList(1);
             } else if (this.state.currentPage === 'ledger') {
                 // کاربر باید دوباره تهیه گزارش بزنه
             }
@@ -591,7 +592,29 @@ window.App = Object.assign(window.App || {}, {
             tafzili: 'تفضیلی‌ها',
             article: 'کالاها',
             sharh: 'شرح‌ها',
-            kind: 'انواع سند'
+            kind: 'انواع سند',
+            // ⭐ منوی ورود/خروج کالا
+            'factor-buy': 'فاکتور خرید',
+            'factor-sell': 'فاکتور فروش',
+            'factor-buy-return': 'مرجوع از خرید',
+            'factor-sell-return': 'مرجوع از فروش',
+            'factor-scrap': 'فروش ضایعات',
+            'factor-pre': 'پیش فاکتور',
+            'stock-receipt': 'ثبت رسید انبار',
+            'stock-transfer': 'ثبت حواله انبار',
+            'stock-return-receipt': 'ثبت رسید برگشتی',
+            'asset-goods': 'ثبت کالاهای اموالی',
+            'asset-goods-transfer': 'انتقالی اموالی',
+            'stock-count': 'انبار گردانی کالا',
+            // ⭐ منوی دریافت/پرداخت
+            'receive-cash': 'دریافت نقدی',
+            'receive-cheque': 'دریافت چکی',
+            'pay-cash': 'پرداخت نقدی',
+            'pay-cheque': 'پرداخت چکی',
+            // ⭐ گزارشات فاکتور
+            'report-factor': 'گزارش فاکتورها',
+            'report-sell-summary': 'خلاصه فروش',
+            'report-profit': 'سود و زیان فاکتورها'
         };
         document.getElementById('pageTitle').textContent = titles[page] || page;
 
@@ -609,6 +632,11 @@ window.App = Object.assign(window.App || {}, {
             case 'tafzili': window.App.Features.Tafzili.render(); break;
             case 'sharh': window.App.Features.Sharh.render(); break;
             case 'kind': window.App.Features.Kind.render(); break;
+
+            // ⭐ صفحات در حال توسعه — placeholder نمایش می‌ده
+            default:
+                window.App.renderComingSoon(page, titles[page] || page);
+                break;
         }
     },
 
@@ -678,6 +706,25 @@ window.App = Object.assign(window.App || {}, {
         };
         const [cls, label] = map[v] || ['badge-gray', 'نامشخص'];
         return `<span class="badge ${cls}">${label}</span>`;
+    },
+    // ⭐ صفحه‌ی «در حال توسعه» برای صفحات ساخته‌نشده
+    renderComingSoon(page, title) {
+        const c = document.getElementById('content');
+        c.innerHTML = `
+            <div class="card">
+                <div class="empty" style="padding: 60px 20px;">
+                    <div class="empty-icon" style="font-size:64px; opacity:0.4;">🚧</div>
+                    <h2 style="margin: 16px 0 8px; color: var(--text); font-size: 18px;">
+                        ${this.esc(title)}
+                    </h2>
+                    <p class="muted" style="font-size: 14px; margin-top: 8px;">
+                        این بخش در حال توسعه است
+                    </p>
+                    <p class="muted" style="font-size: 12px; margin-top: 4px; direction: ltr;">
+                        صفحه: ${this.esc(page)}
+                    </p>
+                </div>
+            </div>`;
     },
 
 });
