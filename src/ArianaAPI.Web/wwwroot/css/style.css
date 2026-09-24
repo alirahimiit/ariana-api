@@ -3653,3 +3653,135 @@ th.sortable-th {
         grid-template-columns: 1fr;
     }
 }
+/* ═══════════════════════════════════════════
+   TafziliForm (tf-*)
+   ═══════════════════════════════════════════ */
+
+.tf-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 4px;
+}
+
+/* ─── Sections ─── */
+.tf-section {
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-radius: 10px;
+    padding: 14px 16px;
+}
+
+.tf-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed #E5E7EB;
+}
+
+/* ─── Grid Layouts ─── */
+.tf-grid {
+    display: grid;
+    gap: 10px 14px;
+}
+
+.tf-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tf-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tf-grid-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.tf-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tf-field-full {
+    grid-column: 1 / -1;
+}
+
+.tf-field label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #4B5563;
+}
+
+    .tf-field label .req {
+        color: #DC2626;
+        margin-right: 2px;
+    }
+
+.tf-field input,
+.tf-field select,
+.tf-field textarea {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+    background: #FFFFFF;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    box-sizing: border-box;
+}
+
+    .tf-field input:focus,
+    .tf-field select:focus,
+    .tf-field textarea:focus {
+        outline: none;
+        border-color: var(--primary, #4F46E5);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+    }
+
+    .tf-field input[readonly] {
+        background: #F3F4F6;
+        color: #6B7280;
+        cursor: not-allowed;
+    }
+
+/* ─── Footer ─── */
+.tf-footer {
+    display: flex;
+    gap: 10px;
+    padding-top: 14px;
+    border-top: 1px solid #E5E7EB;
+    margin-top: 4px;
+}
+
+    .tf-footer .btn {
+        min-width: 110px;
+    }
+
+/* ─── kbd-hint ─── */
+.kbd-hint {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 6px;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+    margin-right: 4px;
+    font-family: monospace;
+}
+
+.btn-ghost .kbd-hint {
+    background: #E5E7EB;
+    color: #6B7280;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 768px) {
+    .tf-grid-2,
+    .tf-grid-3,
+    .tf-grid-4 {
+        grid-template-columns: 1fr;
+    }
+}

@@ -3,6 +3,7 @@ using ArianaAPI.Application.Interfaces;
 using ArianaAPI.Web.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ArianaAPI.Web.Filters;
 
 namespace ArianaAPI.Web.Controllers;
 
@@ -91,9 +92,9 @@ public class SanadController : ControllerBase
 
     /// <summary>ایجاد سند جدید</summary>
     [HttpPost]
+    [RequirePermission(101)]
     public async Task<ActionResult<SanadCreateResultDto>> Create(
-        [FromBody] SanadCreateDto dto,
-        CancellationToken ct)
+        [FromBody] SanadCreateDto dto, CancellationToken ct)
     {
         var orgId = User.GetOrgId();
         var fyId = User.GetFyId();
@@ -112,6 +113,7 @@ public class SanadController : ControllerBase
 
     /// <summary>ویرایش سند</summary>
     [HttpPut("{id:long}")]
+    [RequirePermission(102)]
     public async Task<IActionResult> Update(
         long id,
         [FromBody] SanadUpdateDto dto,
@@ -137,6 +139,7 @@ public class SanadController : ControllerBase
 
     /// <summary>حذف سند</summary>
     [HttpDelete("{id:long}")]
+    [RequirePermission(108)]
     public async Task<IActionResult> Delete(long id, CancellationToken ct)
     {
         var orgId = User.GetOrgId();

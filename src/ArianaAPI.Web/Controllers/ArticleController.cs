@@ -1,8 +1,10 @@
 ﻿using ArianaAPI.Application.DTOs.Article;
 using ArianaAPI.Application.Interfaces;
 using ArianaAPI.Web.Extensions;
+using ArianaAPI.Web.Filters;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
 
 namespace ArianaAPI.Web.Controllers;
 
@@ -38,6 +40,7 @@ public class ArticleController : ControllerBase
     }
 
     [HttpPut("{id:long}")]
+    [RequirePermission(191)]
     public async Task<IActionResult> Update(
         long id, [FromBody] ArticleUpdateDto dto, CancellationToken ct)
     {
@@ -86,6 +89,7 @@ public class ArticleController : ControllerBase
 
     /// <summary>درج کالای جدید</summary>
     [HttpPost]
+    [RequirePermission(190)]
     public async Task<ActionResult<ArticleCreateResultDto>> Create(
         [FromBody] ArticleCreateDto dto,
         CancellationToken ct)
@@ -114,6 +118,25 @@ public class ArticleController : ControllerBase
             return Ok(new { message = "کدینگ‌ها اصلاح شدند" });
         }
         catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>حذف کالا</summary>
+    [HttpDelete("{id:long}")]
+    [RequirePermission(192)]
+    public async Task<IActionResult> Delete(long id, CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        try
+        {
+            await _repo.DeleteAsync(orgId, fyId, id, ct);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
         {
             return BadRequest(new { error = ex.Message });
         }

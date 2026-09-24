@@ -65,6 +65,11 @@ window.App.Features.ArticleForm = (function () {
     //  OPEN CREATE
     // ═══════════════════════════════════════
     async function openCreate() {
+        // ⭐ گارد دسترسی
+        if (window.App.Permissions && !window.App.Permissions.can(190)) {
+            window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
+            return;
+        }
         try {
             await ensureLookups();
             _state = { mode: 'create', articleId: null, data: {} };
@@ -79,6 +84,11 @@ window.App.Features.ArticleForm = (function () {
     //  OPEN EDIT
     // ═══════════════════════════════════════
     async function openEdit(articleId) {
+        // ⭐ گارد دسترسی
+        if (window.App.Permissions && !window.App.Permissions.can(191)) {
+            window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
+            return;
+        }
         try {
             await ensureLookups();
             const data = await window.App.Http.api('/api/article/' + articleId);
@@ -749,9 +759,26 @@ window.App.Features.ArticleForm = (function () {
         return _cache;
     }
 
+    async function deleteArticle(articleId) {
+        if (window.App.Permissions && !window.App.Permissions.can(192)) {
+            window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
+            return;
+        }
+
+        if (!confirm('آیا از حذف این کالا مطمئن هستید؟')) return;
+
+        try {
+            await window.App.Http.api('/api/article/' + articleId, { method: 'DELETE' });
+            window.App.toast('کالا حذف شد', 'success');
+            window.App.Features.Article.runList(1);
+        } catch (err) {
+            window.App.toast('خطا: ' + err.message, 'error');
+        }
+    }
     return {
         openEdit: openEdit,
         openCreate: openCreate,
+        delete: deleteArticle,
         refreshNames: refreshNames,
         getLookups: getLookups
     };

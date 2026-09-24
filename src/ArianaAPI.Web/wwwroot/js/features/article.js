@@ -255,8 +255,13 @@ window.App.Features.Article = (function () {
                             onclick="App.Features.Article.showDetail(${a.id})"
                             title="مشاهده">👁️</button>
                     <button class="btn btn-sm btn-ghost"
+                            data-permission="191"
                             onclick="event.stopPropagation(); App.Features.ArticleForm.openEdit(${a.id})"
                             title="ویرایش">✏️</button>
+                    <button class="btn btn-sm btn-ghost"
+                            data-permission="192"
+                            onclick="event.stopPropagation(); App.Features.ArticleForm.delete(${a.id})"
+                            title="حذف" style="color:var(--danger);">🗑️</button>
                 </td>
             </tr>
         `;
@@ -273,6 +278,7 @@ window.App.Features.Article = (function () {
             <div class="card-title">
                 <span>🏷️ لیست کالاها (${totalCount.toLocaleString('fa-IR')})</span>
                 <button class="btn btn-primary btn-sm"
+                        data-permission="190"
                         onclick="App.Features.ArticleForm.openCreate()">
                     ➕ کالای جدید
                 </button>
@@ -305,6 +311,10 @@ window.App.Features.Article = (function () {
             </div>
             ${paginationHtml}
         </div>`;
+        // ⭐ اعمال permission
+        if (window.App.UI.PermissionGuard) {
+            window.App.UI.PermissionGuard.apply(container);
+        }
 
         // ⭐ Export
         // ⭐ Export

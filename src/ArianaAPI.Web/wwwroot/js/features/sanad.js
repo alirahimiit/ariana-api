@@ -130,7 +130,10 @@ window.App.Features.Sanad = (function () {
             }
 
             container.innerHTML = buildListHtml(items);
-
+            // ⭐ اعمال permission روی دکمه‌ها
+            if (window.App.UI.PermissionGuard) {
+                window.App.UI.PermissionGuard.apply(container);
+            }
             Exporter.attach(container, {
                 table: container.querySelector('table'),
                 title: 'لیست اسناد حسابداری',
@@ -188,14 +191,16 @@ window.App.Features.Sanad = (function () {
                     <button class="btn btn-sm btn-ghost"
                             onclick="App.Features.Sanad.showDetail(${s.parentSanadID})"
                             title="مشاهده">👁️</button>
-                    ${s.vazeit !== 2 ? `
-                        <button class="btn btn-sm btn-ghost"
-                                onclick="event.stopPropagation(); App.Features.SanadForm.openEdit(${s.parentSanadID})"
-                                title="ویرایش">✏️</button>
-                        <button class="btn btn-sm btn-ghost"
-                                onclick="event.stopPropagation(); App.Features.SanadForm.delete(${s.parentSanadID})"
-                                title="حذف" style="color:var(--danger);">🗑️</button>
-                    ` : ''}
+                        ${s.vazeit !== 2 ? `
+                            <button class="btn btn-sm btn-ghost"
+                                    data-permission="102"
+                                    onclick="event.stopPropagation(); App.Features.SanadForm.openEdit(${s.parentSanadID})"
+                                    title="ویرایش">✏️</button>
+                            <button class="btn btn-sm btn-ghost"
+                                    data-permission="108"
+                                    onclick="event.stopPropagation(); App.Features.SanadForm.delete(${s.parentSanadID})"
+                                    title="حذف" style="color:var(--danger);">🗑️</button>
+                        ` : ''}
                 </td>
             </tr>`;
         }).join('');
@@ -205,6 +210,7 @@ window.App.Features.Sanad = (function () {
                 <div class="card-title">
                     <span>📄 اسناد حسابداری</span>
                     <button class="btn btn-primary btn-sm"
+                        data-permission="101"
                         onclick="App.Features.SanadForm.openCreate()">
                           ➕ سند جدید
                     </button>

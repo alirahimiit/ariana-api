@@ -52,7 +52,8 @@ public static class DependencyInjection
         services.AddScoped<IProfitLossRepository, ProfitLossRepository>();
         services.AddScoped<IBilanRepository, BilanRepository>();
         services.AddScoped<IDayBookRepository, DayBookRepository>();
-
+        services.AddScoped<IMenuRegistryRepository, MenuRegistryRepository>();
+        services.AddScoped<IPermissionRepository, PermissionRepository>();
 
         return services;
     }

@@ -21,4 +21,7 @@ public interface IArticleRepository
     Task<ArticleCreateResultDto> CreateAsync(
         long orgId, long fyId, ArticleCreateDto dto, CancellationToken ct = default);
     Task FixCodingAsync(long orgId, long fyId, CancellationToken ct = default);
+
+    Task DeleteAsync(
+    long orgId, long fyId, long articleId, CancellationToken ct = default);
 }

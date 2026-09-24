@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Data;
+using System.Text;
 using ArianaAPI.Application.DTOs.Article;
 using ArianaAPI.Application.Interfaces;
 using ArianaAPI.Infrastructure.Data;
@@ -586,6 +587,44 @@ public class ArticleRepository : IArticleRepository
             Code = nextCode.Code,
             FullCode = nextCode.FullCode
         };
+    }
+    public async Task DeleteAsync(
+    long orgId, long fyId, long articleId, CancellationToken ct = default)
+    {
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        if (conn.State != ConnectionState.Open)
+            await conn.OpenAsync(ct);
+
+        using var tx = conn.BeginTransaction();
+        try
+        {
+            // ۱. چک کن در فاکتورها استفاده نشده
+            var used = await conn.ExecuteScalarAsync<int>(
+                new CommandDefinition(
+                    "SELECT COUNT(*) FROM FactorDetail WHERE ArticleID = @articleId",
+                    new { articleId }, transaction: tx, cancellationToken: ct));
+
+            if (used > 0)
+                throw new InvalidOperationException(
+                    "این کالا در فاکتورها استفاده شده و قابل حذف نیست");
+
+            // ۲. حذف از ArticleStock (many-to-many)
+            await conn.ExecuteAsync(new CommandDefinition(
+                "DELETE FROM ArticleStock WHERE ArticleID = @articleId",
+                new { articleId }, transaction: tx, cancellationToken: ct));
+
+            // ۳. حذف از ArticleNew
+            await conn.ExecuteAsync(new CommandDefinition(
+                "DELETE FROM ArticleNew WHERE ID = @articleId",
+                new { articleId }, transaction: tx, cancellationToken: ct));
+
+            tx.Commit();
+        }
+        catch
+        {
+            try { tx.Rollback(); } catch { }
+            throw;
+        }
     }
     // ═══════════════════════════════════════════
     //  اصلاح کدینگ‌های خراب (SP: UpDate_Article)

@@ -19,86 +19,117 @@ window.App.Features.DayBook = (function () {
     // ═══════════════════════════════════════════
     function render() {
         const c = document.getElementById('content');
+
+        // ⭐ مپینگ subKey → تنظیمات
+        const subToConfig = {
+            'Col': { level: 'col', mode: 'aggregated', label: 'سطح کل (تجمیعی)' },
+            'ColPerSanad': { level: 'col', mode: 'perSanad', label: 'سطح کل (بصورت سند)' },
+            'MoeinTafzil': { level: 'tafzil', mode: 'aggregated', label: 'سطح معین/تفضیل (تجمیعی)' },
+            'MoeinTafzil2': { level: 'tafzil2', mode: 'aggregated', label: 'سطح تفضیلی ۲ (تجمیعی)' }
+        };
+
+        const visibleSubs = window.App.Permissions
+            ? window.App.Permissions.getVisibleSubKeys('DayBook')
+            : ['Col', 'ColPerSanad', 'MoeinTafzil', 'MoeinTafzil2'];
+
+        const visibleConfigs = visibleSubs
+            .map(s => ({ sub: s, ...subToConfig[s] }))
+            .filter(x => x.level);
+
+        if (visibleConfigs.length === 0) {
+            c.innerHTML = `
+            <div class="card">
+                <div class="empty" style="padding: 60px 20px;">
+                    <div class="empty-icon" style="font-size:64px; opacity:0.4;">🚫</div>
+                    <h2 style="margin: 16px 0 8px; color: var(--text); font-size: 18px;">
+                        دسترسی ندارید
+                    </h2>
+                    <p class="muted" style="font-size: 14px;">
+                        شما به هیچ نوعی از دفتر روزنامه دسترسی ندارید
+                    </p>
+                </div>
+            </div>`;
+            return;
+        }
+
+        // ⭐ مقدار پیش‌فرض = اولین گزینه مجاز
+        _level = visibleConfigs[0].level;
+        _mode = visibleConfigs[0].mode;
+
+        // ⭐ ساخت گزینه‌های dropdown
+        const optionsHtml = visibleConfigs.map((cfg, i) => `
+        <div class="custom-select-option ${i === 0 ? 'selected' : ''}"
+             data-level="${cfg.level}" data-mode="${cfg.mode}">
+            ${cfg.label}
+        </div>
+    `).join('');
+
         c.innerHTML = `
-        <div class="card">
-            <div class="card-title">📘 تنظیمات دفتر روزنامه</div>
+    <div class="card">
+        <div class="card-title">📘 تنظیمات دفتر روزنامه</div>
 
-            <div class="form-group">
-                <label>نوع گزارش</label>
-                <div class="custom-select" id="dbModeWrap">
-                    <button type="button" class="custom-select-trigger" id="dbModeTrigger">
-                        <span class="custom-select-value">سطح کل (تجمیعی)</span>
-                        <span class="custom-select-arrow">▼</span>
-                    </button>
-                    <div class="custom-select-menu" id="dbModeMenu">
-                        <div class="custom-select-option selected" data-level="col" data-mode="aggregated">
-                            سطح کل (تجمیعی)
-                        </div>
-                        <div class="custom-select-option" data-level="col" data-mode="perSanad">
-                            سطح کل (بصورت سند)
-                        </div>
-                        <div class="custom-select-option" data-level="tafzil" data-mode="aggregated">
-                            سطح معین/تفضیل (تجمیعی)
-                        </div>
-                        <div class="custom-select-option" data-level="tafzil2" data-mode="aggregated">
-                            سطح تفضیلی ۲ (تجمیعی)
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="filters">
-                <div class="form-group">
-                    <label>از تاریخ سند</label>
-                    <input type="text" id="dbFromDate" placeholder="1404/01/01">
-                </div>
-                <div class="form-group">
-                    <label>تا تاریخ سند</label>
-                    <input type="text" id="dbToDate" placeholder="1404/12/29">
-                </div>
-                <div class="form-group">
-                    <label>از شماره سند</label>
-                    <input type="number" id="dbNoFrom">
-                </div>
-                <div class="form-group">
-                    <label>تا شماره سند</label>
-                    <input type="number" id="dbNoTo">
-                </div>
-                <div class="form-group">
-                    <label>وضعیت سند</label>
-                    <select id="dbVazeit">
-                        <option value="">همه</option>
-                        <option value="0">پیش‌نویس</option>
-                        <option value="1">رسیدگی</option>
-                        <option value="2">قطعی</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>نوع حساب‌ها</label>
-                    <select id="dbHesabOption">
-                        <option value="all">کلیه حساب‌ها</option>
-                        <option value="noZeroMandeh">حساب‌های با مانده صفر آورده نشود</option>
-                        <option value="noZeroGardesh">حساب‌های با گردش صفر آورده نشود</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>&nbsp;</label>
-                    <button class="btn btn-primary btn-block" id="dbBtnRun">
-                        📊 تهیه گزارش
-                    </button>
+        <div class="form-group">
+            <label>نوع گزارش</label>
+            <div class="custom-select" id="dbModeWrap">
+                <button type="button" class="custom-select-trigger" id="dbModeTrigger">
+                    <span class="custom-select-value">${visibleConfigs[0].label}</span>
+                    <span class="custom-select-arrow">▼</span>
+                </button>
+                <div class="custom-select-menu" id="dbModeMenu">
+                    ${optionsHtml}
                 </div>
             </div>
         </div>
 
-        <div id="dbResult">
-            <div class="empty">
-                <div class="empty-icon">📘</div>
-                <p>تنظیمات را انتخاب کنید و دکمه «تهیه گزارش» را بزنید</p>
+        <div class="filters">
+            <div class="form-group">
+                <label>از تاریخ سند</label>
+                <input type="text" id="dbFromDate" placeholder="1404/01/01">
             </div>
-        </div>`;
+            <div class="form-group">
+                <label>تا تاریخ سند</label>
+                <input type="text" id="dbToDate" placeholder="1404/12/29">
+            </div>
+            <div class="form-group">
+                <label>از شماره سند</label>
+                <input type="number" id="dbNoFrom">
+            </div>
+            <div class="form-group">
+                <label>تا شماره سند</label>
+                <input type="number" id="dbNoTo">
+            </div>
+            <div class="form-group">
+                <label>وضعیت سند</label>
+                <select id="dbVazeit">
+                    <option value="">همه</option>
+                    <option value="0">پیش‌نویس</option>
+                    <option value="1">رسیدگی</option>
+                    <option value="2">قطعی</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>نوع حساب‌ها</label>
+                <select id="dbHesabOption">
+                    <option value="all">کلیه حساب‌ها</option>
+                    <option value="noZeroMandeh">حساب‌های با مانده صفر آورده نشود</option>
+                    <option value="noZeroGardesh">حساب‌های با گردش صفر آورده نشود</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>&nbsp;</label>
+                <button class="btn btn-primary btn-block" id="dbBtnRun">
+                    📊 تهیه گزارش
+                </button>
+            </div>
+        </div>
+    </div>
 
-        _level = 'col';
-        _mode = 'aggregated';
+    <div id="dbResult">
+        <div class="empty">
+            <div class="empty-icon">📘</div>
+            <p>تنظیمات را انتخاب کنید و دکمه «تهیه گزارش» را بزنید</p>
+        </div>
+    </div>`;
 
         setupModeSelect();
 
@@ -140,6 +171,14 @@ window.App.Features.DayBook = (function () {
     //  RUN
     // ═══════════════════════════════════════════
     async function run(page = 1) {
+        // ⭐ گارد دسترسی
+        if (window.App.Permissions) {
+            const visibleSubs = window.App.Permissions.getVisibleSubKeys('DayBook');
+            if (visibleSubs.length === 0) {
+                window.App.toast('شما به دفتر روزنامه دسترسی ندارید', 'error');
+                return;
+            }
+        }
         const btn = document.getElementById('dbBtnRun');
         const container = document.getElementById('dbResult');
         if (!container) return;

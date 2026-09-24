@@ -204,28 +204,37 @@ window.App.Features.Tafzili = (function () {
 
         const rows = items.map(t => {
             const mandeh = t.mabMandeh ?? 0;
-            const mandehClass = mandeh > 0
-                ? 'color:#059669; font-weight:600;'
-                : (mandeh < 0 ? 'color:#DC2626; font-weight:600;' : 'color:#6B7280;');
+
 
             return `
-                <tr>
-                    <td class="num text-center">${t.codeTafzil || ''}</td>
-                    <td>${H.esc(t.name || '')}</td>
-                    <td>${H.esc(t.tafziliGroupName || '-')}</td>
-                    <td class="text-center">${kindBadge(t.kind, t.kindName)}</td>
-                    <td class="num text-center">${H.esc(t.mobile || '-')}</td>
-                    <td class="num text-center">${H.esc(t.melliCode || '-')}</td>
-                    <td class="num text-left">${H.fmt(t.sumBed)}</td>
-                    <td class="num text-left">${H.fmt(t.sumBes)}</td>
-                    <td class="num text-left" style="${mandehClass}">${H.fmt(Math.abs(mandeh))}</td>
-                    <td class="text-center">
-                        <button class="btn btn-sm btn-ghost"
-                                onclick="App.Features.Tafzili.showDetail(${t.id})">
-                            🔍 مشاهده
-                        </button>
-                    </td>
-                </tr>`;
+        <tr>
+            <td class="num text-center">${t.codeTafzil || ''}</td>
+            <td>${H.esc(t.name || '')}</td>
+            <td>${H.esc(t.tafziliGroupName || '-')}</td>
+            <td class="text-center">${kindBadge(t.kind, t.kindName)}</td>
+            <td class="num text-center">${H.esc(t.mobile || '-')}</td>
+            <td class="num text-center">${H.esc(t.melliCode || '-')}</td>
+            <td class="num text-left">${t.sumBed > 0 ? H.fmt(t.sumBed) : '—'}</td>
+            <td class="num text-left">${t.sumBes > 0 ? H.fmt(t.sumBes) : '—'}</td>
+            <td class="num text-left" style="color:${t.mabManBed > 0 ? '#059669' : '#D1D5DB'}; font-weight:${t.mabManBed > 0 ? '600' : '400'};">
+                ${t.mabManBed > 0 ? H.fmt(t.mabManBed) : '—'}
+            </td>
+            <td class="num text-left" style="color:${t.mabManBes > 0 ? '#DC2626' : '#D1D5DB'}; font-weight:${t.mabManBes > 0 ? '600' : '400'};">
+                ${t.mabManBes > 0 ? H.fmt(t.mabManBes) : '—'}
+            </td>
+            <td class="text-center">
+                <button class="btn btn-sm btn-ghost"
+                        onclick="App.Features.Tafzili.showDetail(${t.id})">👁️</button>
+                <button class="btn btn-sm btn-ghost"
+                        data-permission="194"
+                        onclick="App.Features.TafziliForm.openEdit(${t.id})"
+                        title="ویرایش">✏️</button>
+                <button class="btn btn-sm btn-ghost"
+                        data-permission="195"
+                        onclick="App.Features.TafziliForm.delete(${t.id})"
+                        title="حذف" style="color:var(--danger);">🗑️</button>
+            </td>
+        </tr>`;
         }).join('');
 
         const page = data.page || 1;
@@ -234,8 +243,13 @@ window.App.Features.Tafzili = (function () {
 
         container.innerHTML = `
             <div class="card">
-                <div class="card-title">
+              <div class="card-title">
                     <span>👥 لیست تفضیلی‌ها (${H.fmt(totalCount)})</span>
+                    <button class="btn btn-primary btn-sm"
+                            data-permission="193"
+                            onclick="App.Features.TafziliForm.openCreate()">
+                        ➕ تفضیلی جدید
+                    </button>
                 </div>
                 <div class="table-wrapper">
                     <table>
@@ -249,7 +263,8 @@ window.App.Features.Tafzili = (function () {
                                 <th style="width:110px;">کد ملی</th>
                                 <th class="text-left" style="width:110px;">گردش بدهکار</th>
                                 <th class="text-left" style="width:110px;">گردش بستانکار</th>
-                                <th class="text-left" style="width:110px;">مانده</th>
+                                <th class="text-left" style="width:110px;">مانده بدهکار</th>
+                                <th class="text-left" style="width:110px;">مانده بستانکار</th>
                                 <th style="width:90px;"></th>
                             </tr>
                         </thead>
@@ -258,6 +273,10 @@ window.App.Features.Tafzili = (function () {
                 </div>
                 ${buildPagination(page, totalPages, totalCount, items.length)}
             </div>`;
+        // ⭐ اعمال permission
+        if (window.App.UI.PermissionGuard) {
+            window.App.UI.PermissionGuard.apply(container);
+        }
 
         Exporter.attach(container, {
             title: 'لیست تفضیلی‌ها',
@@ -321,9 +340,10 @@ window.App.Features.Tafzili = (function () {
                 <td class="text-center">${H.esc(t.kindName || '-')}</td>
                 <td class="num text-center">${H.esc(t.mobile || '-')}</td>
                 <td class="num text-center">${H.esc(t.melliCode || '-')}</td>
-                <td class="num text-left">${H.fmt(t.sumBed)}</td>
-                <td class="num text-left">${H.fmt(t.sumBes)}</td>
-                <td class="num text-left">${H.fmt(Math.abs(t.mabMandeh || 0))}</td>
+                <td class="num text-left">${t.sumBed > 0 ? H.fmt(t.sumBed) : '-'}</td>
+                <td class="num text-left">${t.sumBes > 0 ? H.fmt(t.sumBes) : '-'}</td>
+                <td class="num text-left">${t.mabManBed > 0 ? H.fmt(t.mabManBed) : '-'}</td>
+                <td class="num text-left">${t.mabManBes > 0 ? H.fmt(t.mabManBes) : '-'}</td>
             </tr>
         `).join('');
 
@@ -339,7 +359,8 @@ window.App.Features.Tafzili = (function () {
                     <th>کد ملی</th>
                     <th class="text-left">گردش بدهکار</th>
                     <th class="text-left">گردش بستانکار</th>
-                    <th class="text-left">مانده</th>
+                    <th class="text-left">مانده بدهکار</th>
+                    <th class="text-left">مانده بستانکار</th>
                 </tr>
             </thead>
             <tbody>${rows}</tbody>`;
@@ -562,11 +583,17 @@ window.App.Features.Tafzili = (function () {
     //  GROUP MANAGER (CRUD)
     // ═══════════════════════════════════════════
     function openGroupManager() {
+        // ⭐ گارد دسترسی (حداقل یکی از CRUD)
+        if (window.App.Permissions &&
+            !window.App.Permissions.canAny([193, 194, 195])) {
+            window.App.toast('شما به مدیریت گروه‌های تفضیلی دسترسی ندارید', 'error');
+            return;
+        }
         const body = `
-            <div style="margin-bottom:16px;">
-                <button class="btn btn-primary" id="grpAddBtn">➕ گروه جدید</button>
-            </div>
-            <div id="grpList"><div class="loading"><div class="spinner"></div></div></div>`;
+                <div style="margin-bottom:16px;">
+                    <button class="btn btn-primary" id="grpAddBtn" data-permission="193">➕ گروه جدید</button>
+                </div>
+                <div id="grpList"><div class="loading"><div class="spinner"></div></div></div>`;
 
         window.App.openModal('⚙️ مدیریت گروه‌های تفضیلی', body);
 
@@ -577,6 +604,7 @@ window.App.Features.Tafzili = (function () {
     }
 
     async function loadGroupList() {
+
         const container = document.getElementById('grpList');
         if (!container) return;
 
@@ -605,10 +633,10 @@ window.App.Features.Tafzili = (function () {
                                     <td class="num text-center">${g.id}</td>
                                     <td>${H.esc(g.name || '')}</td>
                                     <td class="text-center">
-                                        <button class="btn btn-sm btn-ghost" data-edit="${g.id}">
+                                        <button class="btn btn-sm btn-ghost" data-edit="${g.id}" data-permission="194">
                                             ✏️ ویرایش
                                         </button>
-                                        <button class="btn btn-sm btn-ghost" data-del="${g.id}"
+                                        <button class="btn btn-sm btn-ghost" data-del="${g.id}" data-permission="195"
                                                 style="color:var(--danger);">
                                             🗑️
                                         </button>
@@ -618,7 +646,10 @@ window.App.Features.Tafzili = (function () {
                         </tbody>
                     </table>
                 </div>`;
-
+            // ⭐ اعمال permission
+            if (window.App.UI.PermissionGuard) {
+                window.App.UI.PermissionGuard.apply(container);
+            }
             container.querySelectorAll('[data-edit]').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const id = parseInt(btn.dataset.edit);

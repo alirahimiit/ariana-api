@@ -72,6 +72,11 @@ window.App.Features.SanadForm = (function () {
 
     // ═══ OPEN CREATE ═══
     async function openCreate() {
+        // ⭐ گارد دسترسی (defense in depth)
+        if (window.App.Permissions && !window.App.Permissions.can(101)) {
+            window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
+            return;
+        }
         _state = { isEdit: false, parentSanadId: null, items: [emptyRow()] };
         await ensureLookups();
         const body = buildFormHtml({ noSanad: '', dateIn: today(), otherParentSharh: '', vazeit: 0, kindSanad: 0 });
@@ -83,6 +88,10 @@ window.App.Features.SanadForm = (function () {
 
     // ═══ OPEN EDIT ═══
     async function openEdit(id) {
+        if (window.App.Permissions && !window.App.Permissions.can(102)) {
+            window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
+            return;
+        }
         try {
             const vRes = await window.App.Http.api(`/api/sanad/${id}/vazeit`);
             if (vRes?.vazeit === 2) { window.App.toast('سند قطعی قابل ویرایش نیست', 'error'); return; }
@@ -626,6 +635,11 @@ window.App.Features.SanadForm = (function () {
 
     // ═══ DELETE ═══
     async function deleteSanad(id) {
+        // ⭐ گارد دسترسی
+        if (window.App.Permissions && !window.App.Permissions.can(108)) {
+            window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
+            return;
+        }
         if (!confirm('آیا از حذف این سند مطمئن هستید؟')) return;
         try {
             await window.App.Http.api(`/api/sanad/${id}`, { method: 'DELETE' });

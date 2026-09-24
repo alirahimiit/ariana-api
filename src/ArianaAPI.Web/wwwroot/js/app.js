@@ -23,7 +23,10 @@ window.App = Object.assign(window.App || {}, {
     loadOrganizations: () => window.App.Auth.loadOrganizations(),
     loadFiscalYears: (orgId) => window.App.Auth.loadFiscalYears(orgId),
     handleLogin: (e) => window.App.Auth.handleLogin(e),
-    handleLogout: () => window.App.Auth.handleLogout(),
+    handleLogout: () => {
+        window.App.Permissions.clear();
+        return window.App.Auth.handleLogout();
+    },
     showLogin: () => window.App.Auth.showLogin(),
     showApp: () => window.App.Auth.showApp(),
     // ═══════════════════════════════════════════
@@ -34,6 +37,7 @@ window.App = Object.assign(window.App || {}, {
         window.App.Http.init(window.location.origin);   // ← window.App
         window.App.State.init();                        // ← window.App
 
+        window.App.Permissions.restore();
         // ⭐ بازیابی از localStorage — الان App.State این کار رو می‌کنه
         //    (این خط رو نگه دار فقط اگه قبلاً اینجا localStorage رو خودت می‌خوندی)
         // const saved = localStorage.getItem('ariana_auth');
@@ -78,6 +82,12 @@ window.App = Object.assign(window.App || {}, {
             this.checkLicense();
             this.loadOrganizations();
         }
+        // ⭐ لود رجیستری منوها (اگه کاربر لاگین هست)
+        if (this.state.token) {
+            window.App.Permissions.loadRegistry().then(() => {
+                window.App.Permissions.applyMenuFilter();
+            });
+        }
     },
 
     // ═══════════════════════════════════════════
@@ -119,6 +129,14 @@ window.App = Object.assign(window.App || {}, {
                 localStorage.setItem('ariana_nav_groups', JSON.stringify(stored));
             } catch (e) { /* ignore */ }
         }
+    },
+    // ⭐ آیا کاربر مجازه این صفحه رو ببینه؟
+    _canAccessPage(page) {
+        const item = document.querySelector(`.nav-item[data-page="${page}"]`);
+        if (!item) return true;   // صفحه‌ای که توی منو نیست → آزاد
+        const key = item.getAttribute('data-menu-key');
+        if (!key) return true;    // بدون کلید → آزاد
+        return window.App.Permissions.hasMenu(key);
     },
     // ═══════════════════════════════════════════
     //  SIDEBAR (mobile drawer)
@@ -573,7 +591,13 @@ window.App = Object.assign(window.App || {}, {
         if (this.isMobile()) this.closeSidebar();
 
         this.state.currentPage = page;
+        // ⭐ چک دسترسی
+        if (!this._canAccessPage(page)) {
+            this.toast('شما به این بخش دسترسی ندارید', 'error');
+            return;
+        }
         this._expandGroupOfPage(page);
+
 
         document.querySelectorAll('.nav-item').forEach(el => {
             el.classList.toggle('active', el.dataset.page === page);
@@ -725,6 +749,9 @@ window.App = Object.assign(window.App || {}, {
                     </p>
                 </div>
             </div>`;
+        if (window.App.UI.PermissionGuard) {
+            window.App.UI.PermissionGuard.apply(c);
+        }
     },
 
 });

@@ -1,4 +1,6 @@
-﻿namespace ArianaAPI.Application.DTOs.Auth;
+﻿using ArianaAPI.Application.DTOs.Permissions;
+
+namespace ArianaAPI.Application.DTOs.Auth;
 
 public class LoginResponseDto
 {
@@ -6,6 +8,8 @@ public class LoginResponseDto
     public string RefreshToken { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
     public UserInfoDto User { get; set; } = null!;
+
+    public UserPermissionsDto? Permissions { get; set; }
 }
 
 public class UserInfoDto
