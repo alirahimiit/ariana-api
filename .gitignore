@@ -7,6 +7,8 @@ publish/
 publish_*/
 Publish-*/
 ArianaAPI-New/
+publish_iis/
+publish_scd/
 
 # ═══════════════════════════════════════════
 #  IDE
@@ -34,11 +36,13 @@ wwwroot_backup_*/
 ArianaAPI-Backup/
 
 # ═══════════════════════════════════════════
-#  🔴 Secrets
+#  🔴 Secrets (خیلی مهم!)
 # ═══════════════════════════════════════════
 appsettings.Production.json
+appsettings.Development.json
 *.lic
 ariana*.lic
+ariana.lic
 .ssh/
 *.pem
 id_rsa
@@ -52,7 +56,7 @@ Thumbs.db
 desktop.ini
 
 # ═══════════════════════════════════════════
-#  Deploy tools
+#  Deploy tools (local only)
 # ═══════════════════════════════════════════
 nssm.exe
 start-tunnel.bat
