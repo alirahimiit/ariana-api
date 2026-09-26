@@ -54,10 +54,15 @@ window.App = Object.assign(window.App || {}, {
         // ⭐ Sidebar موبایل
         this.initSidebar();
 
+        // ⭐ رصد خودکار جدول‌های جدید
+        this._initTableObserver();
+
+
         // ⭐ تشخیص دستگاه
         this.detectDevice();
         document.getElementById('btnSettings')?.addEventListener('click', () => this.openSettings());
 
+        document.getElementById('btnChangePassword')?.addEventListener('click', () => this.openChangePassword());
         // nav
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', () => this.navigate(item.dataset.page));
@@ -178,6 +183,33 @@ window.App = Object.assign(window.App || {}, {
             const dx = e.changedTouches[0].clientX - touchStartX;
             if (dx > 80) this.closeSidebar(); // سوییپ از راست
         }, { passive: true });
+    },
+    _initTableObserver() {
+        const self = this;
+        const observer = new MutationObserver((mutations) => {
+            let hasTable = false;
+            for (const m of mutations) {
+                for (const node of m.addedNodes) {
+                    if (node.nodeType === 1) {
+                        if (node.tagName === 'TABLE' || node.querySelector?.('table')) {
+                            hasTable = true;
+                            break;
+                        }
+                    }
+                }
+                if (hasTable) break;
+            }
+            if (hasTable) {
+                requestAnimationFrame(() => {
+                    window.App.UI.TableCardView?.apply(document);
+                });
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
     },
 
     openSidebar() {
@@ -693,6 +725,10 @@ window.App = Object.assign(window.App || {}, {
             if (window.TableEnhancer) {
                 TableEnhancer.enhance(root);
             }
+            // ⭐ تبدیل به کارت در موبایل
+            if (window.App.UI.TableCardView) {
+                window.App.UI.TableCardView.apply(root);
+            }
         });
     },
 
@@ -752,6 +788,111 @@ window.App = Object.assign(window.App || {}, {
         if (window.App.UI.PermissionGuard) {
             window.App.UI.PermissionGuard.apply(c);
         }
+    },
+
+    // ═══════════════════════════════════════════
+    //  تغییر رمز
+    // ═══════════════════════════════════════════
+    openChangePassword() {
+        const user = this.state.user || {};
+
+        const body = `
+        <div class="pwd-form">
+            <div class="pwd-user-banner">
+                <div class="pwd-user-avatar">${this.esc((user.fullName || user.username || '?').charAt(0))}</div>
+                <div>
+                    <div class="pwd-user-name">${this.esc(user.fullName || user.username || '-')}</div>
+                    <div class="pwd-user-meta">${this.esc(user.orgName || '')} - ${this.esc(user.fyName || '')}</div>
+                </div>
+            </div>
+
+            <div class="pwd-field">
+                <label>رمز فعلی <span class="req">*</span></label>
+                <input type="password" id="pwdCurrent" autocomplete="current-password" placeholder="رمز فعلی خود را وارد کنید">
+            </div>
+
+            <div class="pwd-field">
+                <label>رمز جدید <span class="req">*</span></label>
+                <input type="password" id="pwdNew" autocomplete="new-password" placeholder="حداقل ۴ کاراکتر">
+            </div>
+
+            <div class="pwd-field">
+                <label>تأیید رمز جدید <span class="req">*</span></label>
+                <input type="password" id="pwdConfirm" autocomplete="new-password" placeholder="رمز جدید را دوباره وارد کنید">
+            </div>
+
+            <div id="pwdError" class="pwd-error hidden"></div>
+
+            <div class="pwd-footer">
+                <button class="btn btn-primary" id="pwdSaveBtn">💾 ذخیره</button>
+                <button class="btn btn-ghost" data-close>انصراف</button>
+            </div>
+        </div>
+    `;
+
+        this.openModal('🔑 تغییر رمز عبور', body);
+
+        const modalBody = document.getElementById('modalBody');
+        const currentEl = modalBody.querySelector('#pwdCurrent');
+        const newEl = modalBody.querySelector('#pwdNew');
+        const confirmEl = modalBody.querySelector('#pwdConfirm');
+        const errorEl = modalBody.querySelector('#pwdError');
+
+        setTimeout(() => currentEl.focus(), 100);
+
+        const showError = (msg) => {
+            errorEl.textContent = msg;
+            errorEl.classList.remove('hidden');
+        };
+        const clearError = () => errorEl.classList.add('hidden');
+
+        const doSave = async () => {
+            clearError();
+
+            const cur = currentEl.value;
+            const nw = newEl.value;
+            const cf = confirmEl.value;
+
+            if (!cur) return showError('رمز فعلی را وارد کنید');
+            if (!nw) return showError('رمز جدید را وارد کنید');
+            if (nw.length < 4) return showError('رمز جدید باید حداقل ۴ کاراکتر باشد');
+            if (nw !== cf) return showError('رمز جدید و تأیید آن یکسان نیستند');
+            if (cur === nw) return showError('رمز جدید با رمز فعلی یکسان است');
+
+            const btn = modalBody.querySelector('#pwdSaveBtn');
+            const orig = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳ در حال ذخیره...';
+
+            try {
+                await window.App.Http.api('/api/auth/change-password', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        currentPassword: cur,
+                        newPassword: nw
+                    })
+                });
+
+                this.toast('رمز با موفقیت تغییر کرد', 'success');
+                this.closeModal();
+            } catch (err) {
+                btn.disabled = false;
+                btn.textContent = orig;
+                showError(err.message || 'خطا در تغییر رمز');
+            }
+        };
+
+        modalBody.querySelector('#pwdSaveBtn').addEventListener('click', doSave);
+        modalBody.querySelectorAll('[data-close]').forEach(el => {
+            el.addEventListener('click', () => this.closeModal());
+        });
+
+        // Enter برای ذخیره
+        [currentEl, newEl, confirmEl].forEach(el => {
+            el.addEventListener('keydown', e => {
+                if (e.key === 'Enter') { e.preventDefault(); doSave(); }
+            });
+        });
     },
 
 });

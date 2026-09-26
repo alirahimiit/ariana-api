@@ -21,4 +21,9 @@ public interface IUserRepository
         long fyId,
         long userId,
         CancellationToken ct = default);
+
+    Task<bool> ChangePasswordAsync(
+        long orgId, long fyId, long userId,
+        string currentPassword, string newPassword,
+        CancellationToken ct = default);
 }
