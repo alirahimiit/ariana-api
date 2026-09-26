@@ -24,91 +24,123 @@ window.App.Features.Taraz = (function () {
         _drill = null;
         _currentItems = [];
 
+        // ⭐ چک زیرمجموعه‌های مجاز
+        const subToLevel = {
+            'Col': 'col',
+            'Moein': 'moein',
+            'Tafzili': 'tafzil',
+            'Tafzili2': 'tafzil2'
+        };
+        const levelLabels = {
+            col: 'کل',
+            moein: 'معین',
+            tafzil: 'تفصیلی 1',
+            tafzil2: 'تفصیلی 2'
+        };
+
+        const visibleSubs = window.App.Permissions
+            ? window.App.Permissions.getVisibleSubKeys('Taraz')
+            : ['Col', 'Moein', 'Tafzili', 'Tafzili2'];
+
+        const visibleLevels = visibleSubs
+            .map(s => subToLevel[s])
+            .filter(Boolean);
+
+        // اگه هیچ سطحی مجاز نبود
+        if (visibleLevels.length === 0) {
+            c.innerHTML = `
+            <div class="card">
+                <div class="empty" style="padding: 60px 20px;">
+                    <div class="empty-icon" style="font-size:64px; opacity:0.4;">🚫</div>
+                    <h2 style="margin: 16px 0 8px; color: var(--text); font-size: 18px;">
+                        دسترسی ندارید
+                    </h2>
+                    <p class="muted" style="font-size: 14px;">
+                        شما به هیچ سطحی از تراز حساب‌ها دسترسی ندارید
+                    </p>
+                </div>
+            </div>`;
+            return;
+        }
+
+        const defaultLevel = visibleLevels[0];
+        const radioHtml = visibleLevels.map(lv => `
+        <label class="radio-item">
+            <input type="radio" name="tarazLevel" value="${lv}" ${lv === defaultLevel ? 'checked' : ''}>
+            <span>${levelLabels[lv]}</span>
+        </label>
+    `).join('');
+
         c.innerHTML = `
-        <div class="card">
-            <div class="card-title">⚖️ تنظیمات تراز</div>
+    <div class="card">
+        <div class="card-title">⚖️ تنظیمات تراز</div>
 
-            <div class="form-group">
-                <label>سطح گزارش</label>
-                <div class="radio-group">
-                    <label class="radio-item">
-                        <input type="radio" name="tarazLevel" value="col" checked>
-                        <span>کل</span>
-                    </label>
-                    <label class="radio-item">
-                        <input type="radio" name="tarazLevel" value="moein">
-                        <span>معین</span>
-                    </label>
-                    <label class="radio-item">
-                        <input type="radio" name="tarazLevel" value="tafzil">
-                        <span>تفصیلی 1</span>
-                    </label>
-                    <label class="radio-item">
-                        <input type="radio" name="tarazLevel" value="tafzil2">
-                        <span>تفصیلی 2</span>
-                    </label>
-                </div>
+        <div class="form-group">
+            <label>سطح گزارش</label>
+            <div class="radio-group">
+                ${radioHtml}
             </div>
-
-            <div class="form-group">
-                <label>نمایش سطوح</label>
-                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-                    <input type="checkbox" id="tarazSetDetail">
-                    <span>نمایش همه سطوح کدینگ</span>
-                </label>
-            </div>
-
-            <div class="filters">
-                <div class="form-group">
-                    <label>از تاریخ</label>
-                    <input type="text" id="tarazFromDate" placeholder="1403/01/01">
-                </div>
-                <div class="form-group">
-                    <label>تا تاریخ</label>
-                    <input type="text" id="tarazToDate" placeholder="1403/12/29">
-                </div>
-                <div class="form-group">
-                    <label>از شماره سند</label>
-                    <input type="number" id="tarazNoFrom">
-                </div>
-                <div class="form-group">
-                    <label>تا شماره سند</label>
-                    <input type="number" id="tarazNoTo">
-                </div>
-                <div class="form-group">
-                    <label>وضعیت سند</label>
-                    <select id="tarazVazeit">
-                        <option value="">همه</option>
-                        <option value="0">پیش‌نویس</option>
-                        <option value="1">رسیدگی</option>
-                        <option value="2">قطعی</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>نوع خروجی</label>
-                    <select id="tarazFilterOption">
-                        <option value="all">کلیه حساب‌ها</option>
-                        <option value="noZeroMandeh">حساب‌های با مانده صفر آورده نشود</option>
-                        <option value="noZeroGardesh" selected>حساب‌های با گردش صفر آورده نشود</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="filters" id="tarazAccountFilters"></div>
-
-            <button class="btn btn-primary" id="tarazBtnRun" style="margin-top:12px;">
-                ⚖️ تهیه تراز
-            </button>
         </div>
 
-        <div id="tarazResult">
-            <div class="empty">
-                <div class="empty-icon">⚖️</div>
-                <p>تنظیمات را انتخاب کنید و دکمه «تهیه تراز» را بزنید</p>
-            </div>
-        </div>`;
+        <div class="form-group">
+            <label>نمایش سطوح</label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="tarazSetDetail">
+                <span>نمایش همه سطوح کدینگ</span>
+            </label>
+        </div>
 
-        buildAccountFilters('moein');
+        <div class="filters">
+            <div class="form-group">
+                <label>از تاریخ</label>
+                <input type="text" id="tarazFromDate" placeholder="1403/01/01">
+            </div>
+            <div class="form-group">
+                <label>تا تاریخ</label>
+                <input type="text" id="tarazToDate" placeholder="1403/12/29">
+            </div>
+            <div class="form-group">
+                <label>از شماره سند</label>
+                <input type="number" id="tarazNoFrom">
+            </div>
+            <div class="form-group">
+                <label>تا شماره سند</label>
+                <input type="number" id="tarazNoTo">
+            </div>
+            <div class="form-group">
+                <label>وضعیت سند</label>
+                <select id="tarazVazeit">
+                    <option value="">همه</option>
+                    <option value="0">پیش‌نویس</option>
+                    <option value="1">رسیدگی</option>
+                    <option value="2">قطعی</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>نوع خروجی</label>
+                <select id="tarazFilterOption">
+                    <option value="all">کلیه حساب‌ها</option>
+                    <option value="noZeroMandeh">حساب‌های با مانده صفر آورده نشود</option>
+                    <option value="noZeroGardesh" selected>حساب‌های با گردش صفر آورده نشود</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="filters" id="tarazAccountFilters"></div>
+
+        <button class="btn btn-primary" id="tarazBtnRun" style="margin-top:12px;">
+            ⚖️ تهیه تراز
+        </button>
+    </div>
+
+    <div id="tarazResult">
+        <div class="empty">
+            <div class="empty-icon">⚖️</div>
+            <p>تنظیمات را انتخاب کنید و دکمه «تهیه تراز» را بزنید</p>
+        </div>
+    </div>`;
+
+        buildAccountFilters(defaultLevel);
 
         document.querySelectorAll('input[name="tarazLevel"]').forEach(r => {
             r.addEventListener('change', (e) => buildAccountFilters(e.target.value));
@@ -171,6 +203,14 @@ window.App.Features.Taraz = (function () {
     //  RUN — تهیه تراز
     // ═══════════════════════════════════════════
     async function run(page = 1, drillState = null) {
+        // ⭐ گارد دسترسی
+        if (window.App.Permissions) {
+            const visibleSubs = window.App.Permissions.getVisibleSubKeys('Taraz');
+            if (visibleSubs.length === 0) {
+                window.App.toast('شما به تراز دسترسی ندارید', 'error');
+                return;
+            }
+        }
         if (drillState) _drill = drillState;
 
         if (!_drill) {

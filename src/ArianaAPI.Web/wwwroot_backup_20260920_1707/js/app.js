@@ -692,17 +692,17 @@ const App = {
             this.closeModal();
             this.toast('تنظیمات ذخیره شد', 'success');
 
-            // رفرش صفحه فعلی
-            if (this.state.currentPage === 'sanad') {
+            // ⭐ رفرش صفحه فعلی با متدهای feature مستقیم
+            const page = this.state.currentPage;
+            if (page === 'sanad') {
                 this.state.sanadPage = 1;
-                this.loadSanadList();
-            } else if (this.state.currentPage === 'article') {
-                this.runArticleList(1);
-            } else if (this.state.currentPage === 'factor') {
-                this.runFactorList(1);
-            } else if (this.state.currentPage === 'ledger') {
-                // کاربر باید دوباره تهیه گزارش بزنه
+                window.App.Features.Sanad.loadList();
+            } else if (page === 'article') {
+                window.App.Features.Article.runList(1);
+            } else if (page === 'factor') {
+                window.App.Features.Factor.runList(1);
             }
+            // بقیه صفحات: کاربر باید خودش دوباره تهیه گزارش بزنه
         });
 
         // بستن

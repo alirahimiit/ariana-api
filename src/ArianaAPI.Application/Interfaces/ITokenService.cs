@@ -9,11 +9,9 @@ public interface ITokenService
         string username,
         long orgId,
         long fyId,
-        IEnumerable<string>? roles = null);
+        long userGroupCode = 0,
+        IEnumerable<long>? permissions = null);
 
     string GenerateRefreshToken();
-
-    ClaimsPrincipal? GetPrincipalFromExpiredToken(string token);
-
     DateTime GetAccessTokenExpiry();
 }

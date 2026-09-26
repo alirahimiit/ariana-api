@@ -3,6 +3,7 @@ using ArianaAPI.Application.Interfaces;
 using ArianaAPI.Web.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ArianaAPI.Web.Filters;
 
 namespace ArianaAPI.Web.Controllers;
 
@@ -18,6 +19,10 @@ public class SanadController : ControllerBase
         _repo = repo;
     }
 
+    // ═══════════════════════════════════════════
+    //  READ
+    // ═══════════════════════════════════════════
+
     /// <summary>لیست اسناد با فیلتر</summary>
     [HttpGet]
     public async Task<ActionResult<IEnumerable<SanadListDto>>> GetList(
@@ -27,6 +32,8 @@ public class SanadController : ControllerBase
         [FromQuery] int? noTo = null,
         [FromQuery] int? vazeit = null,
         [FromQuery] int? kindSanad = null,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] string? sortDir = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 100,
         CancellationToken ct = default)
@@ -35,7 +42,9 @@ public class SanadController : ControllerBase
         var fyId = User.GetFyId();
 
         var result = await _repo.GetListAsync(
-            orgId, fyId, fromDate, toDate, noFrom, noTo, vazeit, kindSanad, page, pageSize, ct);
+              orgId, fyId, fromDate, toDate, noFrom, noTo, vazeit, kindSanad,
+            sortBy, sortDir,
+            page, pageSize, ct);
 
         return Ok(result);
     }
@@ -75,5 +84,88 @@ public class SanadController : ControllerBase
 
         var count = await _repo.GetCountAsync(orgId, fyId, fromDate, toDate, vazeit, ct);
         return Ok(new { count });
+    }
+
+    // ═══════════════════════════════════════════
+    //  WRITE (جدید - فاز ۱۱)
+    // ═══════════════════════════════════════════
+
+    /// <summary>ایجاد سند جدید</summary>
+    [HttpPost]
+    [RequirePermission(101)]
+    public async Task<ActionResult<SanadCreateResultDto>> Create(
+        [FromBody] SanadCreateDto dto, CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+        var userCode = User.GetUserId();
+
+        try
+        {
+            var result = await _repo.CreateAsync(orgId, fyId, dto, userCode, ct);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>ویرایش سند</summary>
+    [HttpPut("{id:long}")]
+    [RequirePermission(102)]
+    public async Task<IActionResult> Update(
+        long id,
+        [FromBody] SanadUpdateDto dto,
+        CancellationToken ct)
+    {
+        if (id != dto.ParentSanadId)
+            return BadRequest(new { error = "شناسه سند در URL و بدنه یکسان نیست" });
+
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+        var userCode = User.GetUserId();
+
+        try
+        {
+            await _repo.UpdateAsync(orgId, fyId, dto, userCode, ct);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>حذف سند</summary>
+    [HttpDelete("{id:long}")]
+    [RequirePermission(108)]
+    public async Task<IActionResult> Delete(long id, CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+        var userCode = User.GetUserId();
+
+        try
+        {
+            await _repo.DeleteAsync(orgId, fyId, id, userCode, ct);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>وضعیت سند (برای چک قابل‌ویرایش بودن)</summary>
+    [HttpGet("{id:long}/vazeit")]
+    public async Task<ActionResult<int>> GetVazeit(long id, CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        var vazeit = await _repo.GetVazeitAsync(orgId, fyId, id, ct);
+        if (vazeit < 0) return NotFound();
+        return Ok(new { vazeit });
     }
 }

@@ -13,13 +13,9 @@ public class TokenService : ITokenService
 {
     private readonly JwtSettings _settings;
 
-    public TokenService(IOptions<JwtSettings> options)
+    public TokenService(IOptions<JwtSettings> settings)
     {
-        _settings = options.Value;
-
-        if (string.IsNullOrWhiteSpace(_settings.Key) || _settings.Key.Length < 32)
-            throw new InvalidOperationException(
-                "Jwt:Key باید حداقل ۳۲ کاراکتر باشه (256-bit برای HS256)");
+        _settings = settings.Value;
     }
 
     public string GenerateAccessToken(
@@ -27,22 +23,25 @@ public class TokenService : ITokenService
         string username,
         long orgId,
         long fyId,
-        IEnumerable<string>? roles = null)
+        long userGroupCode = 0,
+        IEnumerable<long>? permissions = null)
     {
         var claims = new List<Claim>
         {
-            new(JwtRegisteredClaimNames.Sub, userId.ToString()),
+            new(JwtRegisteredClaimNames.Sub, username),
             new(JwtRegisteredClaimNames.UniqueName, username),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new("userId", userId.ToString()),
             new("orgId", orgId.ToString()),
-            new("fyId", fyId.ToString())
+            new("fyId", fyId.ToString()),
+            new("userGroupCode", userGroupCode.ToString())
         };
 
-        if (roles != null)
+        // ⭐ اضافه کردن permissions
+        if (permissions != null)
         {
-            foreach (var role in roles)
-                claims.Add(new Claim(ClaimTypes.Role, role));
+            foreach (var code in permissions)
+                claims.Add(new Claim("perm", code.ToString()));
         }
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Key));
@@ -52,7 +51,7 @@ public class TokenService : ITokenService
             issuer: _settings.Issuer,
             audience: _settings.Audience,
             claims: claims,
-            expires: GetAccessTokenExpiry(),
+            expires: DateTime.UtcNow.AddMinutes(_settings.AccessTokenExpiryMinutes),
             signingCredentials: creds);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
@@ -60,41 +59,10 @@ public class TokenService : ITokenService
 
     public string GenerateRefreshToken()
     {
-        var randomBytes = new byte[64];
+        var bytes = new byte[64];
         using var rng = RandomNumberGenerator.Create();
-        rng.GetBytes(randomBytes);
-        return Convert.ToBase64String(randomBytes);
-    }
-
-    public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
-    {
-        var validationParams = new TokenValidationParameters
-        {
-            ValidateAudience = true,
-            ValidAudience = _settings.Audience,
-            ValidateIssuer = true,
-            ValidIssuer = _settings.Issuer,
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Key)),
-            ValidateLifetime = false // ← مهم: برای توکن منقضی
-        };
-
-        var handler = new JwtSecurityTokenHandler();
-        try
-        {
-            var principal = handler.ValidateToken(token, validationParams, out var securityToken);
-
-            if (securityToken is not JwtSecurityToken jwt ||
-                !jwt.Header.Alg.Equals(SecurityAlgorithms.HmacSha256,
-                    StringComparison.InvariantCultureIgnoreCase))
-                return null;
-
-            return principal;
-        }
-        catch
-        {
-            return null;
-        }
+        rng.GetBytes(bytes);
+        return Convert.ToBase64String(bytes);
     }
 
     public DateTime GetAccessTokenExpiry()

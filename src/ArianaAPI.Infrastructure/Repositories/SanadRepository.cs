@@ -3,6 +3,8 @@ using ArianaAPI.Application.Interfaces;
 using ArianaAPI.Infrastructure.Data;
 using Dapper;
 using System.Text;
+using System.Data;
+using System.Globalization;
 
 namespace ArianaAPI.Infrastructure.Repositories;
 
@@ -31,6 +33,8 @@ public class SanadRepository : ISanadRepository
         int? noTo = null,
         int? vazeit = null,
         int? kindSanad = null,
+        string? sortBy = null,
+        string? sortDir = null,
         int page = 1,
         int pageSize = 100,
         CancellationToken ct = default)
@@ -85,6 +89,29 @@ public class SanadRepository : ISanadRepository
 
         // ⚠️ استفاده از ROW_NUMBER به جای OFFSET/FETCH
         // چون SQL Server 2008 R2 OFFSET/FETCH رو پشتیبانی نمی‌کنه
+        // ⭐ سورت داینامیک (whitelist برای جلوگیری از SQL Injection)
+        var orderBy = "P.NO_Sanad DESC";   // پیش‌فرض
+        if (!string.IsNullOrWhiteSpace(sortBy))
+        {
+            var dir = string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase)
+                ? "ASC"
+                : "DESC";
+
+            var allowed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["noSanad"] = "P.NO_Sanad",
+                ["dateIn"] = "P.DATE_IN",
+                ["sharh"] = "P.OtherParentSharh",
+                ["vazeit"] = "P.Vazeit",
+                ["kindSanad"] = "P.KindSanad",
+                ["mabBed"] = "ISNULL(S.SumBed, 0)",
+                ["mabBes"] = "ISNULL(S.SumBes, 0)"
+            };
+
+            if (allowed.TryGetValue(sortBy, out var col))
+                orderBy = $"{col} {dir}";
+        }
+
         var sql = $@"
             SELECT * FROM (
                 SELECT 
@@ -96,7 +123,7 @@ public class SanadRepository : ISanadRepository
                     P.KindSanad,
                     ISNULL(S.SumBed, 0) AS Mab_Bed,
                     ISNULL(S.SumBes, 0) AS Mab_Bes,
-                    ROW_NUMBER() OVER (ORDER BY P.NO_Sanad DESC) AS RowNum
+                     ROW_NUMBER() OVER (ORDER BY {orderBy}) AS RowNum
                 FROM ParentSanad P
                 LEFT JOIN (
                     SELECT ParentSanadCode,
@@ -233,5 +260,359 @@ public class SanadRepository : ISanadRepository
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         return await conn.ExecuteScalarAsync<int>(
             new CommandDefinition(sql, parameters, cancellationToken: ct));
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  WRITE (جدید - فاز ۱۱)
+    // ═══════════════════════════════════════════════════
+
+    // ──────────────────────────────────────────────────
+    //  Helper: تاریخ شمسی امروز
+    // ──────────────────────────────────────────────────
+    private static string GetTodayPersian()
+    {
+        var pc = new PersianCalendar();
+        var now = DateTime.Now;
+        return $"{pc.GetYear(now):D4}/{pc.GetMonth(now):D2}/{pc.GetDayOfMonth(now):D2}";
+    }
+
+    private static string GetCurrentTime()
+    {
+        return DateTime.Now.ToString("HH:mm:ss");
+    }
+
+    // ──────────────────────────────────────────────────
+    //  CREATE
+    // ──────────────────────────────────────────────────
+    public async Task<SanadCreateResultDto> CreateAsync(
+        long orgId,
+        long fyId,
+        SanadCreateDto dto,
+        long userCode,
+        CancellationToken ct = default)
+    {
+        // اعتبارسنجی حداقلی
+        if (dto.Items == null || dto.Items.Count == 0)
+            throw new InvalidOperationException("سند باید حداقل یک ردیف داشته باشد");
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        if (conn.State != ConnectionState.Open)
+            await conn.OpenAsync(ct);
+
+        using var tx = conn.BeginTransaction();
+        try
+        {
+            // ۱) شماره سند
+            var noSanad = dto.NoSanad;
+            if (noSanad == null || noSanad <= 0)
+            {
+                noSanad = await conn.ExecuteScalarAsync<int>(
+                    new CommandDefinition(
+                        "SELECT ISNULL(MAX(NO_Sanad), 0) + 1 FROM ParentSanad",
+                        transaction: tx, cancellationToken: ct));
+            }
+
+            // ۲) درج سرسند و گرفتن ParentSanadID
+            const string insertParentSql = @"
+                INSERT INTO ParentSanad 
+                    (NO_Sanad, Date_IN, OtherParentSharh, ParentSharh_Code, Vazeit, KindSanad,
+                     Creator, Updater, Deleter, Tempconfirmer, Confirmer,
+                     Code_Op, Date_Op, Time_Op)
+                OUTPUT INSERTED.ParentSanadID
+                VALUES 
+                    (@noSanad, @dateIn, @sharh, @sharhCode, @vazeit, @kindSanad,
+                     @userCode, 0, 0, 0, 0,
+                     @userCode, @dateOp, @timeOp)";
+
+            var parentId = await conn.ExecuteScalarAsync<long>(
+                new CommandDefinition(insertParentSql, new
+                {
+                    noSanad = noSanad.Value,
+                    dateIn = dto.DateIn ?? "",
+                    sharh = dto.OtherParentSharh ?? "",
+                    sharhCode = dto.ParentSharhCode ?? 0,
+                    vazeit = dto.Vazeit,
+                    kindSanad = dto.KindSanad,
+                    userCode = userCode,
+                    dateOp = GetTodayPersian(),
+                    timeOp = GetCurrentTime()
+                }, transaction: tx, cancellationToken: ct));
+
+            // ۳) درج ردیف‌ها
+            const string insertItemSql = @"
+                INSERT INTO Sanad 
+                    (NO_Sanad, ParentSanadCode, RowNum,
+                     Code_Col, Code_Moein, Code_Tafzil, Code_Tafzili2, Tafzili2ID,
+                     Code_Sharh, OtherSharh,
+                     Mab_Bed, Mab_Bes, Meghdar,
+                     TikRow, ResidNum, CheckType,
+                     Code_Op, Date_Op, Time_Op)
+                VALUES 
+                    (@noSanad, @parentId, @rowNum,
+                     @codeCol, @codeMoein, @codeTafzil, @codeTafzili2, @tafzili2Id,
+                     @codeSharh, @otherSharh,
+                     @mabBed, @mabBes, @meghdar,
+                     0, 0, -1,
+                     @userCode, @dateOp, @timeOp)";
+
+            var rowNum = 1;
+            foreach (var item in dto.Items)
+            {
+                await conn.ExecuteAsync(
+                    new CommandDefinition(insertItemSql, new
+                    {
+                        noSanad = noSanad.Value,
+                        parentId = parentId,
+                        rowNum = item.RowNum > 0 ? item.RowNum : rowNum,
+                        codeCol = item.CodeCol,
+                        codeMoein = item.CodeMoein,
+                        codeTafzil = item.CodeTafzil,
+                        codeTafzili2 = item.CodeTafzili2 ?? 0,
+                        tafzili2Id = item.Tafzili2Id ?? 0,
+                        codeSharh = item.CodeSharh ?? 0,
+                        otherSharh = item.OtherSharh ?? "",
+                        mabBed = item.MabBed,
+                        mabBes = item.MabBes,
+                        meghdar = item.Meghdar ?? 0m,
+                        userCode = userCode,
+                        dateOp = GetTodayPersian(),
+                        timeOp = GetCurrentTime()
+                    }, transaction: tx, cancellationToken: ct));
+
+                rowNum++;
+            }
+
+            tx.Commit();
+
+            return new SanadCreateResultDto
+            {
+                ParentSanadId = parentId,
+                NoSanad = noSanad.Value
+            };
+        }
+        catch
+        {
+            try { tx.Rollback(); } catch { /* ignore */ }
+            throw;
+        }
+    }
+
+    // ──────────────────────────────────────────────────
+    //  UPDATE
+    // ──────────────────────────────────────────────────
+    public async Task UpdateAsync(
+        long orgId,
+        long fyId,
+        SanadUpdateDto dto,
+        long userCode,
+        CancellationToken ct = default)
+    {
+        if (dto.ParentSanadId <= 0)
+            throw new InvalidOperationException("شناسه سند نامعتبر است");
+
+        if (dto.Items == null || dto.Items.Count == 0)
+            throw new InvalidOperationException("سند باید حداقل یک ردیف داشته باشد");
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        if (conn.State != ConnectionState.Open)
+            await conn.OpenAsync(ct);
+
+        using var tx = conn.BeginTransaction();
+        try
+        {
+            // ۱) چک وضعیت — سند قطعی (Vazeit = 2) قابل ویرایش نیست
+            var vazeit = await conn.ExecuteScalarAsync<int?>(
+                new CommandDefinition(
+                    "SELECT Vazeit FROM ParentSanad WHERE ParentSanadID = @id",
+                    new { id = dto.ParentSanadId },
+                    transaction: tx, cancellationToken: ct));
+
+            if (vazeit == null)
+                throw new InvalidOperationException("سند یافت نشد");
+
+            if (vazeit.Value == 2)
+                throw new InvalidOperationException("سند قطعی قابل ویرایش نیست");
+
+            // ۲) آپدیت سرسند
+            const string updateParentSql = @"
+                UPDATE ParentSanad 
+                SET Date_IN = @dateIn,
+                    OtherParentSharh = @sharh,
+                    ParentSharh_Code = @sharhCode,
+                    Vazeit = @vazeit,
+                    KindSanad = @kindSanad,
+                    Updater = @userCode,
+                    Code_Op = @userCode,
+                    Date_Op = @dateOp,
+                    Time_Op = @timeOp
+                WHERE ParentSanadID = @id";
+
+            await conn.ExecuteAsync(
+                new CommandDefinition(updateParentSql, new
+                {
+                    id = dto.ParentSanadId,
+                    dateIn = dto.DateIn ?? "",
+                    sharh = dto.OtherParentSharh ?? "",
+                    sharhCode = dto.ParentSharhCode ?? 0,
+                    vazeit = dto.Vazeit,
+                    kindSanad = dto.KindSanad,
+                    userCode = userCode,
+                    dateOp = GetTodayPersian(),
+                    timeOp = GetCurrentTime()
+                }, transaction: tx, cancellationToken: ct));
+
+            // ۳) حذف ردیف‌های قبلی (بدون آرشیو - چون Update نیست، Replace است)
+            await conn.ExecuteAsync(
+                new CommandDefinition(
+                    "DELETE FROM Sanad WHERE ParentSanadCode = @id",
+                    new { id = dto.ParentSanadId },
+                    transaction: tx, cancellationToken: ct));
+
+            // ۴) درج ردیف‌های جدید
+            var noSanadRow = await conn.ExecuteScalarAsync<int>(
+                new CommandDefinition(
+                    "SELECT NO_Sanad FROM ParentSanad WHERE ParentSanadID = @id",
+                    new { id = dto.ParentSanadId },
+                    transaction: tx, cancellationToken: ct));
+
+            const string insertItemSql = @"
+                INSERT INTO Sanad 
+                    (NO_Sanad, ParentSanadCode, RowNum,
+                     Code_Col, Code_Moein, Code_Tafzil, Code_Tafzili2, Tafzili2ID,
+                     Code_Sharh, OtherSharh,
+                     Mab_Bed, Mab_Bes, Meghdar,
+                     TikRow, ResidNum, CheckType,
+                     Code_Op, Date_Op, Time_Op)
+                VALUES 
+                    (@noSanad, @parentId, @rowNum,
+                     @codeCol, @codeMoein, @codeTafzil, @codeTafzili2, @tafzili2Id,
+                     @codeSharh, @otherSharh,
+                     @mabBed, @mabBes, @meghdar,
+                     0, 0, -1,
+                     @userCode, @dateOp, @timeOp)";
+
+            var rowNum = 1;
+            foreach (var item in dto.Items)
+            {
+                await conn.ExecuteAsync(
+                    new CommandDefinition(insertItemSql, new
+                    {
+                        noSanad = noSanadRow,
+                        parentId = dto.ParentSanadId,
+                        rowNum = item.RowNum > 0 ? item.RowNum : rowNum,
+                        codeCol = item.CodeCol,
+                        codeMoein = item.CodeMoein,
+                        codeTafzil = item.CodeTafzil,
+                        codeTafzili2 = item.CodeTafzili2 ?? 0,
+                        tafzili2Id = item.Tafzili2Id ?? 0,
+                        codeSharh = item.CodeSharh ?? 0,
+                        otherSharh = item.OtherSharh ?? "",
+                        mabBed = item.MabBed,
+                        mabBes = item.MabBes,
+                        meghdar = item.Meghdar ?? 0m,
+                        userCode = userCode,
+                        dateOp = GetTodayPersian(),
+                        timeOp = GetCurrentTime()
+                    }, transaction: tx, cancellationToken: ct));
+
+                rowNum++;
+            }
+
+            tx.Commit();
+        }
+        catch
+        {
+            try { tx.Rollback(); } catch { /* ignore */ }
+            throw;
+        }
+    }
+
+    // ──────────────────────────────────────────────────
+    //  DELETE (با آرشیو در RecycleSanad)
+    // ──────────────────────────────────────────────────
+    public async Task DeleteAsync(
+        long orgId,
+        long fyId,
+        long parentSanadId,
+        long userCode,
+        CancellationToken ct = default)
+    {
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        if (conn.State != ConnectionState.Open)
+            await conn.OpenAsync(ct);
+
+        using var tx = conn.BeginTransaction();
+        try
+        {
+            // ۱) چک وضعیت
+            var vazeit = await conn.ExecuteScalarAsync<int?>(
+                new CommandDefinition(
+                    "SELECT Vazeit FROM ParentSanad WHERE ParentSanadID = @id",
+                    new { id = parentSanadId },
+                    transaction: tx, cancellationToken: ct));
+
+            if (vazeit == null)
+                throw new InvalidOperationException("سند یافت نشد");
+
+            if (vazeit.Value == 2)
+                throw new InvalidOperationException("سند قطعی قابل حذف نیست");
+
+            // ۲) آرشیو ردیف‌ها در RecycleSanad
+            const string archiveSql = @"
+                INSERT INTO RecycleSanad 
+                    (NO_Sanad, ParentSanadCode, Code_Col, Code_Moein, Code_Tafzil,
+                     Code_Sharh, OtherSharh, Mab_Bed, Mab_Bes,
+                     Code_Op, Date_Op, Time_Op, ResidNum, CheckType)
+                SELECT 
+                    NO_Sanad, ParentSanadCode, Code_Col, Code_Moein, Code_Tafzil,
+                    Code_Sharh, OtherSharh, Mab_Bed, Mab_Bes,
+                    Code_Op, Date_Op, Time_Op, ResidNum, CheckType
+                FROM Sanad 
+                WHERE ParentSanadCode = @id";
+
+            await conn.ExecuteAsync(
+                new CommandDefinition(archiveSql,
+                    new { id = parentSanadId },
+                    transaction: tx, cancellationToken: ct));
+
+            // ۳) حذف ردیف‌ها
+            await conn.ExecuteAsync(
+                new CommandDefinition(
+                    "DELETE FROM Sanad WHERE ParentSanadCode = @id",
+                    new { id = parentSanadId },
+                    transaction: tx, cancellationToken: ct));
+
+            // ۴) حذف سرسند
+            await conn.ExecuteAsync(
+                new CommandDefinition(
+                    "DELETE FROM ParentSanad WHERE ParentSanadID = @id",
+                    new { id = parentSanadId },
+                    transaction: tx, cancellationToken: ct));
+
+            tx.Commit();
+        }
+        catch
+        {
+            try { tx.Rollback(); } catch { /* ignore */ }
+            throw;
+        }
+    }
+
+    // ──────────────────────────────────────────────────
+    //  GET Vazeit
+    // ──────────────────────────────────────────────────
+    public async Task<int> GetVazeitAsync(
+        long orgId,
+        long fyId,
+        long parentSanadId,
+        CancellationToken ct = default)
+    {
+        const string sql = "SELECT Vazeit FROM ParentSanad WHERE ParentSanadID = @id";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        var result = await conn.ExecuteScalarAsync<int?>(
+            new CommandDefinition(sql, new { id = parentSanadId }, cancellationToken: ct));
+
+        return result ?? -1;
     }
 }

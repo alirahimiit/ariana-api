@@ -22,15 +22,31 @@ window.App.Features.Article = (function () {
     // ═══════════════════════════════════════════
     //  RENDER — صفحه فیلتر + نتیجه
     // ═══════════════════════════════════════════
-    function render() {
+    async function render() {
         const c = document.getElementById('content');
+        c.innerHTML = `<div class="loading"><div class="spinner"></div><p>در حال بارگذاری...</p></div>`;
+
+        // ⭐ لود lookup ها برای dropdown
+        let lookups = { groups: [], stockTypes: [] };
+        try {
+            lookups = await window.App.Http.api('/api/article/lookups') || lookups;
+        } catch (err) {
+            console.error('lookup load failed:', err);
+        }
+
+        // ⭐ ساخت dropdown انبار
+        let stockOpts = '<option value="">همه انبارها</option>';
+        (lookups.stockTypes || []).forEach(s => {
+            stockOpts += `<option value="${s.id}">${H.esc(s.name || '')}</option>`;
+        });
+
         c.innerHTML = `
         <div class="card">
             <div class="card-title">فیلترها</div>
             <div class="filters">
                 <div class="form-group">
                     <label>کد کالا</label>
-                    <input type="text" id="artCode">
+                    <input type="text" id="artCode" dir="ltr">
                 </div>
                 <div class="form-group">
                     <label>نام کالا</label>
@@ -38,38 +54,28 @@ window.App.Features.Article = (function () {
                 </div>
                 <div class="form-group">
                     <label>شناسه مالیاتی</label>
-                    <input type="text" id="artTaxId">
-                </div>
-                <div class="form-group">
-                    <label>گروه کالا</label>
-                    <input type="number" id="artGroupId">
+                    <input type="text" id="artTaxId" dir="ltr">
                 </div>
                 <div class="form-group">
                     <label>انبار</label>
-                    <input type="number" id="artStockTypeId">
+                    <select id="artStockTypeId">${stockOpts}</select>
                 </div>
                 <div class="form-group">
-                    <label>واحد</label>
-                    <input type="number" id="artUnitId">
-                </div>
-                <div class="form-group">
-                    <label>وضعیت موجودی</label>
-                    <div class="custom-select" id="artStockFilterWrap">
-                        <button type="button" class="custom-select-trigger" id="artStockFilterTrigger">
-                            <span class="custom-select-value">همه کالاها</span>
-                            <span class="custom-select-arrow">▼</span>
-                        </button>
-                        <div class="custom-select-menu" id="artStockFilterMenu">
-                            <div class="custom-select-option selected" data-value="all">همه کالاها</div>
-                            <div class="custom-select-option" data-value="hasStock">فقط دارای موجودی</div>
-                            <div class="custom-select-option" data-value="noStock">فقط موجودی صفر</div>
-                            <div class="custom-select-option" data-value="negativeStock">فقط موجودی منفی</div>
-                        </div>
-                    </div>
+                    <label>گروه کالا</label>
+                    <select id="artGroupId">
+                        <option value="">همه گروه‌ها</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label>&nbsp;</label>
                     <button class="btn btn-primary btn-block" id="artBtnRun">🔍 جستجو</button>
+                </div>
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <button class="btn btn-ghost btn-block" id="artBtnFixCoding"
+                            title="اصلاح کدینگ‌های کالاها">
+                        🔧 اصلاح کدینگ‌ها
+                    </button>
                 </div>
             </div>
         </div>
@@ -77,19 +83,60 @@ window.App.Features.Article = (function () {
             <div class="loading"><div class="spinner"></div></div>
         </div>`;
 
-        _stockFilter = 'all';
-        setupCustomSelect();
+        // ⭐ Cascade: انبار → گروه کالا
+        const stockSel = document.getElementById('artStockTypeId');
+        const groupSel = document.getElementById('artGroupId');
 
+        function rebuildGroupOptions() {
+            const stockId = stockSel.value;
+            let groups = lookups.groups || [];
+            if (stockId) {
+                groups = groups.filter(g => String(g.stockTypeId) === String(stockId));
+            }
+
+            let html = '<option value="">همه گروه‌ها</option>';
+            groups.forEach(g => {
+                html += `<option value="${g.id}">${H.esc(g.name || '')}</option>`;
+            });
+            groupSel.innerHTML = html;
+        }
+
+        stockSel.addEventListener('change', rebuildGroupOptions);
+        rebuildGroupOptions();
+
+        // ⭐ رویداد دکمه‌ها
         document.getElementById('artBtnRun').addEventListener('click', () => runList(1));
+        document.getElementById('artBtnFixCoding').addEventListener('click', fixCoding);
 
-        // Enter key روی هر فیلد
-        ['artCode', 'artName', 'artTaxId', 'artGroupId', 'artStockTypeId', 'artUnitId'].forEach(id => {
-            document.getElementById(id)?.addEventListener('keydown', (e) => {
+        // Enter → جستجو
+        ['artCode', 'artName', 'artTaxId'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('keydown', e => {
                 if (e.key === 'Enter') runList(1);
             });
         });
 
+        // ⭐ اجرای اولیه
         runList(1);
+    }
+
+    // ⭐ اصلاح کدینگ‌ها با SP
+    async function fixCoding() {
+        if (!confirm('آیا از اصلاح کدینگ همه کالاها مطمئن هستید؟\n(ممکن است کمی طول بکشد)')) return;
+        const btn = document.getElementById('artBtnFixCoding');
+        const orig = btn.textContent;
+        try {
+            btn.disabled = true;
+            btn.textContent = '⏳ در حال اصلاح...';
+            await window.App.Http.api('/api/article/fix-coding', { method: 'POST' });
+            window.App.toast('کدینگ‌ها با موفقیت اصلاح شدند', 'success');
+            runList(1);
+        } catch (err) {
+            window.App.toast('خطا: ' + err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = orig;
+        }
     }
 
     function setupCustomSelect() {
@@ -144,17 +191,20 @@ window.App.Features.Article = (function () {
         const parseIntOrNull = (id) => {
             const el = document.getElementById(id);
             if (!el) return null;
-            return el.value === '' ? null : parseInt(el.value);
+            const v = el.value;
+            if (v === '' || v == null) return null;
+            const n = parseInt(v);
+            return isNaN(n) ? null : n;
         };
 
         return {
             code: document.getElementById('artCode')?.value || null,
             name: document.getElementById('artName')?.value || null,
             taxId: document.getElementById('artTaxId')?.value || null,
-            groupId: parseIntOrNull('artGroupId'),
             stockTypeId: parseIntOrNull('artStockTypeId'),
-            unitId: parseIntOrNull('artUnitId'),
-            stockFilter: _stockFilter || 'all',
+            groupId: parseIntOrNull('artGroupId'),
+            // unitId و stockFilter حذف شدن
+            stockFilter: 'all',   // برای سازگاری با Backend
             page: page,
             pageSize: pageSizeOverride || window.App.state.settings.pageSize
         };
@@ -183,64 +233,156 @@ window.App.Features.Article = (function () {
                 : (stock < 0 ? 'color:#DC2626; font-weight:600;' : 'color:#6B7280;');
 
             return `
-                <tr>
-                    <td class="num text-center">${a.code || ''}</td>
-                    <td>${H.esc(a.name || '')}</td>
-                    <td class="num text-center">${a.taxId || '-'}</td>
-                    <td>${H.esc(a.articleGroupName || '')}</td>
-                    <td>${H.esc(a.stockTypeName || '')}</td>
-                    <td>${H.esc(a.articleUnitName || '')}</td>
-                    <td class="num text-left" style="${stockClass}">${H.fmt(stock)}</td>
-                    <td class="num text-left">${H.fmt(a.amountSale)}</td>
-                    <td class="text-center">${H.esc(a.statusName || '')}</td>
-                    <td class="text-center">
-                        <button class="btn btn-sm btn-ghost"
-                                onclick="App.Features.Article.showDetail(${a.id})">
-                            🔍 مشاهده
-                        </button>
-                    </td>
-                </tr>`;
+            <tr>
+                <td class="num text-center">${a.stockTypeCode || '-'}</td>
+                <td class="num text-center">${a.articleGroupCode || '-'}</td>
+                <td class="num text-center" style="font-weight:600;">${a.code || ''}</td>
+                <td>${H.esc(a.name || '')}</td>
+                <td class="text-center">${H.esc(a.articleUnitName || '')}</td>
+                <td class="num text-left">${H.fmt(a.amountFirst)}</td>
+                <td class="num text-left">${H.fmt(a.costFirst)}</td>
+                <td class="num text-left" style="color:#DC2626;">${H.fmt(a.outAmount1)}</td>
+                <td class="num text-left" style="color:#DC2626;">${H.fmt(a.outVal1)}</td>
+                <td class="num text-left" style="color:#059669;">${H.fmt(a.inAmount1)}</td>
+                <td class="num text-left" style="color:#059669;">${H.fmt(a.inVal1)}</td>
+                <td class="num text-left">${H.fmt(a.backAmount1)}</td>
+                <td class="num text-left">${H.fmt(a.backVal1)}</td>
+                <td class="num text-left" style="${stockClass}">${H.fmt(stock)}</td>
+                <td class="num text-left">${H.fmt(a.amountSale)}</td>
+                <td class="text-center">${H.esc(a.statusName || '')}</td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-ghost"
+                            onclick="App.Features.Article.showDetail(${a.id})"
+                            title="مشاهده">👁️</button>
+                    <button class="btn btn-sm btn-ghost"
+                            data-permission="191"
+                            onclick="event.stopPropagation(); App.Features.ArticleForm.openEdit(${a.id})"
+                            title="ویرایش">✏️</button>
+                    <button class="btn btn-sm btn-ghost"
+                            data-permission="192"
+                            onclick="event.stopPropagation(); App.Features.ArticleForm.delete(${a.id})"
+                            title="حذف" style="color:var(--danger);">🗑️</button>
+                </td>
+            </tr>
+        `;
         }).join('');
 
         const page = data.page || 1;
         const totalPages = data.totalPages || 1;
         const totalCount = data.totalCount || items.length;
 
-        container.innerHTML = `
-            <div class="card">
-                <div class="card-title">
-                    <span>🏷️ لیست کالاها (${H.fmt(totalCount)})</span>
-                </div>
-                <div class="table-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th style="width:90px;">کد</th>
-                                <th>نام کالا</th>
-                                <th style="width:100px;">شناسه مالیاتی</th>
-                                <th style="width:110px;">گروه</th>
-                                <th style="width:120px;">انبار</th>
-                                <th style="width:80px;">واحد</th>
-                                <th class="text-left" style="width:100px;">موجودی</th>
-                                <th class="text-left" style="width:110px;">قیمت فروش</th>
-                                <th style="width:80px;">وضعیت</th>
-                                <th style="width:90px;"></th>
-                            </tr>
-                        </thead>
-                        <tbody>${rows}</tbody>
-                    </table>
-                </div>
-                ${buildPagination(page, totalPages, totalCount, items.length)}
-            </div>`;
+        const paginationHtml = buildPagination(page, totalPages, totalCount, items.length);
 
+        container.innerHTML = `
+        <div class="card">
+            <div class="card-title">
+                <span>🏷️ لیست کالاها (${totalCount.toLocaleString('fa-IR')})</span>
+                <button class="btn btn-primary btn-sm"
+                        data-permission="190"
+                        onclick="App.Features.ArticleForm.openCreate()">
+                    ➕ کالای جدید
+                </button>
+            </div>
+            <div class="table-wrapper" style="overflow-x:auto;">
+                <table class="article-list-table">
+                    <thead>
+                        <tr>
+                            <th style="width:60px;">انبار</th>
+                            <th style="width:60px;">گروه</th>
+                            <th style="width:90px;">کد کالا</th>
+                            <th style="min-width:200px;">نام کالا</th>
+                            <th style="width:70px;">واحد</th>
+                            <th class="text-left" style="width:80px;">موج اولیه</th>
+                            <th class="text-left" style="width:100px;">ارزش اولیه</th>
+                            <th class="text-left" style="width:80px;">فروش (تعداد)</th>
+                            <th class="text-left" style="width:100px;">فروش (ریالی)</th>
+                            <th class="text-left" style="width:80px;">خرید (تعداد)</th>
+                            <th class="text-left" style="width:100px;">خرید (ریالی)</th>
+                            <th class="text-left" style="width:80px;">برگشت (تعداد)</th>
+                            <th class="text-left" style="width:100px;">برگشت (ریالی)</th>
+                            <th class="text-left" style="width:100px;">موجودی فعلی</th>
+                            <th class="text-left" style="width:110px;">قیمت فروش</th>
+                            <th style="width:80px;">وضعیت</th>
+                            <th style="width:90px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            ${paginationHtml}
+        </div>`;
+        // ⭐ اعمال permission
+        if (window.App.UI.PermissionGuard) {
+            window.App.UI.PermissionGuard.apply(container);
+        }
+
+        // ⭐ Export
+        // ⭐ Export
+       
         Exporter.attach(container, {
             title: 'لیست کالاها',
-            subtitle: subtitle(),
+            subtitle: (window.App.state.user?.orgName || '') + ' - ' + (window.App.state.user?.fyName || ''),
             filename: 'ArticleList',
-            getFullTable: fetchFullTable
+            getFullTable: async () => {
+                const payload = buildPayload(1, 100000);
+                const full = await window.App.Http.api('/api/article/list', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                return buildArticleTableHtml(full.items || []);
+            }
+        });
+    }
+    function buildArticleTableHtml(items) {
+        let rows = '';
+        items.forEach(a => {
+            const stock = a.finallExistence ?? 0;
+            const stockClass = stock > 0
+                ? 'color:#059669; font-weight:600;'
+                : (stock < 0 ? 'color:#DC2626; font-weight:600;' : 'color:#6B7280;');
+
+            rows += '<tr>' +
+                '<td class="num text-center">' + (a.stockTypeCode || '-') + '</td>' +
+                '<td class="num text-center">' + (a.articleGroupCode || '-') + '</td>' +
+                '<td class="num text-center">' + (a.code || '') + '</td>' +
+                '<td>' + H.esc(a.name || '') + '</td>' +
+                '<td class="text-center">' + H.esc(a.articleUnitName || '') + '</td>' +
+                '<td class="num text-left">' + H.fmt(a.amountFirst) + '</td>' +
+                '<td class="num text-left">' + H.fmt(a.costFirst) + '</td>' +
+                '<td class="num text-left">' + H.fmt(a.outAmount1) + '</td>' +
+                '<td class="num text-left">' + H.fmt(a.outVal1) + '</td>' +
+                '<td class="num text-left">' + H.fmt(a.inAmount1) + '</td>' +
+                '<td class="num text-left">' + H.fmt(a.inVal1) + '</td>' +
+                '<td class="num text-left">' + H.fmt(a.backAmount1) + '</td>' +
+                '<td class="num text-left">' + H.fmt(a.backVal1) + '</td>' +
+                '<td class="num text-left" style="' + stockClass + '">' + H.fmt(stock) + '</td>' +
+                '<td class="num text-left">' + H.fmt(a.amountSale) + '</td>' +
+                '<td class="text-center">' + H.esc(a.statusName || '') + '</td>' +
+                '</tr>';
         });
 
-        window.App.enhanceTables(container);
+        const table = document.createElement('table');
+        table.innerHTML =
+            '<thead><tr>' +
+            '<th>انبار</th>' +
+            '<th>گروه</th>' +
+            '<th>کد کالا</th>' +
+            '<th>نام کالا</th>' +
+            '<th>واحد</th>' +
+            '<th class="text-left">موج اولیه</th>' +
+            '<th class="text-left">ارزش اولیه</th>' +
+            '<th class="text-left">فروش (تعداد)</th>' +
+            '<th class="text-left">فروش (ریالی)</th>' +
+            '<th class="text-left">خرید (تعداد)</th>' +
+            '<th class="text-left">خرید (ریالی)</th>' +
+            '<th class="text-left">برگشت (تعداد)</th>' +
+            '<th class="text-left">برگشت (ریالی)</th>' +
+            '<th class="text-left">موجودی فعلی</th>' +
+            '<th class="text-left">قیمت فروش</th>' +
+            '<th>وضعیت</th>' +
+            '</tr></thead>' +
+            '<tbody>' + rows + '</tbody>';
+        return table;
     }
 
     function buildPagination(page, totalPages, totalCount, itemCount) {
@@ -331,8 +473,17 @@ window.App.Features.Article = (function () {
             `<div class="loading"><div class="spinner"></div></div>`);
 
         try {
+            // ⭐ لود کردن lookup ها (گروه، معین، تفصیلی)
+            let lookups = { cols: [], moeins: [], tafzils: [] };
+            try {
+                lookups = await window.App.Features.ArticleForm.getLookups();
+            } catch (e) {
+                console.warn('Lookups load failed:', e);
+            }
+
             const d = await window.App.Http.api(`/api/article/${articleId}`);
-            document.getElementById('modalBody').innerHTML = buildDetailHtml(d);
+
+            document.getElementById('modalBody').innerHTML = buildDetailHtml(d, lookups);
 
             Exporter.attach(document.getElementById('modalBody'), {
                 title: `کالا: ${d.name || ''} (${d.code || ''})`,
@@ -340,118 +491,203 @@ window.App.Features.Article = (function () {
                 filename: `Article_${d.code || articleId}`,
                 customHtml: () => buildPrintHtml(d)
             });
-
-            window.App.enhanceTables(document.getElementById('modalBody'));
         } catch (err) {
             document.getElementById('modalBody').innerHTML =
                 `<div class="error-box">${H.esc(err.message)}</div>`;
         }
     }
 
-    function buildDetailHtml(d) {
+    function buildDetailHtml(d, lookups) {
+        lookups = lookups || { cols: [], moeins: [], tafzils: [] };
+        const statusInfo = getStatusInfo(d.status);
+
         return `
-            <div class="section-title">📋 اطلاعات پایه</div>
-            <table class="factor-info-table">
-                <tr>
-                    <td class="label">کد کالا:</td>
-                    <td>${d.code || '-'}</td>
-                    <td class="label">نام کالا:</td>
-                    <td colspan="3">${H.esc(d.name || '-')}</td>
-                </tr>
-                <tr>
-                    <td class="label">گروه:</td>
-                    <td>${H.esc(d.articleGroupName || '-')} (${d.articleGroupCode || ''})</td>
-                    <td class="label">انبار:</td>
-                    <td>${H.esc(d.stockTypeName || '-')} (${d.stockTypeCode || ''})</td>
-                    <td class="label">وضعیت:</td>
-                    <td>${H.esc(d.statusName || '-')}</td>
-                </tr>
-                ${d.articleCoding ? `
-                <tr>
-                    <td class="label">کدینگ کالا:</td>
-                    <td colspan="5">${H.esc(d.articleCoding)}</td>
-                </tr>` : ''}
-            </table>
+        <div class="art-view">
+            <!-- ═══ Header ═══ -->
+            <div class="art-view-header">
+                <div class="art-view-title">
+                    <div class="art-view-icon">🏷️</div>
+                    <div>
+                        <h3>${H.esc(d.name || '(بی‌نام)')}</h3>
+                        <div class="art-view-code">کد کالا: <strong>${d.code || '-'}</strong></div>
+                    </div>
+                </div>
+                <div class="art-view-badges">
+                    <span class="art-badge ${statusInfo.cls}">${statusInfo.text}</span>
+                    ${d.articleGroupName ? `<span class="art-badge art-badge-info">${H.esc(d.articleGroupName)}</span>` : ''}
+                    ${d.stockTypeName ? `<span class="art-badge art-badge-gray">${H.esc(d.stockTypeName)}</span>` : ''}
+                </div>
+            </div>
 
-            <div class="section-title">📏 واحدها</div>
-            <table class="factor-info-table">
-                <tr>
-                    <td class="label">واحد اصلی:</td>
-                    <td>${H.esc(d.articleUnitName || '-')}</td>
-                    <td class="label">واحد دوم:</td>
-                    <td>${H.esc(d.articleUnitName2 || '-')} ${d.tabdil2 ? '(تبدیل: ' + d.tabdil2 + ')' : ''}</td>
-                    <td class="label">واحد سوم:</td>
-                    <td>${H.esc(d.articleUnitName3 || '-')} ${d.tabdil3 ? '(تبدیل: ' + d.tabdil3 + ')' : ''}</td>
-                </tr>
-            </table>
+            <!-- ═══ Cards ═══ -->
+            <div class="art-view-grid">
+                <div class="art-card">
+                    <div class="art-card-title">📋 اطلاعات پایه</div>
+                    <div class="art-row"><span>شناسه مالیاتی</span><span class="art-num">${d.taxId || '-'}</span></div>
+                    <div class="art-row"><span>کدینگ کالا</span><span class="art-num">${d.articleCoding || '-'}</span></div>
+                    <div class="art-row"><span>کدینگ انبار</span><span class="art-num">${d.codingStore || '-'}</span></div>
+                    <div class="art-row"><span>کدینگ گروه انبار</span><span class="art-num">${d.codingGroupStore || '-'}</span></div>
+                </div>
 
-            <div class="section-title">📦 موجودی</div>
-            <table class="factor-info-table">
-                <tr>
-                    <td class="label">موجودی اول دوره:</td>
-                    <td class="num">${H.fmt(d.firstExistence)}</td>
-                    <td class="label">ورودی:</td>
-                    <td class="num">${H.fmt(d.inputed)}</td>
-                    <td class="label">خروجی:</td>
-                    <td class="num">${H.fmt(d.outPuted)}</td>
-                </tr>
-                <tr>
-                    <td class="label">ضایعات ۱:</td>
-                    <td class="num">${H.fmt(d.loss1)}</td>
-                    <td class="label">ضایعات ۲:</td>
-                    <td class="num">${H.fmt(d.loss2)}</td>
-                    <td class="label">موجودی فعلی:</td>
-                    <td class="num" style="font-weight:bold; color:#4F46E5;">${H.fmt(d.finallExistence)}</td>
-                </tr>
-            </table>
+                <div class="art-card">
+                    <div class="art-card-title">📁 گروه و انبار</div>
+                    <div class="art-row"><span>گروه کالا</span><span>${H.esc(d.articleGroupName || '-')}</span></div>
+                    <div class="art-row"><span>کد گروه</span><span class="art-num">${d.articleGroupCode || '-'}</span></div>
+                    <div class="art-row"><span>انبار</span><span>${H.esc(d.stockTypeName || '-')}</span></div>
+                    <div class="art-row"><span>کد انبار</span><span class="art-num">${d.stockTypeCode || '-'}</span></div>
+                </div>
 
-            <div class="section-title">💰 قیمت‌ها</div>
-            <table class="factor-info-table">
-                <tr>
-                    <td class="label">موجودی اولیه (مقدار):</td>
-                    <td class="num">${H.fmt(d.amountFirst)}</td>
-                    <td class="label">بهای اولیه:</td>
-                    <td class="num">${H.fmt(d.costFirst)}</td>
-                    <td class="label">قیمت فروش:</td>
-                    <td class="num" style="font-weight:bold;">${H.fmt(d.amountSale)}</td>
-                </tr>
-            </table>
+                <div class="art-card">
+                    <div class="art-card-title">📏 واحدها</div>
+                    <div class="art-row"><span>واحد اصلی</span><span>${H.esc(d.articleUnitName || '-')}</span></div>
+                    <div class="art-row"><span>واحد دوم</span><span>${H.esc(d.articleUnitName2 || '-')}</span></div>
+                    <div class="art-row"><span>واحد سوم</span><span>${H.esc(d.articleUnitName3 || '-')}</span></div>
+                </div>
 
-            <div class="section-title">🔢 کدینگ حسابداری</div>
-            <table class="factor-info-table">
-                <tr>
-                    <td class="label">پیش‌فرض (کل-معین-تفصیل):</td>
-                    <td colspan="5">${d.codeCol || 0} - ${d.codeMoein || 0} - ${d.codeTafzil || 0}</td>
-                </tr>
-                <tr>
-                    <td class="label">خرید:</td>
-                    <td>${d.codeColBuy || 0} - ${d.codeMoeinBuy || 0} - ${d.codeTafzilBuy || 0}</td>
-                    <td class="label">برگشت از خرید:</td>
-                    <td>${d.codeColReBuy || 0} - ${d.codeMoeinReBuy || 0} - ${d.codeTafzilReBuy || 0}</td>
-                    <td class="label">برگشت از فروش:</td>
-                    <td>${d.codeColReSale || 0} - ${d.codeMoeinReSale || 0} - ${d.codeTafzilReSale || 0}</td>
-                </tr>
-            </table>
+                <div class="art-card">
+                    <div class="art-card-title">📦 موجودی</div>
+                    <div class="art-row"><span>موجودی اول دوره</span><span class="art-num">${H.fmt(d.firstExistence)}</span></div>
+                    <div class="art-row"><span>ورودی</span><span class="art-num art-green">${H.fmt(d.inputed)}</span></div>
+                    <div class="art-row"><span>خروجی</span><span class="art-num art-red">${H.fmt(d.outPuted)}</span></div>
+                    <div class="art-row art-row-hl"><span>موجودی فعلی</span><span class="art-num">${H.fmt(d.finallExistence)}</span></div>
+                </div>
 
-            <div class="section-title">⚙️ تنظیمات</div>
-            <table class="factor-info-table">
-                <tr>
-                    <td class="label">درصد بازاریاب:</td>
-                    <td class="num">${d.marketerPercent ? d.marketerPercent + '%' : '-'}</td>
-                    <td class="label">حد سفارش (ورود):</td>
-                    <td class="num">${H.fmt(d.maxCostOrderBy)}</td>
-                    <td class="label">حد سفارش (خروج):</td>
-                    <td class="num">${H.fmt(d.minCostOrderBy)}</td>
-                </tr>
-                <tr>
-                    <td class="label">استهلاک:</td>
-                    <td>${H.esc(d.depreciationTypeName || '-')} (${d.depreciation || 0})</td>
-                    <td class="label">کنترل موجودی منفی:</td>
-                    <td>${d.xIsRegNegativKala ? '✅ فعال' : '❌ غیرفعال'}</td>
-                    <td class="label">محاسبه ارزش افزوده:</td>
-                    <td>${d.xNotCalcArezeshafzode ? '❌ غیرفعال' : '✅ فعال'}</td>
-                </tr>
-            </table>`;
+                <div class="art-card">
+                    <div class="art-card-title">💰 قیمت‌ها</div>
+                    <div class="art-row"><span>موجودی اولیه</span><span class="art-num">${H.fmt(d.amountFirst)}</span></div>
+                    <div class="art-row"><span>بهای اولیه</span><span class="art-num">${H.fmt(d.costFirst)}</span></div>
+                    <div class="art-row art-row-hl"><span>قیمت فروش</span><span class="art-num">${H.fmt(d.amountSale)}</span></div>
+                </div>
+
+                <div class="art-card">
+                    <div class="art-card-title">⚙️ تنظیمات</div>
+                    <div class="art-row"><span>درصد بازاریاب</span><span class="art-num">${d.marketerPercent ? d.marketerPercent + '%' : '-'}</span></div>
+                    <div class="art-row"><span>حد سفارش (ورود)</span><span class="art-num">${H.fmt(d.maxCostOrderBy)}</span></div>
+                    <div class="art-row"><span>حد سفارش (خروج)</span><span class="art-num">${H.fmt(d.minCostOrderBy)}</span></div>
+                </div>
+            </div>
+
+            <!-- ═══ آمار حرکات ═══ -->
+            <div class="art-card art-card-full art-stats-card">
+                <div class="art-card-title">📊 آمار و موجودی</div>
+                <div class="art-stats-grid">
+                    <div class="art-stat-item">
+                        <div class="art-stat-label">📥 موجودی اولیه</div>
+                        <div class="art-stat-value">
+                            ${H.fmt(d.amountFirst)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span>
+                        </div>
+                    </div>
+                    <div class="art-stat-item">
+                        <div class="art-stat-label">💰 ارزش اولیه</div>
+                        <div class="art-stat-value art-num">${H.fmt(d.costFirst)} <span class="art-stat-unit">ریال</span></div>
+                    </div>
+
+                    <div class="art-stat-item art-stat-buy">
+                        <div class="art-stat-label">📦 خرید</div>
+                        <div class="art-stat-value">${H.fmt(d.inAmount1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
+                        <div class="art-stat-sub art-num">${H.fmt(d.inVal1)} ریال</div>
+                    </div>
+                    <div class="art-stat-item art-stat-sell">
+                        <div class="art-stat-label">💸 فروش</div>
+                        <div class="art-stat-value">${H.fmt(d.outAmount1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
+                        <div class="art-stat-sub art-num">${H.fmt(d.outVal1)} ریال</div>
+                    </div>
+
+                    <div class="art-stat-item art-stat-return">
+                        <div class="art-stat-label">↩️ برگشت</div>
+                        <div class="art-stat-value">${H.fmt(d.backAmount1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
+                        <div class="art-stat-sub art-num">${H.fmt(d.backVal1)} ریال</div>
+                    </div>
+                    <div class="art-stat-item art-stat-final">
+                        <div class="art-stat-label">📊 موجودی فعلی</div>
+                        <div class="art-stat-value" style="color:${(d.finallExistence || 0) > 0 ? '#059669' : ((d.finallExistence || 0) < 0 ? '#DC2626' : '#6B7280')};">
+                            ${H.fmt(d.finallExistence)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ کدینگ حسابداری ═══ -->
+            <div class="art-card art-card-full">
+                <div class="art-card-title">🔢 کدینگ حسابداری</div>
+                <table class="art-coding-table">
+                    <thead>
+                        <tr>
+                            <th style="width:130px;">عملیات</th>
+                            <th style="width:70px;">کد کل</th>
+                            <th>نام کل</th>
+                            <th style="width:70px;">کد معین</th>
+                            <th>نام معین</th>
+                            <th style="width:70px;">کد تفصیلی</th>
+                            <th>نام تفصیلی</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${codingRow('💵 فروش', d.codeCol, d.codeMoein, d.codeTafzil, lookups)}
+                        ${codingRow('🛒 خرید', d.codeColBuy, d.codeMoeinBuy, d.codeTafzilBuy, lookups)}
+                        ${codingRow('↩️ برگشت خرید', d.codeColReBuy, d.codeMoeinReBuy, d.codeTafzilReBuy, lookups)}
+                        ${codingRow('↪️ برگشت فروش', d.codeColReSale, d.codeMoeinReSale, d.codeTafzilReSale, lookups)}
+                    </tbody>
+                </table>
+            </div>
+        </div>`;
+    }
+
+    // ⭐ یک ردیف کدینگ
+    function codingRow(label, col, moein, tafzil, lookups) {
+        const colName = findColName(col, lookups);
+        const moeinName = findMoeinName(col, moein, lookups);
+        const tafzilName = findTafzilName(tafzil, lookups);
+
+        return `
+            <tr>
+                <td><strong>${label}</strong></td>
+                <td class="num">${col || '-'}</td>
+                <td class="art-muted">${H.esc(colName) || '-'}</td>
+                <td class="num">${moein || '-'}</td>
+                <td class="art-muted">${H.esc(moeinName) || '-'}</td>
+                <td class="num">${tafzil || '-'}</td>
+                <td class="art-muted">${H.esc(tafzilName) || '-'}</td>
+            </tr>`;
+    }
+
+    function findColName(code, lookups) {
+        if (!code || !lookups || !lookups.cols) return '';
+        const c = lookups.cols.find(x => x.codeCol === parseInt(code));
+        return c ? c.name : '';
+    }
+
+    function findMoeinName(colCode, moeinCode, lookups) {
+        if (!colCode || !moeinCode || !lookups || !lookups.moeins) return '';
+        const m = lookups.moeins.find(x =>
+            x.codeCol === parseInt(colCode) && x.codeMoein === parseInt(moeinCode));
+        return m ? m.name : '';
+    }
+
+    function findTafzilName(code, lookups) {
+        if (!code || !lookups || !lookups.tafzils) return '';
+        const t = lookups.tafzils.find(x => x.code === parseInt(code));
+        return t ? t.name : '';
+    }   
+
+    function getStatusInfo(status) {
+        const map = {
+            0: { text: 'غیرفعال', cls: 'art-badge-gray' },
+            1: { text: 'فعال', cls: 'art-badge-success' },
+            2: { text: 'انباری', cls: 'art-badge-info' },
+            3: { text: 'اموالی', cls: 'art-badge-warning' }
+        };
+        return map[status] || { text: 'نامشخص', cls: 'art-badge-gray' };
+    }
+
+    function getStatusInfo(status) {
+        const map = {
+            0: { text: 'غیرفعال', cls: 'art-badge-gray' },
+            1: { text: 'فعال', cls: 'art-badge-success' },
+            2: { text: 'انباری', cls: 'art-badge-info' },
+            3: { text: 'اموالی', cls: 'art-badge-warning' }
+        };
+        return map[status] || { text: 'نامشخص', cls: 'art-badge-gray' };
     }
 
     function buildPrintHtml(d) {
@@ -569,7 +805,13 @@ window.App.Features.Article = (function () {
     // ═══════════════════════════════════════════
     //  API عمومی
     // ═══════════════════════════════════════════
-    return { render, runList, showDetail };
+    return {
+        render: render,
+        runList: runList,
+        showDetail: showDetail,
+        buildArticleTableHtml: buildArticleTableHtml
+    };
+
 })();
 
 // ⭐ alias برای سازگاری با کد فعلی

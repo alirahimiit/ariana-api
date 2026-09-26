@@ -95,4 +95,50 @@ public class UserRepository : IUserRepository
         return await conn.QueryFirstOrDefaultAsync<User>(
             new CommandDefinition(sql, new { userId }, cancellationToken: ct));
     }
+
+    public async Task<bool> ChangePasswordAsync(
+        long orgId, long fyId, long userId,
+        string currentPassword, string newPassword,
+        CancellationToken ct = default)
+    {
+        const string checkSql = @"
+        SELECT TOP 1 Password 
+        FROM Users 
+        WHERE UsersID = @userId";
+
+        const string updateSql = @"
+        UPDATE Users 
+        SET Password = @newPassword,
+            Date_Op = @dateOp,
+            Time_OP = @timeOp
+        WHERE UsersID = @userId";
+
+        try
+        {
+            await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+            await conn.OpenAsync(ct);
+
+            var current = await conn.ExecuteScalarAsync<string>(
+                new CommandDefinition(checkSql, new { userId }, cancellationToken: ct));
+
+            if (current == null) return false;              // کاربر نیست
+            if (current != currentPassword) return false;   // رمز فعلی اشتباهه
+
+            await conn.ExecuteAsync(new CommandDefinition(updateSql, new
+            {
+                userId,
+                newPassword,
+                dateOp = DateTime.Now.ToString("yyyy/MM/dd"),
+                timeOp = DateTime.Now.ToString("HH:mm:ss")
+            }, cancellationToken: ct));
+
+            _logger.LogInformation("رمز کاربر {UserId} تغییر کرد", userId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "خطا در تغییر رمز کاربر {UserId}", userId);
+            throw;
+        }
+    }
 }

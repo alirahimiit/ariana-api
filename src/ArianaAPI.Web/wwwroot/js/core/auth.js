@@ -177,8 +177,14 @@ window.App.Auth = (function () {
             state.apiKey = apiKey;
 
             S.persistAuth();
+            // ⭐ راه‌اندازی permissions
+            await window.App.Permissions.init(data.permissions);
 
             showApp();
+
+            // ⭐ اعمال فیلتر روی منوها
+            window.App.Permissions.applyMenuFilter();
+
             window.App.navigate('dashboard');
             window.App.toast('خوش آمدید!', 'success');
         } catch (err) {
@@ -190,6 +196,9 @@ window.App.Auth = (function () {
     }
 
     function handleLogout() {
+        // ⭐ پاک کردن permissions
+        window.App.Permissions.clear();
+
         S.clearAuth();
         showLogin();
         loadOrganizations();
@@ -204,6 +213,11 @@ window.App.Auth = (function () {
         document.getElementById('appView').classList.add('hidden');
         const pw = document.getElementById('password');
         if (pw) pw.value = '';
+
+        // ⭐ پاک کردن permissions
+        if (window.App.Permissions) {
+            window.App.Permissions.clear();
+        }
     }
 
     function showApp() {

@@ -4,11 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>آریانا - سیستم حسابداری</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-
     <!-- ═══════════════ صفحه ورود ═══════════════ -->
     <div id="loginView" class="login-wrapper">
         <div class="login-card">
@@ -91,7 +89,7 @@
                         <span class="nav-group-arrow">▼</span>
                     </div>
                     <div class="nav-group-items">
-                        <a class="nav-item" data-page="dashboard">
+                        <a class="nav-item" data-page="dashboard" data-menu-key="Dashboard">
                             <span class="nav-icon">📊</span>
                             <span class="nav-label">داشبورد</span>
                         </a>
@@ -101,19 +99,19 @@
                 <div class="nav-group" data-group="accounting">
                     <div class="nav-group-header" data-toggle-group="accounting">
                         <span class="nav-group-icon">📚</span>
-                        <span class="nav-group-label">حسابداری</span>
+                        <span class="nav-group-label">عملیات حسابداری</span>
                         <span class="nav-group-arrow">▼</span>
                     </div>
                     <div class="nav-group-items">
-                        <a class="nav-item" data-page="sanad">
+                        <a class="nav-item" data-page="sanad" data-menu-key="Sanad">
                             <span class="nav-icon">📄</span>
                             <span class="nav-label">اسناد</span>
                         </a>
-                        <a class="nav-item" data-page="ledger">
+                        <a class="nav-item" data-page="ledger" data-menu-key="Ledger">
                             <span class="nav-icon">📒</span>
                             <span class="nav-label">دفتر حساب</span>
                         </a>
-                        <a class="nav-item" data-page="taraz">
+                        <a class="nav-item" data-page="taraz" data-menu-key="Taraz">
                             <span class="nav-icon">⚖️</span>
                             <span class="nav-label">تراز حساب‌ها</span>
                         </a>
@@ -123,21 +121,110 @@
                 <div class="nav-group" data-group="reports">
                     <div class="nav-group-header" data-toggle-group="reports">
                         <span class="nav-group-icon">📈</span>
-                        <span class="nav-group-label">گزارش‌ها</span>
+                        <span class="nav-group-label">گزارشات ویژه مالی</span>
                         <span class="nav-group-arrow">▼</span>
                     </div>
                     <div class="nav-group-items">
-                        <a class="nav-item" data-page="profitloss">
+                        <a class="nav-item" data-page="profitloss" data-menu-key="ProfitLoss">
                             <span class="nav-icon">💰</span>
                             <span class="nav-label">سود و زیان</span>
                         </a>
-                        <a class="nav-item" data-page="bilan">
+                        <a class="nav-item" data-page="bilan" data-menu-key="Bilan">
                             <span class="nav-icon">⚖️</span>
                             <span class="nav-label">بیلان</span>
                         </a>
-                        <a class="nav-item" data-page="daybook">
+                        <a class="nav-item" data-page="daybook" data-menu-key="DayBook">
                             <span class="nav-icon">📘</span>
                             <span class="nav-label">دفتر روزنامه</span>
+                        </a>
+                        <!-- این دو تای زیر هنوز در MenuRegistry نیستن → آزاد -->
+                        <a class="nav-item" data-page="factor" data-menu-key="Factor">
+                            <span class="nav-icon">📋</span>
+                            <span class="nav-label">همه فاکتورها</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="nav-group" data-group="goods">
+                    <div class="nav-group-header" data-toggle-group="goods">
+                        <span class="nav-group-icon">📦</span>
+                        <span class="nav-group-label">عملیات ورود و خروج کالا</span>
+                        <span class="nav-group-arrow">▼</span>
+                    </div>
+                    <div class="nav-group-items">
+                        <a class="nav-item" data-page="factor-buy" data-menu-key="FactorBuy">
+                            <span class="nav-icon">📥</span>
+                            <span class="nav-label">فاکتور خرید</span>
+                        </a>
+                        <a class="nav-item" data-page="factor-sell" data-menu-key="FactorSale">
+                            <span class="nav-icon">📤</span>
+                            <span class="nav-label">فاکتور فروش</span>
+                        </a>
+                        <a class="nav-item" data-page="factor-buy-return" data-menu-key="FactorBackBuy">
+                            <span class="nav-icon">↩️</span>
+                            <span class="nav-label">مرجوع از خرید</span>
+                        </a>
+                        <a class="nav-item" data-page="factor-sell-return" data-menu-key="FactorBackSale">
+                            <span class="nav-icon">↪️</span>
+                            <span class="nav-label">مرجوع از فروش</span>
+                        </a>
+                        <a class="nav-item" data-page="factor-scrap" data-menu-key="FactorWaste">
+                            <span class="nav-icon">🗑️</span>
+                            <span class="nav-label">فروش ضایعات</span>
+                        </a>
+                        <a class="nav-item" data-page="factor-pre" data-menu-key="FactorPre">
+                            <span class="nav-icon">📋</span>
+                            <span class="nav-label">پیش فاکتور</span>
+                        </a>
+                        <a class="nav-item" data-page="stock-receipt" data-menu-key="ResidStock">
+                            <span class="nav-icon">📨</span>
+                            <span class="nav-label">ثبت رسید انبار</span>
+                        </a>
+                        <a class="nav-item" data-page="stock-transfer" data-menu-key="HavaleStock">
+                            <span class="nav-icon">🔄</span>
+                            <span class="nav-label">ثبت حواله انبار</span>
+                        </a>
+                        <a class="nav-item" data-page="stock-return-receipt" data-menu-key="BakResidStock">
+                            <span class="nav-icon">📩</span>
+                            <span class="nav-label">ثبت رسید برگشتی</span>
+                        </a>
+                        <a class="nav-item" data-page="asset-goods" data-menu-key="AmvalResid">
+                            <span class="nav-icon">🏢</span>
+                            <span class="nav-label">ثبت کالاهای اموالی</span>
+                        </a>
+                        <a class="nav-item" data-page="asset-goods-transfer" data-menu-key="AmvalTransfer">
+                            <span class="nav-icon">🔀</span>
+                            <span class="nav-label">انتقالی اموالی</span>
+                        </a>
+                        <a class="nav-item" data-page="stock-count" data-menu-key="StockTaking">
+                            <span class="nav-icon">📊</span>
+                            <span class="nav-label">انبار گردانی کالا</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="nav-group" data-group="payments">
+                    <div class="nav-group-header" data-toggle-group="payments">
+                        <span class="nav-group-icon">💰</span>
+                        <span class="nav-group-label">عملیات دریافت و پرداخت</span>
+                        <span class="nav-group-arrow">▼</span>
+                    </div>
+                    <div class="nav-group-items">
+                        <a class="nav-item" data-page="receive-cash" data-menu-key="ReceiveCash">
+                            <span class="nav-icon">💵</span>
+                            <span class="nav-label">دریافت نقدی</span>
+                        </a>
+                        <a class="nav-item" data-page="receive-cheque" data-menu-key="ReceiveCheck">
+                            <span class="nav-icon">📝</span>
+                            <span class="nav-label">دریافت چکی</span>
+                        </a>
+                        <a class="nav-item" data-page="pay-cash" data-menu-key="PayCash">
+                            <span class="nav-icon">💸</span>
+                            <span class="nav-label">پرداخت نقدی</span>
+                        </a>
+                        <a class="nav-item" data-page="pay-cheque" data-menu-key="PayCheck">
+                            <span class="nav-icon">🖊️</span>
+                            <span class="nav-label">پرداخت چکی</span>
                         </a>
                     </div>
                 </div>
@@ -149,27 +236,23 @@
                         <span class="nav-group-arrow">▼</span>
                     </div>
                     <div class="nav-group-items">
-                        <a class="nav-item" data-page="factor">
-                            <span class="nav-icon">🧾</span>
-                            <span class="nav-label">فاکتورها</span>
-                        </a>
-                        <a class="nav-item" data-page="hesab">
+                        <a class="nav-item" data-page="hesab" data-menu-key="Hesab">
                             <span class="nav-icon">🏦</span>
                             <span class="nav-label">حساب‌ها</span>
                         </a>
-                        <a class="nav-item" data-page="tafzili">
+                        <a class="nav-item" data-page="tafzili" data-menu-key="Tafzili">
                             <span class="nav-icon">👥</span>
                             <span class="nav-label">تفضیلی‌ها</span>
                         </a>
-                        <a class="nav-item" data-page="article">
+                        <a class="nav-item" data-page="article" data-menu-key="Article">
                             <span class="nav-icon">🏷️</span>
                             <span class="nav-label">کالاها</span>
                         </a>
-                        <a class="nav-item" data-page="sharh">
+                        <a class="nav-item" data-page="sharh" data-menu-key="Sharh">
                             <span class="nav-icon">📝</span>
                             <span class="nav-label">شرح‌ها</span>
                         </a>
-                        <a class="nav-item" data-page="kind">
+                        <a class="nav-item" data-page="kind" data-menu-key="Kind">
                             <span class="nav-icon">🔖</span>
                             <span class="nav-label">انواع سند</span>
                         </a>
@@ -201,6 +284,9 @@
                 <h2 id="pageTitle">داشبورد</h2>
 
                 <div class="topbar-actions">
+                    <button class="topbar-btn" id="btnChangePassword" title="تغییر رمز">
+                        🔑
+                    </button>
                     <button class="topbar-btn" id="btnSettings" title="تنظیمات">
                         ⚙️
                     </button>
@@ -233,7 +319,7 @@
     <!-- ═══════════════ Toast ═══════════════ -->
     <div id="toast" class="toast hidden"></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="/js/chart.umd.min.js"></script>
 
     <script src="js/exporter.js"></script>
     <script src="js/form-builder.js"></script>
@@ -242,17 +328,23 @@
     <script src="js/core/helpers.js"></script>
     <script src="js/core/state.js"></script>
     <script src="js/core/http.js"></script>
+    <script src="js/core/permissions.js"></script>
     <script src="js/core/auth.js"></script>
     <script src="js/ui/toast.js"></script>
     <script src="js/ui/modal.js"></script>
+    <script src="js/ui/permission-guard.js"></script>
+    <script src="js/ui/table-card-view.js"></script>
     <script src="js/features/sanad.js"></script>
+    <script src="js/features/sanad-form.js"></script>
     <script src="js/features/sharh.js"></script>
     <script src="js/features/kind.js"></script>
     <script src="js/features/profitloss.js"></script>
     <script src="js/features/bilan.js"></script>
     <script src="js/features/article.js"></script>
+    <script src="js/features/article-form.js"></script>
     <script src="js/features/factor.js"></script>
     <script src="js/features/tafzili.js"></script>
+    <script src="js/features/tafzili-form.js"></script>
     <script src="js/features/daybook.js"></script>
     <script src="js/features/dashboard.js"></script>
     <script src="js/features/hesab.js"></script>

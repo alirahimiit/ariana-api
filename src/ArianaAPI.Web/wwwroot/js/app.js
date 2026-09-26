@@ -23,7 +23,10 @@ window.App = Object.assign(window.App || {}, {
     loadOrganizations: () => window.App.Auth.loadOrganizations(),
     loadFiscalYears: (orgId) => window.App.Auth.loadFiscalYears(orgId),
     handleLogin: (e) => window.App.Auth.handleLogin(e),
-    handleLogout: () => window.App.Auth.handleLogout(),
+    handleLogout: () => {
+        window.App.Permissions.clear();
+        return window.App.Auth.handleLogout();
+    },
     showLogin: () => window.App.Auth.showLogin(),
     showApp: () => window.App.Auth.showApp(),
     // ═══════════════════════════════════════════
@@ -34,6 +37,7 @@ window.App = Object.assign(window.App || {}, {
         window.App.Http.init(window.location.origin);   // ← window.App
         window.App.State.init();                        // ← window.App
 
+        window.App.Permissions.restore();
         // ⭐ بازیابی از localStorage — الان App.State این کار رو می‌کنه
         //    (این خط رو نگه دار فقط اگه قبلاً اینجا localStorage رو خودت می‌خوندی)
         // const saved = localStorage.getItem('ariana_auth');
@@ -45,13 +49,20 @@ window.App = Object.assign(window.App || {}, {
 
         // ⭐ اعمال لوگو
         this.applyLogo();
+        // ⭐ Nav groups (تاشو)
+        this.initNavGroups();
         // ⭐ Sidebar موبایل
         this.initSidebar();
+
+        // ⭐ رصد خودکار جدول‌های جدید
+        this._initTableObserver();
+
 
         // ⭐ تشخیص دستگاه
         this.detectDevice();
         document.getElementById('btnSettings')?.addEventListener('click', () => this.openSettings());
 
+        document.getElementById('btnChangePassword')?.addEventListener('click', () => this.openChangePassword());
         // nav
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', () => this.navigate(item.dataset.page));
@@ -75,6 +86,12 @@ window.App = Object.assign(window.App || {}, {
             this.showLogin();
             this.checkLicense();
             this.loadOrganizations();
+        }
+        // ⭐ لود رجیستری منوها (اگه کاربر لاگین هست)
+        if (this.state.token) {
+            window.App.Permissions.loadRegistry().then(() => {
+                window.App.Permissions.applyMenuFilter();
+            });
         }
     },
 
@@ -118,6 +135,14 @@ window.App = Object.assign(window.App || {}, {
             } catch (e) { /* ignore */ }
         }
     },
+    // ⭐ آیا کاربر مجازه این صفحه رو ببینه؟
+    _canAccessPage(page) {
+        const item = document.querySelector(`.nav-item[data-page="${page}"]`);
+        if (!item) return true;   // صفحه‌ای که توی منو نیست → آزاد
+        const key = item.getAttribute('data-menu-key');
+        if (!key) return true;    // بدون کلید → آزاد
+        return window.App.Permissions.hasMenu(key);
+    },
     // ═══════════════════════════════════════════
     //  SIDEBAR (mobile drawer)
     // ═══════════════════════════════════════════
@@ -158,6 +183,33 @@ window.App = Object.assign(window.App || {}, {
             const dx = e.changedTouches[0].clientX - touchStartX;
             if (dx > 80) this.closeSidebar(); // سوییپ از راست
         }, { passive: true });
+    },
+    _initTableObserver() {
+        const self = this;
+        const observer = new MutationObserver((mutations) => {
+            let hasTable = false;
+            for (const m of mutations) {
+                for (const node of m.addedNodes) {
+                    if (node.nodeType === 1) {
+                        if (node.tagName === 'TABLE' || node.querySelector?.('table')) {
+                            hasTable = true;
+                            break;
+                        }
+                    }
+                }
+                if (hasTable) break;
+            }
+            if (hasTable) {
+                requestAnimationFrame(() => {
+                    window.App.UI.TableCardView?.apply(document);
+                });
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
     },
 
     openSidebar() {
@@ -508,13 +560,14 @@ window.App = Object.assign(window.App || {}, {
             this.toast('تنظیمات ذخیره شد', 'success');
 
             // رفرش صفحه فعلی
+            const page = this.state.currentPage;
             if (this.state.currentPage === 'sanad') {
                 this.state.sanadPage = 1;
                 window.App.Features.Sanad.loadList();
             } else if (this.state.currentPage === 'article') {
-                this.runArticleList(1);
+                window.App.Features.Article.runList(1);
             } else if (this.state.currentPage === 'factor') {
-                this.runFactorList(1);
+                window.App.Features.Factor.runList(1);
             } else if (this.state.currentPage === 'ledger') {
                 // کاربر باید دوباره تهیه گزارش بزنه
             }
@@ -570,7 +623,13 @@ window.App = Object.assign(window.App || {}, {
         if (this.isMobile()) this.closeSidebar();
 
         this.state.currentPage = page;
+        // ⭐ چک دسترسی
+        if (!this._canAccessPage(page)) {
+            this.toast('شما به این بخش دسترسی ندارید', 'error');
+            return;
+        }
         this._expandGroupOfPage(page);
+
 
         document.querySelectorAll('.nav-item').forEach(el => {
             el.classList.toggle('active', el.dataset.page === page);
@@ -589,7 +648,29 @@ window.App = Object.assign(window.App || {}, {
             tafzili: 'تفضیلی‌ها',
             article: 'کالاها',
             sharh: 'شرح‌ها',
-            kind: 'انواع سند'
+            kind: 'انواع سند',
+            // ⭐ منوی ورود/خروج کالا
+            'factor-buy': 'فاکتور خرید',
+            'factor-sell': 'فاکتور فروش',
+            'factor-buy-return': 'مرجوع از خرید',
+            'factor-sell-return': 'مرجوع از فروش',
+            'factor-scrap': 'فروش ضایعات',
+            'factor-pre': 'پیش فاکتور',
+            'stock-receipt': 'ثبت رسید انبار',
+            'stock-transfer': 'ثبت حواله انبار',
+            'stock-return-receipt': 'ثبت رسید برگشتی',
+            'asset-goods': 'ثبت کالاهای اموالی',
+            'asset-goods-transfer': 'انتقالی اموالی',
+            'stock-count': 'انبار گردانی کالا',
+            // ⭐ منوی دریافت/پرداخت
+            'receive-cash': 'دریافت نقدی',
+            'receive-cheque': 'دریافت چکی',
+            'pay-cash': 'پرداخت نقدی',
+            'pay-cheque': 'پرداخت چکی',
+            // ⭐ گزارشات فاکتور
+            'report-factor': 'گزارش فاکتورها',
+            'report-sell-summary': 'خلاصه فروش',
+            'report-profit': 'سود و زیان فاکتورها'
         };
         document.getElementById('pageTitle').textContent = titles[page] || page;
 
@@ -607,6 +688,11 @@ window.App = Object.assign(window.App || {}, {
             case 'tafzili': window.App.Features.Tafzili.render(); break;
             case 'sharh': window.App.Features.Sharh.render(); break;
             case 'kind': window.App.Features.Kind.render(); break;
+
+            // ⭐ صفحات در حال توسعه — placeholder نمایش می‌ده
+            default:
+                window.App.renderComingSoon(page, titles[page] || page);
+                break;
         }
     },
 
@@ -638,6 +724,10 @@ window.App = Object.assign(window.App || {}, {
         requestAnimationFrame(() => {
             if (window.TableEnhancer) {
                 TableEnhancer.enhance(root);
+            }
+            // ⭐ تبدیل به کارت در موبایل
+            if (window.App.UI.TableCardView) {
+                window.App.UI.TableCardView.apply(root);
             }
         });
     },
@@ -676,6 +766,133 @@ window.App = Object.assign(window.App || {}, {
         };
         const [cls, label] = map[v] || ['badge-gray', 'نامشخص'];
         return `<span class="badge ${cls}">${label}</span>`;
+    },
+    // ⭐ صفحه‌ی «در حال توسعه» برای صفحات ساخته‌نشده
+    renderComingSoon(page, title) {
+        const c = document.getElementById('content');
+        c.innerHTML = `
+            <div class="card">
+                <div class="empty" style="padding: 60px 20px;">
+                    <div class="empty-icon" style="font-size:64px; opacity:0.4;">🚧</div>
+                    <h2 style="margin: 16px 0 8px; color: var(--text); font-size: 18px;">
+                        ${this.esc(title)}
+                    </h2>
+                    <p class="muted" style="font-size: 14px; margin-top: 8px;">
+                        این بخش در حال توسعه است
+                    </p>
+                    <p class="muted" style="font-size: 12px; margin-top: 4px; direction: ltr;">
+                        صفحه: ${this.esc(page)}
+                    </p>
+                </div>
+            </div>`;
+        if (window.App.UI.PermissionGuard) {
+            window.App.UI.PermissionGuard.apply(c);
+        }
+    },
+
+    // ═══════════════════════════════════════════
+    //  تغییر رمز
+    // ═══════════════════════════════════════════
+    openChangePassword() {
+        const user = this.state.user || {};
+
+        const body = `
+        <div class="pwd-form">
+            <div class="pwd-user-banner">
+                <div class="pwd-user-avatar">${this.esc((user.fullName || user.username || '?').charAt(0))}</div>
+                <div>
+                    <div class="pwd-user-name">${this.esc(user.fullName || user.username || '-')}</div>
+                    <div class="pwd-user-meta">${this.esc(user.orgName || '')} - ${this.esc(user.fyName || '')}</div>
+                </div>
+            </div>
+
+            <div class="pwd-field">
+                <label>رمز فعلی <span class="req">*</span></label>
+                <input type="password" id="pwdCurrent" autocomplete="current-password" placeholder="رمز فعلی خود را وارد کنید">
+            </div>
+
+            <div class="pwd-field">
+                <label>رمز جدید <span class="req">*</span></label>
+                <input type="password" id="pwdNew" autocomplete="new-password" placeholder="حداقل ۴ کاراکتر">
+            </div>
+
+            <div class="pwd-field">
+                <label>تأیید رمز جدید <span class="req">*</span></label>
+                <input type="password" id="pwdConfirm" autocomplete="new-password" placeholder="رمز جدید را دوباره وارد کنید">
+            </div>
+
+            <div id="pwdError" class="pwd-error hidden"></div>
+
+            <div class="pwd-footer">
+                <button class="btn btn-primary" id="pwdSaveBtn">💾 ذخیره</button>
+                <button class="btn btn-ghost" data-close>انصراف</button>
+            </div>
+        </div>
+    `;
+
+        this.openModal('🔑 تغییر رمز عبور', body);
+
+        const modalBody = document.getElementById('modalBody');
+        const currentEl = modalBody.querySelector('#pwdCurrent');
+        const newEl = modalBody.querySelector('#pwdNew');
+        const confirmEl = modalBody.querySelector('#pwdConfirm');
+        const errorEl = modalBody.querySelector('#pwdError');
+
+        setTimeout(() => currentEl.focus(), 100);
+
+        const showError = (msg) => {
+            errorEl.textContent = msg;
+            errorEl.classList.remove('hidden');
+        };
+        const clearError = () => errorEl.classList.add('hidden');
+
+        const doSave = async () => {
+            clearError();
+
+            const cur = currentEl.value;
+            const nw = newEl.value;
+            const cf = confirmEl.value;
+
+            if (!cur) return showError('رمز فعلی را وارد کنید');
+            if (!nw) return showError('رمز جدید را وارد کنید');
+            if (nw.length < 4) return showError('رمز جدید باید حداقل ۴ کاراکتر باشد');
+            if (nw !== cf) return showError('رمز جدید و تأیید آن یکسان نیستند');
+            if (cur === nw) return showError('رمز جدید با رمز فعلی یکسان است');
+
+            const btn = modalBody.querySelector('#pwdSaveBtn');
+            const orig = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳ در حال ذخیره...';
+
+            try {
+                await window.App.Http.api('/api/auth/change-password', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        currentPassword: cur,
+                        newPassword: nw
+                    })
+                });
+
+                this.toast('رمز با موفقیت تغییر کرد', 'success');
+                this.closeModal();
+            } catch (err) {
+                btn.disabled = false;
+                btn.textContent = orig;
+                showError(err.message || 'خطا در تغییر رمز');
+            }
+        };
+
+        modalBody.querySelector('#pwdSaveBtn').addEventListener('click', doSave);
+        modalBody.querySelectorAll('[data-close]').forEach(el => {
+            el.addEventListener('click', () => this.closeModal());
+        });
+
+        // Enter برای ذخیره
+        [currentEl, newEl, confirmEl].forEach(el => {
+            el.addEventListener('keydown', e => {
+                if (e.key === 'Enter') { e.preventDefault(); doSave(); }
+            });
+        });
     },
 
 });

@@ -3,6 +3,7 @@ using ArianaAPI.Application.Interfaces;
 using ArianaAPI.Web.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ArianaAPI.Web.Filters;
 
 namespace ArianaAPI.Web.Controllers;
 
@@ -80,6 +81,68 @@ public class TafziliController : ControllerBase
 
         var ok = await _repo.DeleteGroupAsync(orgId, fyId, id, ct);
         return ok ? NoContent() : NotFound();
+    }
+
+    /// <summary>درج تفضیلی جدید</summary>
+    [HttpPost]
+    [RequirePermission(193)]
+    public async Task<ActionResult<TafziliCreateResultDto>> Create(
+        [FromBody] TafziliCreateDto dto, CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        try
+        {
+            var result = await _repo.CreateAsync(orgId, fyId, dto, ct);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>ویرایش تفضیلی</summary>
+    [HttpPut("{id:long}")]
+    [RequirePermission(194)]
+    public async Task<IActionResult> Update(
+        long id, [FromBody] TafziliUpdateDto dto, CancellationToken ct)
+    {
+        if (id != dto.Id)
+            return BadRequest(new { error = "شناسه در URL و بدنه یکسان نیست" });
+
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        try
+        {
+            await _repo.UpdateAsync(orgId, fyId, dto, ct);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>حذف تفضیلی</summary>
+    [HttpDelete("{id:long}")]
+    [RequirePermission(195)]
+    public async Task<IActionResult> Delete(long id, CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        try
+        {
+            await _repo.DeleteAsync(orgId, fyId, id, ct);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
 }
