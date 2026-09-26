@@ -1,30 +1,64 @@
-# ===== .NET =====
+# ═══════════════════════════════════════════
+#  Build outputs
+# ═══════════════════════════════════════════
 bin/
 obj/
+publish/
+publish_*/
+Publish-*/
+ArianaAPI-New/
+
+# ═══════════════════════════════════════════
+#  IDE
+# ═══════════════════════════════════════════
+.vs/
+.vscode/
+.idea/
 *.user
 *.suo
-.vs/
 
-# ===== Secrets (خیلی مهم) =====
-appsettings.Development.json
-appsettings.Production.json
-appsettings.Local.json
-*.secrets.json
-.env
-.env.*
-
-# ===== Logs =====
-Logs/
+# ═══════════════════════════════════════════
+#  Logs
+# ═══════════════════════════════════════════
+logs/
 *.log
 
-# ===== Build/Test =====
-TestResults/
-*.trx
+# ═══════════════════════════════════════════
+#  Backups
+# ═══════════════════════════════════════════
+Backup/
+BackupData/
+*_backup_*/
+*_backup/
+wwwroot_backup_*/
+ArianaAPI-Backup/
 
-# ===== OS =====
+# ═══════════════════════════════════════════
+#  🔴 Secrets
+# ═══════════════════════════════════════════
+appsettings.Production.json
+*.lic
+ariana*.lic
+.ssh/
+*.pem
+id_rsa
+id_rsa.pub
+
+# ═══════════════════════════════════════════
+#  OS
+# ═══════════════════════════════════════════
 Thumbs.db
 .DS_Store
+desktop.ini
 
-# ===== Rider/VS Code =====
-.idea/
-.vscode/
+# ═══════════════════════════════════════════
+#  Deploy tools
+# ═══════════════════════════════════════════
+nssm.exe
+start-tunnel.bat
+deploy.bat
+git-push.bat
+restart-tunnel.bat
+restart-all.bat
+check-status.bat
+backup.bat
