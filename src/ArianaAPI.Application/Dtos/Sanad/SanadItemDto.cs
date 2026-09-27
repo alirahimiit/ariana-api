@@ -38,4 +38,6 @@ public class SanadItemDto
     public string? MoeinName { get; set; }
     public string? TafzilName { get; set; }
     public string? Tafzili2Name { get; set; }
+    public bool IsStock { get; set; }
+    public bool HasTafzili { get; set; }
 }

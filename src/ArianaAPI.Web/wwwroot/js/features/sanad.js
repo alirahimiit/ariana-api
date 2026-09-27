@@ -1,14 +1,6 @@
 ﻿/* ═══════════════════════════════════════════════════
    Feature / Sanad (اسناد حسابداری)
-   مسئولیت: لیست، جستجو، جزئیات سند
-   ═══════════════════════════════════════════════════
-   وابستگی‌ها:
-     - window.App.Helpers   (fmt, fmtSigned, esc)
-     - window.App.Http      (api)
-     - window.App.State
-     - window.App.UI.FilterPanel   (بعداً — فعلاً از App.FilterPanel)
-     - window.App.UI.Exporter
-     - window.App.UI.Modal
+   مسئولیت: لیست، جستجو، جزئیات سند + فیلتر خطاها
    ═══════════════════════════════════════════════════ */
 
 window.App = window.App || {};
@@ -20,6 +12,11 @@ window.App.Features.Sanad = (function () {
     // ─── state محلی این feature ───
     let _filters = {};
     let _sort = { by: 'noSanad', dir: 'desc' };
+
+    // ⭐ state فیلتر خطاها در modal جزئیات
+    let _detailFilter = { errorType: 'all' };
+    let _detailData = { detail: null, items: [] };
+
     // ─── shortcut ها ───
     const H = window.App.Helpers;
     const S = window.App.State;
@@ -30,6 +27,7 @@ window.App.Features.Sanad = (function () {
             ? '<span style="color:#4F46E5;font-size:10px;">▲</span>'
             : '<span style="color:#4F46E5;font-size:10px;">▼</span>';
     }
+
     function sortBy(field) {
         if (_sort.by === field) {
             _sort.dir = _sort.dir === 'asc' ? 'desc' : 'asc';
@@ -40,6 +38,7 @@ window.App.Features.Sanad = (function () {
         window.App.state.sanadPage = 1;
         loadList();
     }
+
     // ═══════════════════════════════════════════
     //  RENDER — صفحه لیست
     // ═══════════════════════════════════════════
@@ -101,6 +100,13 @@ window.App.Features.Sanad = (function () {
                             { value: '1', label: 'افتتاحیه' },
                             { value: '2', label: 'اختتامیه' }
                         ]
+                    },
+                    {
+                        name: 'onlyWithErrors', label: 'نمایش', type: 'select',
+                        placeholder: 'همه اسناد',
+                        options: [
+                            { value: 'true', label: '⚠️ فقط دارای ایراد' }
+                        ]
                     }
                 ]
             }
@@ -130,10 +136,11 @@ window.App.Features.Sanad = (function () {
             }
 
             container.innerHTML = buildListHtml(items);
-            // ⭐ اعمال permission روی دکمه‌ها
+
             if (window.App.UI.PermissionGuard) {
                 window.App.UI.PermissionGuard.apply(container);
             }
+
             Exporter.attach(container, {
                 table: container.querySelector('table'),
                 title: 'لیست اسناد حسابداری',
@@ -141,13 +148,10 @@ window.App.Features.Sanad = (function () {
                 filename: 'SanadList'
             });
 
-           // window.App.enhanceTables(container);
-
         } catch (err) {
             container.innerHTML = `<div class="error-box">${err.message}</div>`;
         }
     }
-
 
     function buildUrl() {
         const f = _filters || {};
@@ -161,10 +165,13 @@ window.App.Features.Sanad = (function () {
         if (f.noTo != null && f.noTo !== '') url += `&noTo=${parseInt(f.noTo)}`;
         if (f.vazeit != null && f.vazeit !== '') url += `&vazeit=${parseInt(f.vazeit)}`;
         if (f.kindSanad != null && f.kindSanad !== '') url += `&kindSanad=${parseInt(f.kindSanad)}`;
-        // ⭐ سورت
         if (_sort.by) {
             url += `&sortBy=${_sort.by}&sortDir=${_sort.dir}`;
         }
+        if (f.onlyWithErrors === 'true') {
+            url += `&onlyWithErrors=true`;
+        }
+            
         return url;
     }
 
@@ -175,16 +182,19 @@ window.App.Features.Sanad = (function () {
         const rows = items.map(s => {
             const bed = s.mabBed || 0;
             const bes = s.mabBes || 0;
-            const diff = Math.abs(bed - bes);
-            const isUnbalanced = diff > 0.01;
+            const isUnbalanced = Math.abs(bed - bes) > 0.01;
+            const hasErrors = (s.totalErrorCount || 0) > 0;
+            const rowClass = hasErrors ? 'row-has-errors'
+                : (isUnbalanced ? 'row-unbalanced' : '');
 
             return `
-            <tr class="${isUnbalanced ? 'row-unbalanced' : ''}">
+            <tr class="${rowClass}">
                 <td class="num">${H.fmt(s.noSanad)}</td>
                 <td class="num">${H.esc(s.dateIn || '-')}</td>
                 <td>${H.esc(s.otherParentSharh || '-')}</td>
                 <td>${window.App.statusBadge(s.vazeit)}</td>
                 <td>${kindSanadText(s.kindSanad)}</td>
+                <td class="text-center">${renderErrorBadge(s)}</td>
                 <td class="num text-left">${H.fmt(s.mabBed)}</td>
                 <td class="num text-left">${H.fmt(s.mabBes)}</td>
                 <td class="text-center">
@@ -224,6 +234,7 @@ window.App.Features.Sanad = (function () {
                                 <th class="sortable-th" onclick="App.Features.Sanad.sortBy('sharh')">شرح ${sortIcon('sharh')}</th>
                                 <th class="sortable-th" onclick="App.Features.Sanad.sortBy('vazeit')">وضعیت ${sortIcon('vazeit')}</th>
                                 <th class="sortable-th" onclick="App.Features.Sanad.sortBy('kindSanad')">نوع ${sortIcon('kindSanad')}</th>
+                                <th style="width:80px;">ایراد</th>
                                 <th class="sortable-th text-left" onclick="App.Features.Sanad.sortBy('mabBed')">بدهکار ${sortIcon('mabBed')}</th>
                                 <th class="sortable-th text-left" onclick="App.Features.Sanad.sortBy('mabBes')">بستانکار ${sortIcon('mabBes')}</th>
                                 <th></th>
@@ -256,13 +267,22 @@ window.App.Features.Sanad = (function () {
         window.App.openModal('جزئیات سند',
             `<div class="loading"><div class="spinner"></div></div>`);
 
+        // ⭐ ریست فیلتر
+        _detailFilter.errorType = 'all';
+
         try {
             const [detail, items] = await Promise.all([
                 window.App.Http.api(`/api/sanad/${sanadId}`),
                 window.App.Http.api(`/api/sanad/${sanadId}/items`)
             ]);
 
+            // ⭐ ذخیره برای re-render
+            _detailData = { detail, items: items || [] };
+
             document.getElementById('modalBody').innerHTML = buildDetailHtml(detail, items);
+
+            // ⭐ bind رویداد فیلتر
+            bindDetailFilter();
 
             Exporter.attach(document.getElementById('modalBody'), {
                 title: 'سند حسابداری - شماره ' + (detail?.noSanad || ''),
@@ -276,22 +296,102 @@ window.App.Features.Sanad = (function () {
         }
     }
 
+    // ═══════════════════════════════════════════
+    //  BUILD DETAIL HTML — با badge خطا + فیلتر
+    // ═══════════════════════════════════════════
     function buildDetailHtml(detail, items) {
-        const rows = (items || []).map(it => `
-            <tr>
-                <td class="num text-center">${H.fmt(it.rowNum)}</td>
-                <td class="num text-center">${it.code_Col ?? '-'}</td>
-                <td>${H.esc(it.colName || '-')}</td>
-                <td class="num text-center">${it.code_Moein || '-'}</td>
-                <td>${H.esc(it.moeinName || '-')}</td>
-                <td class="num text-center">${it.code_Tafzil || '-'}</td>
-                <td>${H.esc(it.tafzilName || '-')}</td>
-                <td>${H.esc(it.otherSharh || '-')}</td>
-                <td class="num text-left">${H.fmt(it.mabBed)}</td>
-                <td class="num text-left">${H.fmt(it.mabBes)}</td>
-                <td class="num text-left">${H.fmtSigned(it.meghdar)}</td>
-            </tr>
-        `).join('');
+        items = items || [];
+
+        // ─── شمارش خطاها ───
+        const errorCounts = {
+            all: 0,
+            missingCoding: 0,   // کدینگ ناقص
+            missingMoein: 0,    // معین ندارد
+            noMeghdar: 0,       // مقدار خالی (انباری)
+            noAmount: 0,        // مبلغ صفر
+            noDescr: 0          // بدون شرح
+        };
+
+        const itemsWithErrors = items.map(it => {
+            const errs = detectRowErrors(it);
+            errs.forEach(e => {
+                if (errorCounts[e.code] !== undefined) errorCounts[e.code]++;
+            });
+            if (errs.length > 0) errorCounts.all++;
+            return Object.assign({}, it, { _errors: errs });
+        });
+
+        // ─── فیلتر ───
+        const f = _detailFilter.errorType;
+        const visibleItems = (f === 'all')
+            ? itemsWithErrors
+            : itemsWithErrors.filter(x => x._errors.some(e => e.code === f));
+
+        // ─── فیلتر bar ───
+        const filterBar = `
+            <div class="sanad-error-filter">
+                <div class="sanad-filter-info">
+                    ${errorCounts.all > 0
+                ? `<span class="sanad-err-badge">⚠️ ${H.fmt(errorCounts.all)} ردیف دارای ایراد</span>`
+                : `<span class="sanad-ok-badge">✅ همه ردیف‌ها سالم</span>`
+            }
+                </div>
+                <div class="sanad-filter-select">
+                    <label>فیلتر:</label>
+                    <select id="sanadErrFilter">
+                        <option value="all" ${f === 'all' ? 'selected' : ''}>
+                            همه ردیف‌ها (${H.fmt(itemsWithErrors.length)})
+                        </option>
+                        <option value="missingCoding" ${f === 'missingCoding' ? 'selected' : ''}>
+                            کدینگ ناقص (${H.fmt(errorCounts.missingCoding)})
+                        </option>
+                        <option value="missingMoein" ${f === 'missingMoein' ? 'selected' : ''}>
+                            بدون معین (${H.fmt(errorCounts.missingMoein)})
+                        </option>
+                        <option value="noMeghdar" ${f === 'noMeghdar' ? 'selected' : ''}>
+                            مقدار خالی انباری (${H.fmt(errorCounts.noMeghdar)})
+                        </option>
+                        <option value="noAmount" ${f === 'noAmount' ? 'selected' : ''}>
+                            مبلغ صفر (${H.fmt(errorCounts.noAmount)})
+                        </option>
+                        <option value="noDescr" ${f === 'noDescr' ? 'selected' : ''}>
+                            بدون شرح (${H.fmt(errorCounts.noDescr)})
+                        </option>
+                    </select>
+                </div>
+            </div>`;
+
+        // ─── ردیف‌ها ───
+        const rows = visibleItems.map(it => {
+            const errBadges = (it._errors || []).map(e =>
+                `<span class="sanad-row-err sanad-err-${e.severity}" title="${H.esc(e.label)}">
+                    ${e.severity === 'error' ? '⛔' : (e.severity === 'warn' ? '⚠️' : 'ℹ️')}
+                </span>`
+            ).join('');
+
+            const hasError = (it._errors || []).some(e => e.severity === 'error');
+            const hasWarn = (it._errors || []).some(e => e.severity === 'warn');
+            const rowClass = hasError ? 'sanad-row-has-error'
+                : (hasWarn ? 'sanad-row-has-warn' : '');
+
+            return `
+                <tr class="${rowClass}">
+                    <td class="num text-center">
+                        ${H.fmt(it.rowNum)}
+                        ${errBadges}
+                    </td>
+                    <td class="num text-center">${it.code_Col ?? '-'}</td>
+                    <td>${H.esc(it.colName || '-')}</td>
+                    <td class="num text-center">${it.code_Moein || '-'}</td>
+                    <td>${H.esc(it.moeinName || '-')}</td>
+                    <td class="num text-center">${it.code_Tafzil || '-'}</td>
+                    <td>${H.esc(it.tafzilName || '-')}</td>
+                    <td>${H.esc(it.otherSharh || '-')}</td>
+                    <td class="num text-left">${H.fmt(it.mabBed)}</td>
+                    <td class="num text-left">${H.fmt(it.mabBes)}</td>
+                    <td class="num text-left">${H.fmtSigned(it.meghdar)}</td>
+                </tr>`;
+        }).join('');
 
         return `
             <div class="stats-grid" style="margin-bottom:16px;">
@@ -317,16 +417,17 @@ window.App.Features.Sanad = (function () {
                     <div>
                         <div class="stat-label">نوع سند</div>
                         <div class="stat-value" style="font-size:16px;">
-                            ${kindSanadText(detail?.kindSanad)}
+                            ${kindSanadText(detail?.kindSanad ?? 0)}
                         </div>
                     </div>
                 </div>
             </div>
+            ${filterBar}
             <div class="table-wrapper">
                 <table>
                     <thead>
                         <tr>
-                            <th style="width:40px;">ردیف</th>
+                            <th style="width:80px;">ردیف</th>
                             <th style="width:50px;">کد کل</th>
                             <th>نام کل</th>
                             <th style="width:50px;">معین</th>
@@ -340,12 +441,63 @@ window.App.Features.Sanad = (function () {
                         </tr>
                     </thead>
                     <tbody>
-                        ${rows || '<tr><td colspan="11" class="text-center">ردیفی وجود ندارد</td></tr>'}
+                        ${rows || '<tr><td colspan="11" class="text-center">ردیفی برای نمایش نیست</td></tr>'}
                     </tbody>
                 </table>
             </div>`;
     }
 
+    // ═══════════════════════════════════════════
+    //  تشخیص خطاهای ردیف
+    // ═══════════════════════════════════════════
+    function detectRowErrors(it) {
+        const errors = [];
+        const hasBed = (it.mabBed || 0) > 0;
+        const hasBes = (it.mabBes || 0) > 0;
+        const hasAmount = hasBed || hasBes;
+
+        // ─── ۱. کدینگ ناقص (کد کل نداره) ───
+        if (!it.code_Col || it.code_Col === 0) {
+            errors.push({ code: 'missingCoding', label: 'کد کل ندارد — نیاز به کدینگ', severity: 'error' });
+        }
+
+        // ─── ۲. معین ندارد (وقتی مبلغ داره ولی معین صفر) ───
+        if (it.code_Col > 0 && (!it.code_Moein || it.code_Moein === 0) && hasAmount) {
+            errors.push({ code: 'missingMoein', label: 'کد معین ندارد', severity: 'warn' });
+        }
+
+        // ─── ۳. مقدار خالی (فقط برای حساب‌های انباری) ───
+        if (it.isStock && hasAmount && (!it.meghdar || Math.abs(it.meghdar) === 0)) {
+            errors.push({ code: 'noMeghdar', label: 'مقدار انباری ندارد', severity: 'error' });
+        }
+
+        // ─── ۴. مبلغ صفر ───
+        if (!hasAmount) {
+            errors.push({ code: 'noAmount', label: 'مبلغ بدهکار و بستانکار صفر است', severity: 'warn' });
+        }
+
+        // ─── ۵. بدون شرح ───
+        if (!it.otherSharh || !String(it.otherSharh).trim()) {
+            errors.push({ code: 'noDescr', label: 'شرح ردیف خالی است', severity: 'info' });
+        }
+
+        return errors;
+    }
+
+    function bindDetailFilter() {
+        const sel = document.getElementById('sanadErrFilter');
+        if (!sel) return;
+        sel.addEventListener('change', function () {
+            _detailFilter.errorType = this.value;
+            const { detail, items } = _detailData;
+            document.getElementById('modalBody').innerHTML = buildDetailHtml(detail, items);
+            bindDetailFilter();
+        });
+    }
+
+    // ═══════════════════════════════════════════
+    //  PRINT
+    // ═══════════════════════════════════════════
     function buildDetailPrintHtml(detail, items) {
         const headerBlock = `
             <table class="factor-info-table">
@@ -357,7 +509,7 @@ window.App.Features.Sanad = (function () {
                     <td class="label">وضعیت:</td>
                     <td>${statusText(detail?.vazeit)}</td>
                     <td class="label">نوع سند:</td>
-                    <td>${kindSanadText(detail?.kindSanad)}</td>
+                    <td>${kindSanadText(detail?.kindSanad ?? 0)}</td>
                 </tr>
                 <tr>
                     <td class="label">شرح سند:</td>
@@ -429,7 +581,7 @@ window.App.Features.Sanad = (function () {
     }
 
     // ═══════════════════════════════════════════
-    //  Helpers (محلی این feature)
+    //  Helpers (محلی)
     // ═══════════════════════════════════════════
     function statusText(v) {
         const map = { 0: 'پیش‌نویس', 1: 'ثبت شده', 2: 'تأیید شده', 3: 'برگشتی' };
@@ -443,7 +595,26 @@ window.App.Features.Sanad = (function () {
         };
         return map[v] ?? '-';
     }
+    // ⭐ badge خطا در لیست
+    function renderErrorBadge(s) {
+        const total = s.totalErrorCount || 0;
+        if (total === 0) {
+            return '<span class="sanad-list-ok" title="بدون ایراد">✅</span>';
+        }
 
+        const coding = s.codingErrorCount || 0;
+        const moein = s.moeinErrorCount || 0;
+
+        const parts = [];
+        if (coding > 0) parts.push(coding + ' کدینگ ناقص');
+        if (moein > 0) parts.push(moein + ' بدون معین');
+
+        const title = 'ایرادها: ' + parts.join('، ');
+
+        return `<span class="sanad-list-err" title="${H.esc(title)}">
+                    ⚠️ ${H.fmt(total)}
+                </span>`;
+    }
     function subtitle() {
         const u = window.App.state.user || {};
         return (u.orgName || '') + ' - ' + (u.fyName || '');
@@ -462,11 +633,9 @@ window.App.Features.Sanad = (function () {
     };
 })();
 
-// ⭐ به آبجکت اصلی وصل کن (تا بشه از HTML صدا زد)
+// ⭐ alias
 window.App.Features = window.App.Features || {};
 window.App.Features.Sanad = window.App.Features.Sanad;
-
-// ⭐ alias در سطح ریشه برای سازگاری با کد فعلی
 window.App.showSanadDetail = window.App.Features.Sanad.showDetail;
 window.App.gotoSanadPage = window.App.Features.Sanad.gotoPage;
 window.App.renderSanadList = window.App.Features.Sanad.render;

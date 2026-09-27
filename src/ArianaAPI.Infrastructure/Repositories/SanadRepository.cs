@@ -21,9 +21,8 @@ public class SanadRepository : ISanadRepository
     }
 
     // ═══════════════════════════════════════════════════
-    //  لیست اسناد
+    //  لیست اسناد + شمارش خطاها
     // ═══════════════════════════════════════════════════
-
     public async Task<IEnumerable<SanadListDto>> GetListAsync(
         long orgId,
         long fyId,
@@ -37,9 +36,9 @@ public class SanadRepository : ISanadRepository
         string? sortDir = null,
         int page = 1,
         int pageSize = 100,
+        bool? onlyWithErrors = null,
         CancellationToken ct = default)
     {
-        // ساخت WHERE دینامیک
         var where = new StringBuilder(" WHERE 1=1 ");
         var parameters = new DynamicParameters();
 
@@ -48,38 +47,38 @@ public class SanadRepository : ISanadRepository
             where.Append(" AND P.Date_IN >= @fromDate ");
             parameters.Add("fromDate", fromDate);
         }
-
         if (!string.IsNullOrWhiteSpace(toDate))
         {
             where.Append(" AND P.Date_IN <= @toDate ");
             parameters.Add("toDate", toDate);
         }
-
         if (noFrom.HasValue)
         {
             where.Append(" AND P.NO_Sanad >= @noFrom ");
             parameters.Add("noFrom", noFrom.Value);
         }
-
         if (noTo.HasValue)
         {
             where.Append(" AND P.NO_Sanad <= @noTo ");
             parameters.Add("noTo", noTo.Value);
         }
-
         if (vazeit.HasValue)
         {
             where.Append(" AND P.Vazeit = @vazeit ");
             parameters.Add("vazeit", vazeit.Value);
         }
-
         if (kindSanad.HasValue)
         {
             where.Append(" AND P.KindSanad = @kindSanad ");
             parameters.Add("kindSanad", kindSanad.Value);
         }
 
-        // صفحه‌بندی
+        // ⭐ فیلتر فقط اسناد دارای خطا
+        if (onlyWithErrors == true)
+        {
+            where.Append(" AND (ISNULL(E.CodingErrors, 0) + ISNULL(E.MoeinErrors, 0)) > 0 ");
+        }
+
         if (page < 1) page = 1;
         if (pageSize < 1 || pageSize > 100000) pageSize = 100;
         var offset = (page - 1) * pageSize;
@@ -87,16 +86,12 @@ public class SanadRepository : ISanadRepository
         parameters.Add("startRow", offset + 1);
         parameters.Add("endRow", offset + pageSize);
 
-        // ⚠️ استفاده از ROW_NUMBER به جای OFFSET/FETCH
-        // چون SQL Server 2008 R2 OFFSET/FETCH رو پشتیبانی نمی‌کنه
-        // ⭐ سورت داینامیک (whitelist برای جلوگیری از SQL Injection)
-        var orderBy = "P.NO_Sanad DESC";   // پیش‌فرض
+        // سورت داینامیک
+        var orderBy = "P.NO_Sanad DESC";
         if (!string.IsNullOrWhiteSpace(sortBy))
         {
             var dir = string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase)
-                ? "ASC"
-                : "DESC";
-
+                ? "ASC" : "DESC";
             var allowed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["noSanad"] = "P.NO_Sanad",
@@ -107,7 +102,6 @@ public class SanadRepository : ISanadRepository
                 ["mabBed"] = "ISNULL(S.SumBed, 0)",
                 ["mabBes"] = "ISNULL(S.SumBes, 0)"
             };
-
             if (allowed.TryGetValue(sortBy, out var col))
                 orderBy = $"{col} {dir}";
         }
@@ -123,7 +117,10 @@ public class SanadRepository : ISanadRepository
                     P.KindSanad,
                     ISNULL(S.SumBed, 0) AS Mab_Bed,
                     ISNULL(S.SumBes, 0) AS Mab_Bes,
-                     ROW_NUMBER() OVER (ORDER BY {orderBy}) AS RowNum
+                    ISNULL(E.CodingErrors, 0)  AS CodingErrorCount,
+                    ISNULL(E.MoeinErrors, 0)   AS MoeinErrorCount,
+                    (ISNULL(E.CodingErrors, 0) + ISNULL(E.MoeinErrors, 0)) AS TotalErrorCount,
+                    ROW_NUMBER() OVER (ORDER BY {orderBy}) AS RowNum
                 FROM ParentSanad P
                 LEFT JOIN (
                     SELECT ParentSanadCode,
@@ -132,6 +129,22 @@ public class SanadRepository : ISanadRepository
                     FROM Sanad
                     GROUP BY ParentSanadCode
                 ) S ON S.ParentSanadCode = P.ParentSanadID
+                LEFT JOIN (
+                    SELECT ParentSanadCode,
+                        SUM(CASE 
+                            WHEN (Code_Col IS NULL OR Code_Col = 0) 
+                                 AND (ISNULL(Mab_Bed,0) <> 0 OR ISNULL(Mab_Bes,0) <> 0)
+                            THEN 1 ELSE 0 
+                        END) AS CodingErrors,
+                        SUM(CASE 
+                            WHEN Code_Col > 0 
+                                 AND (Code_Moein IS NULL OR Code_Moein = 0)
+                                 AND (ISNULL(Mab_Bed,0) <> 0 OR ISNULL(Mab_Bes,0) <> 0)
+                            THEN 1 ELSE 0 
+                        END) AS MoeinErrors
+                    FROM Sanad
+                    GROUP BY ParentSanadCode
+                ) E ON E.ParentSanadCode = P.ParentSanadID
                 {where}
             ) AS T
             WHERE T.RowNum BETWEEN @startRow AND @endRow
@@ -143,9 +156,8 @@ public class SanadRepository : ISanadRepository
     }
 
     // ═══════════════════════════════════════════════════
-    //  جزئیات سند
+    //  جزئیات سند — با ISNULL KindSanad
     // ═══════════════════════════════════════════════════
-
     public async Task<SanadDetailDto?> GetByIdAsync(
         long orgId,
         long fyId,
@@ -155,7 +167,9 @@ public class SanadRepository : ISanadRepository
         const string sql = @"
             SELECT 
                 ParentSanadID, NO_Sanad, Date_IN, OtherParentSharh,
-                ParentSharh_Code, Vazeit, KindSanad, Creator, Confirmer,
+                ParentSharh_Code, Vazeit,
+                ISNULL(KindSanad, 0) AS KindSanad,
+                Creator, Confirmer,
                 Date_Op, Time_Op
             FROM ParentSanad
             WHERE ParentSanadID = @sanadId";
@@ -166,9 +180,8 @@ public class SanadRepository : ISanadRepository
     }
 
     // ═══════════════════════════════════════════════════
-    //  آیتم‌های سند (ردیف‌ها)
+    //  آیتم‌های سند — با IsStock + HasTafzili + شرط‌های JOIN
     // ═══════════════════════════════════════════════════
-
     public async Task<IEnumerable<SanadItemDto>> GetItemsAsync(
         long orgId,
         long fyId,
@@ -199,21 +212,28 @@ public class SanadRepository : ISanadRepository
                 ISNULL(H1.Name, '') AS ColName,
                 ISNULL(H2.Name, '') AS MoeinName,
                 ISNULL(H3.Name, '') AS TafzilName,
-                ISNULL(T2.Name, '') AS Tafzili2Name
+                ISNULL(T2.Name, '') AS Tafzili2Name,
+                ISNULL(H2.IsStock, 0)     AS IsStock,
+                ISNULL(H2.HasTafzili, 0)  AS HasTafzili
             FROM Sanad S
             LEFT JOIN Hesab H1 
-                ON H1.Code_Col = S.Code_Col 
-               AND H1.Code_Moein = 0 
+                ON S.Code_Col > 0
+               AND H1.Code_Col  = S.Code_Col 
+               AND H1.Code_Moein  = 0 
                AND H1.Code_Tafzil = 0
             LEFT JOIN Hesab H2 
-                ON H2.Code_Col = S.Code_Col 
+                ON S.Code_Col > 0
+               AND S.Code_Moein > 0
+               AND H2.Code_Col   = S.Code_Col 
                AND H2.Code_Moein = S.Code_Moein 
                AND H2.Code_Tafzil = 0
             LEFT JOIN Hesab H3 
-                ON H3.Code_Col = -1 
+                ON S.Code_Tafzil > 0
+               AND H3.Code_Col   = -1 
                AND H3.Code_Tafzil = S.Code_Tafzil
             LEFT JOIN Tafzili2 T2 
-                ON T2.Code = S.Code_Tafzili2
+                ON S.Code_Tafzili2 > 0
+               AND T2.Code = S.Code_Tafzili2
             WHERE S.ParentSanadCode = @parentSanadId
             ORDER BY S.RowNum";
 
@@ -223,9 +243,8 @@ public class SanadRepository : ISanadRepository
     }
 
     // ═══════════════════════════════════════════════════
-    //  تعداد کل اسناد
+    //  تعداد کل
     // ═══════════════════════════════════════════════════
-
     public async Task<int> GetCountAsync(
         long orgId,
         long fyId,
@@ -242,13 +261,11 @@ public class SanadRepository : ISanadRepository
             where.Append(" AND Date_IN >= @fromDate ");
             parameters.Add("fromDate", fromDate);
         }
-
         if (!string.IsNullOrWhiteSpace(toDate))
         {
             where.Append(" AND Date_IN <= @toDate ");
             parameters.Add("toDate", toDate);
         }
-
         if (vazeit.HasValue)
         {
             where.Append(" AND Vazeit = @vazeit ");
@@ -263,12 +280,8 @@ public class SanadRepository : ISanadRepository
     }
 
     // ═══════════════════════════════════════════════════
-    //  WRITE (جدید - فاز ۱۱)
+    //  WRITE (بدون تغییر)
     // ═══════════════════════════════════════════════════
-
-    // ──────────────────────────────────────────────────
-    //  Helper: تاریخ شمسی امروز
-    // ──────────────────────────────────────────────────
     private static string GetTodayPersian()
     {
         var pc = new PersianCalendar();
@@ -281,17 +294,9 @@ public class SanadRepository : ISanadRepository
         return DateTime.Now.ToString("HH:mm:ss");
     }
 
-    // ──────────────────────────────────────────────────
-    //  CREATE
-    // ──────────────────────────────────────────────────
     public async Task<SanadCreateResultDto> CreateAsync(
-        long orgId,
-        long fyId,
-        SanadCreateDto dto,
-        long userCode,
-        CancellationToken ct = default)
+        long orgId, long fyId, SanadCreateDto dto, long userCode, CancellationToken ct = default)
     {
-        // اعتبارسنجی حداقلی
         if (dto.Items == null || dto.Items.Count == 0)
             throw new InvalidOperationException("سند باید حداقل یک ردیف داشته باشد");
 
@@ -302,7 +307,6 @@ public class SanadRepository : ISanadRepository
         using var tx = conn.BeginTransaction();
         try
         {
-            // ۱) شماره سند
             var noSanad = dto.NoSanad;
             if (noSanad == null || noSanad <= 0)
             {
@@ -312,7 +316,6 @@ public class SanadRepository : ISanadRepository
                         transaction: tx, cancellationToken: ct));
             }
 
-            // ۲) درج سرسند و گرفتن ParentSanadID
             const string insertParentSql = @"
                 INSERT INTO ParentSanad 
                     (NO_Sanad, Date_IN, OtherParentSharh, ParentSharh_Code, Vazeit, KindSanad,
@@ -338,7 +341,6 @@ public class SanadRepository : ISanadRepository
                     timeOp = GetCurrentTime()
                 }, transaction: tx, cancellationToken: ct));
 
-            // ۳) درج ردیف‌ها
             const string insertItemSql = @"
                 INSERT INTO Sanad 
                     (NO_Sanad, ParentSanadCode, RowNum,
@@ -378,7 +380,6 @@ public class SanadRepository : ISanadRepository
                         dateOp = GetTodayPersian(),
                         timeOp = GetCurrentTime()
                     }, transaction: tx, cancellationToken: ct));
-
                 rowNum++;
             }
 
@@ -392,24 +393,16 @@ public class SanadRepository : ISanadRepository
         }
         catch
         {
-            try { tx.Rollback(); } catch { /* ignore */ }
+            try { tx.Rollback(); } catch { }
             throw;
         }
     }
 
-    // ──────────────────────────────────────────────────
-    //  UPDATE
-    // ──────────────────────────────────────────────────
     public async Task UpdateAsync(
-        long orgId,
-        long fyId,
-        SanadUpdateDto dto,
-        long userCode,
-        CancellationToken ct = default)
+        long orgId, long fyId, SanadUpdateDto dto, long userCode, CancellationToken ct = default)
     {
         if (dto.ParentSanadId <= 0)
             throw new InvalidOperationException("شناسه سند نامعتبر است");
-
         if (dto.Items == null || dto.Items.Count == 0)
             throw new InvalidOperationException("سند باید حداقل یک ردیف داشته باشد");
 
@@ -420,7 +413,6 @@ public class SanadRepository : ISanadRepository
         using var tx = conn.BeginTransaction();
         try
         {
-            // ۱) چک وضعیت — سند قطعی (Vazeit = 2) قابل ویرایش نیست
             var vazeit = await conn.ExecuteScalarAsync<int?>(
                 new CommandDefinition(
                     "SELECT Vazeit FROM ParentSanad WHERE ParentSanadID = @id",
@@ -429,11 +421,9 @@ public class SanadRepository : ISanadRepository
 
             if (vazeit == null)
                 throw new InvalidOperationException("سند یافت نشد");
-
             if (vazeit.Value == 2)
                 throw new InvalidOperationException("سند قطعی قابل ویرایش نیست");
 
-            // ۲) آپدیت سرسند
             const string updateParentSql = @"
                 UPDATE ParentSanad 
                 SET Date_IN = @dateIn,
@@ -461,14 +451,12 @@ public class SanadRepository : ISanadRepository
                     timeOp = GetCurrentTime()
                 }, transaction: tx, cancellationToken: ct));
 
-            // ۳) حذف ردیف‌های قبلی (بدون آرشیو - چون Update نیست، Replace است)
             await conn.ExecuteAsync(
                 new CommandDefinition(
                     "DELETE FROM Sanad WHERE ParentSanadCode = @id",
                     new { id = dto.ParentSanadId },
                     transaction: tx, cancellationToken: ct));
 
-            // ۴) درج ردیف‌های جدید
             var noSanadRow = await conn.ExecuteScalarAsync<int>(
                 new CommandDefinition(
                     "SELECT NO_Sanad FROM ParentSanad WHERE ParentSanadID = @id",
@@ -514,7 +502,6 @@ public class SanadRepository : ISanadRepository
                         dateOp = GetTodayPersian(),
                         timeOp = GetCurrentTime()
                     }, transaction: tx, cancellationToken: ct));
-
                 rowNum++;
             }
 
@@ -522,20 +509,13 @@ public class SanadRepository : ISanadRepository
         }
         catch
         {
-            try { tx.Rollback(); } catch { /* ignore */ }
+            try { tx.Rollback(); } catch { }
             throw;
         }
     }
 
-    // ──────────────────────────────────────────────────
-    //  DELETE (با آرشیو در RecycleSanad)
-    // ──────────────────────────────────────────────────
     public async Task DeleteAsync(
-        long orgId,
-        long fyId,
-        long parentSanadId,
-        long userCode,
-        CancellationToken ct = default)
+        long orgId, long fyId, long parentSanadId, long userCode, CancellationToken ct = default)
     {
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         if (conn.State != ConnectionState.Open)
@@ -544,7 +524,6 @@ public class SanadRepository : ISanadRepository
         using var tx = conn.BeginTransaction();
         try
         {
-            // ۱) چک وضعیت
             var vazeit = await conn.ExecuteScalarAsync<int?>(
                 new CommandDefinition(
                     "SELECT Vazeit FROM ParentSanad WHERE ParentSanadID = @id",
@@ -553,11 +532,9 @@ public class SanadRepository : ISanadRepository
 
             if (vazeit == null)
                 throw new InvalidOperationException("سند یافت نشد");
-
             if (vazeit.Value == 2)
                 throw new InvalidOperationException("سند قطعی قابل حذف نیست");
 
-            // ۲) آرشیو ردیف‌ها در RecycleSanad
             const string archiveSql = @"
                 INSERT INTO RecycleSanad 
                     (NO_Sanad, ParentSanadCode, Code_Col, Code_Moein, Code_Tafzil,
@@ -575,14 +552,12 @@ public class SanadRepository : ISanadRepository
                     new { id = parentSanadId },
                     transaction: tx, cancellationToken: ct));
 
-            // ۳) حذف ردیف‌ها
             await conn.ExecuteAsync(
                 new CommandDefinition(
                     "DELETE FROM Sanad WHERE ParentSanadCode = @id",
                     new { id = parentSanadId },
                     transaction: tx, cancellationToken: ct));
 
-            // ۴) حذف سرسند
             await conn.ExecuteAsync(
                 new CommandDefinition(
                     "DELETE FROM ParentSanad WHERE ParentSanadID = @id",
@@ -593,26 +568,18 @@ public class SanadRepository : ISanadRepository
         }
         catch
         {
-            try { tx.Rollback(); } catch { /* ignore */ }
+            try { tx.Rollback(); } catch { }
             throw;
         }
     }
 
-    // ──────────────────────────────────────────────────
-    //  GET Vazeit
-    // ──────────────────────────────────────────────────
     public async Task<int> GetVazeitAsync(
-        long orgId,
-        long fyId,
-        long parentSanadId,
-        CancellationToken ct = default)
+        long orgId, long fyId, long parentSanadId, CancellationToken ct = default)
     {
         const string sql = "SELECT Vazeit FROM ParentSanad WHERE ParentSanadID = @id";
-
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         var result = await conn.ExecuteScalarAsync<int?>(
             new CommandDefinition(sql, new { id = parentSanadId }, cancellationToken: ct));
-
         return result ?? -1;
     }
 }

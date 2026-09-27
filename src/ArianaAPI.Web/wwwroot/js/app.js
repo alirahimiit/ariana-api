@@ -683,6 +683,14 @@ window.App = Object.assign(window.App || {}, {
             case 'bilan': window.App.Features.Bilan.render(); break;
             case 'daybook': window.App.Features.DayBook.render(); break;
             case 'factor': window.App.Features.Factor.render(); break;
+
+            case 'factor-buy': window.App.Features.Factor.render(0); break;
+            case 'factor-sell': window.App.Features.Factor.render(1); break;
+            case 'factor-buy-return': window.App.Features.Factor.render(2); break;
+            case 'factor-sell-return': window.App.Features.Factor.render(3); break;
+            case 'factor-scrap': window.App.Features.Factor.render(9); break;
+            case 'factor-pre': window.App.Features.Factor.render(4); break;
+
             case 'article': window.App.Features.Article.render(); break;
             case 'hesab': window.App.Features.Hesab.render(); break;
             case 'tafzili': window.App.Features.Tafzili.render(); break;
@@ -713,7 +721,7 @@ window.App = Object.assign(window.App || {}, {
         return el.value === '' ? null : parseFloat(el.value);
     },
     fmt(n) {
-        if (n == null || n === '') return '-';
+        if (n == null || n === '' || n === 0) return '';
         const num = Number(n);
         if (isNaN(num)) return this.esc(String(n));
         return num.toLocaleString('fa-IR');

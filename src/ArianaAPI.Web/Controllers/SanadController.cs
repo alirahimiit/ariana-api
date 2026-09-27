@@ -23,9 +23,9 @@ public class SanadController : ControllerBase
     //  READ
     // ═══════════════════════════════════════════
 
-    /// <summary>لیست اسناد با فیلتر</summary>
+    /// <summary>لیست اسناد</summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<SanadListDto>>> GetList(
+    public async Task<IActionResult> GetList(
         [FromQuery] string? fromDate = null,
         [FromQuery] string? toDate = null,
         [FromQuery] int? noFrom = null,
@@ -36,17 +36,20 @@ public class SanadController : ControllerBase
         [FromQuery] string? sortDir = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 100,
+        [FromQuery] bool? onlyWithErrors = null,       // ⭐ جدید
         CancellationToken ct = default)
     {
         var orgId = User.GetOrgId();
         var fyId = User.GetFyId();
 
-        var result = await _repo.GetListAsync(
-              orgId, fyId, fromDate, toDate, noFrom, noTo, vazeit, kindSanad,
-            sortBy, sortDir,
-            page, pageSize, ct);
+        var list = await _repo.GetListAsync(
+            orgId, fyId,
+            fromDate, toDate, noFrom, noTo, vazeit, kindSanad,
+            sortBy, sortDir, page, pageSize,
+            onlyWithErrors,                            // ⭐ جدید
+            ct);
 
-        return Ok(result);
+        return Ok(list);
     }
 
     /// <summary>جزئیات یک سند</summary>

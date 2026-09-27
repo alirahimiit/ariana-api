@@ -26,4 +26,13 @@ public class SanadListDto
 
     [JsonPropertyName("mabBes")]
     public decimal Mab_Bes { get; set; }
+
+    [JsonPropertyName("codingErrorCount")]
+    public int CodingErrorCount { get; set; }
+
+    [JsonPropertyName("moeinErrorCount")]
+    public int MoeinErrorCount { get; set; }
+
+    [JsonPropertyName("totalErrorCount")]
+    public int TotalErrorCount { get; set; }
 }

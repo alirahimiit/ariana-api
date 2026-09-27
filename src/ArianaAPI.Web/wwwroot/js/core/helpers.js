@@ -21,7 +21,7 @@ App.Helpers = (function () {
      * @returns {string} مثال: "۱,۲۳۴,۵۶۷"
      */
     function fmt(n) {
-        if (n == null || n === '') return '-';
+        if (n == null || n === '' || n === 0) return '';
         const num = Number(n);
         if (isNaN(num)) return esc(String(n));
         return num.toLocaleString('fa-IR');
@@ -112,6 +112,13 @@ App.Helpers = (function () {
         const nb = toLatinDigits(b || '').replace(/\//g, '');
         return na.localeCompare(nb);
     }
+    function todayPersian() {  // ← function declaration
+        const now = new Date();
+        return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        }).format(now);
+        // خروجی: 1404/09/26 (خودش اسلش می‌ذاره)
+    }
 
     return {
         fmt,
@@ -121,6 +128,7 @@ App.Helpers = (function () {
         toLatinDigits,
         parseNumber,
         isValidDate,
-        compareDates
+        compareDates,
+        todayPersian
     };
 })();
