@@ -21,38 +21,55 @@ window.App.Auth = (function () {
     //  LICENSE
     // ═══════════════════════════════════════════
     async function checkLicense() {
-        try {
-            const res = await fetch(`${BASE}/api/license/status`);
-            const data = await res.json();
+        const el = document.getElementById('licenseWarning');
+        if (el) {
+            el.className = 'license-status license-loading';
+            el.textContent = 'در حال بررسی لایسنس...';
+            el.classList.remove('hidden');
+        }
 
-            const warningEl = document.getElementById('licenseWarning');
-            if (!warningEl) return;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                const data = await window.App.Http.api('/api/license/status');
 
-            if (!data.isValid) {
-                warningEl.className = 'license-warning';
-                warningEl.innerHTML = `
-                    <div>
-                        <strong>لایسنس نامعتبر است</strong><br>
-                        <small>${H.esc(data.errorMessage || '')}</small>
-                    </div>`;
-                warningEl.classList.remove('hidden');
-            } else {
-                warningEl.className = 'license-valid-info';
-                const custName = data.customerName && data.customerName.trim()
-                    ? data.customerName
-                    : '(بدون نام)';
-                warningEl.innerHTML = `
-                    ✅ لایسنس معتبر | 
-                    <strong>${H.esc(custName)}</strong>
-                    | سازمان‌های مجاز: ${data.authorizedOrgs.length}
-                    | انقضا: ${H.esc(data.expiresAt)}`;
-                warningEl.classList.remove('hidden');
+                // ⭐ Backend فیلد isValid می‌فرسته
+                const isValid = data && (data.isValid === true || data.valid === true);
+
+                if (el) {
+                    if (isValid) {
+                        const orgCount = (data.authorizedOrgs || []).length;
+                        const expires = data.expiresAt || '-';
+                        el.className = 'license-status license-valid';
+                        el.textContent = '✅ لایسنس معتبر | ' +
+                            'تعداد سازمان‌های مجاز: ' + orgCount +
+                            ' | انقضا: ' + expires;
+                    } else {
+                        el.className = 'license-status license-invalid';
+                        const msg = data?.errorMessage || data?.error || 'لطفاً با پشتیبانی تماس بگیرید';
+                        el.textContent = '⚠️ ' + msg;
+                    }
+                }
+
+                // ⭐ ذخیره برای استفاده در handleLogin
+                window.App.Auth._licenseData = {
+                    valid: isValid,
+                    raw: data
+                };
+
+                return data;
+            } catch (err) {
+                if (attempt === 2) {
+                    if (el) {
+                        el.className = 'license-status license-invalid';
+                        el.textContent = '⚠️ خطا در بررسی لایسنس: ' + (err.message || 'ناشناخته');
+                    }
+                    window.App.Auth._licenseData = { valid: false, raw: null };
+                    return null;
+                }
+                await new Promise(r => setTimeout(r, 800));
             }
-        } catch (err) {
-            console.error('License check failed:', err);
         }
     }
-
     // ═══════════════════════════════════════════
     //  LOOKUPS
     // ═══════════════════════════════════════════
@@ -132,8 +149,17 @@ window.App.Auth = (function () {
         e.preventDefault();
 
         const btn = document.getElementById('loginBtnText');
+        const originalText = btn ? btn.textContent : '';
         const errBox = document.getElementById('loginError');
         errBox.classList.add('hidden');
+
+        // ⭐ چک لایسنس قبل از هر کاری
+        const lic = window.App.Auth._licenseData;
+        if (!lic || lic.valid !== true) {
+            errBox.textContent = '❌ لایسنس معتبر نیست. لطفاً با پشتیبانی تماس بگیرید.';
+            errBox.classList.remove('hidden');
+            return;
+        }
 
         const orgVal = document.getElementById('orgId').value;
         const fyVal = document.getElementById('fyId').value;
@@ -177,21 +203,17 @@ window.App.Auth = (function () {
             state.apiKey = apiKey;
 
             S.persistAuth();
-            // ⭐ راه‌اندازی permissions
             await window.App.Permissions.init(data.permissions);
 
             showApp();
-
-            // ⭐ اعمال فیلتر روی منوها
             window.App.Permissions.applyMenuFilter();
-
             window.App.navigate('dashboard');
             window.App.toast('خوش آمدید!', 'success');
         } catch (err) {
             errBox.textContent = err.message;
             errBox.classList.remove('hidden');
         } finally {
-            btn.textContent = 'ورود';
+            if (btn) btn.textContent = originalText;
         }
     }
 
@@ -211,13 +233,26 @@ window.App.Auth = (function () {
     function showLogin() {
         document.getElementById('loginView').classList.remove('hidden');
         document.getElementById('appView').classList.add('hidden');
+
+        // ⭐ پاک کردن رمز + برگرداندن به حالت password
         const pw = document.getElementById('password');
-        if (pw) pw.value = '';
+        if (pw) {
+            pw.value = '';
+            pw.type = 'password';
+        }
+
+        // ⭐ برگرداندن آیکن دکمه‌ی نمایش رمز
+        const toggle = document.getElementById('togglePwdBtn');
+        if (toggle) toggle.textContent = '👁️';
 
         // ⭐ پاک کردن permissions
         if (window.App.Permissions) {
             window.App.Permissions.clear();
         }
+
+        // ⭐ پاک کردن متن دکمه ورود
+        const btnText = document.getElementById('loginBtnText');
+        if (btnText) btnText.textContent = 'ورود به سیستم';
     }
 
     function showApp() {

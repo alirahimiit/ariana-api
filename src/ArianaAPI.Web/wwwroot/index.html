@@ -8,55 +8,171 @@
 </head>
 <body>
     <!-- ═══════════════ صفحه ورود ═══════════════ -->
+    <!-- ═══════════════ صفحه ورود ═══════════════ -->
     <div id="loginView" class="login-wrapper">
-        <div class="login-card">
-            <div id="licenseWarning" class="license-warning hidden"></div>
 
-            <div class="login-header">
-                <div class="logo-circle" id="loginLogo">
-                    <span class="logo-text">آ</span>
+        <!-- ═══ تزئینات پس‌زمینه ═══ -->
+        <div class="login-decor">
+            <div class="ld-blob ld-blob-1"></div>
+            <div class="ld-blob ld-blob-2"></div>
+            <div class="ld-blob ld-blob-3"></div>
+            <div class="ld-grid"></div>
+        </div>
+
+        <!-- ═══ کارت اصلی ═══ -->
+        <div class="login-card-v2">
+
+            <!-- ═══ ستون برند (چپ در RTL) ═══ -->
+            <div class="login-brand-panel">
+
+                <!-- لوگو -->
+                <div class="login-brand-logo">
+                    <div class="logo-circle" id="loginLogo">
+                        <span class="logo-text">آ</span>
+                    </div>
+                    <div class="login-brand-names">
+                        <span class="login-brand-name-main">گروه نرم‌افزاری آریانا</span>
+                        <span class="login-brand-name-sub">Ariana Software Group</span>
+                    </div>
                 </div>
-                <h1>سیستم حسابداری آریانا</h1>
-                <p class="muted">برای ادامه وارد شوید</p>
+
+                <!-- عنوان -->
+                <div class="login-brand-heading">
+                    <h1>سیستم جامع حسابداری آریانا</h1>
+                    <p>راهکار جامع مدیریت مالی سازمان</p>
+                </div>
+
+                <!-- ویژگی‌ها -->
+                <ul class="login-brand-features">
+                    <li>
+                        <span class="lbf-icon">📊</span>
+                        <div>
+                            <strong>داشبورد هوشمند</strong>
+                            <small>نمای کامل از وضعیت مالی</small>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="lbf-icon">📄</span>
+                        <div>
+                            <strong>اسناد و فاکتورها</strong>
+                            <small>ثبت سریع و دقیق</small>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="lbf-icon">📈</span>
+                        <div>
+                            <strong>گزارشات حرفه‌ای</strong>
+                            <small>سود و زیان، بیلان، دفتر روزنامه</small>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="lbf-icon">🏢</span>
+                        <div>
+                            <strong>پشتیبانی چند سازمانی</strong>
+                            <small>مدیریت متمرکز سازمان‌ها</small>
+                        </div>
+                    </li>
+                </ul>
+
+                <!-- فوتر برند -->
+                <div class="login-brand-footer">
+                    <span>© <span id="loginYear"></span> Ariana Software Group</span>
+                    <a href="https://iewco.com" target="_blank">iewco.com</a>
+                </div>
             </div>
 
-            <form id="loginForm" class="login-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>سازمان</label>
-                        <select id="orgId" required>
-                            <option value="">در حال بارگذاری...</option>
-                        </select>
+            <!-- ═══ ستون فرم (راست در RTL) ═══ -->
+            <div class="login-form-panel">
+
+                <!-- Mobile brand (فقط موبایل) -->
+                <div class="login-mobile-brand">
+                    <div class="logo-circle" id="loginLogoMobile">
+                        <span class="logo-text">آ</span>
                     </div>
-                    <div class="form-group">
-                        <label>دوره مالی</label>
-                        <select id="fyId" required>
-                            <option value="">-- ابتدا سازمان --</option>
-                        </select>
+                    <span>سیستم جامع حسابداری آریانا</span>
+                </div>
+
+                <!-- اخطار لایسنس (همیشه بالای فرم) -->
+                <div id="licenseWarning" class="license-status hidden"></div>
+
+                <!-- Header -->
+                <div class="login-form-header">
+                    <h2>ورود به سیستم</h2>
+                    <p>لطفاً اطلاعات کاربری خود را وارد کنید</p>
+                </div>
+
+                <!-- Form -->
+                <form id="loginForm" class="login-form-v2">
+
+                    <div class="lf-row">
+                        <div class="lf-field">
+                            <label for="orgId">
+                                <span class="lf-icon">🏢</span>
+                                سازمان
+                            </label>
+                            <select id="orgId" required>
+                                <option value="">در حال بارگذاری...</option>
+                            </select>
+                        </div>
+
+                        <div class="lf-field">
+                            <label for="fyId">
+                                <span class="lf-icon">📅</span>
+                                دوره مالی
+                            </label>
+                            <select id="fyId" required>
+                                <option value="">-- ابتدا سازمان --</option>
+                            </select>
+                        </div>
                     </div>
+
+                    <div class="lf-field">
+                        <label for="username">
+                            <span class="lf-icon">👤</span>
+                            نام کاربری
+                        </label>
+                        <input type="text" id="username" autocomplete="username" required
+                               placeholder="نام کاربری خود را وارد کنید">
+                    </div>
+
+                    <div class="lf-field">
+                        <label for="password">
+                            <span class="lf-icon">🔒</span>
+                            رمز عبور
+                        </label>
+                        <div class="lf-password-wrap">
+                            <input type="password" id="password" autocomplete="current-password" required
+                                   placeholder="رمز عبور">
+                            <button type="button" class="lf-pwd-toggle" id="togglePwdBtn" tabindex="-1">
+                                👁️
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="lf-field">
+                        <label for="apiKey">
+                            <span class="lf-icon">🔑</span>
+                            API Key
+                        </label>
+                        <input type="text" id="apiKey" value="dev-api-key-change-in-production"
+                               required dir="ltr" style="text-align: left;">
+                    </div>
+
+                    <button type="submit" class="btn-login" id="loginBtn">
+                        <span id="loginBtnText">ورود به سیستم</span>
+                        <span class="btn-login-arrow">←</span>
+                    </button>
+
+                    <div id="loginError" class="error-box hidden"></div>
+                </form>
+
+                <!-- Footer form -->
+                <div class="login-form-footer">
+                    <span>🔒 اتصال امن SSL</span>
+                    <span>نسخه 1.0</span>
                 </div>
+            </div>
 
-                <div class="form-group">
-                    <label>نام کاربری</label>
-                    <input type="text" id="username" autocomplete="username" required>
-                </div>
-
-                <div class="form-group">
-                    <label>رمز عبور</label>
-                    <input type="password" id="password" autocomplete="current-password" required>
-                </div>
-
-                <div class="form-group">
-                    <label>API Key</label>
-                    <input type="text" id="apiKey" value="dev-api-key-change-in-production" required>
-                </div>
-
-                <button type="submit" class="btn btn-primary btn-block">
-                    <span id="loginBtnText">ورود</span>
-                </button>
-
-                <div id="loginError" class="error-box hidden"></div>
-            </form>
         </div>
     </div>
 

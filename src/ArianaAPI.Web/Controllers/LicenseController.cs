@@ -16,24 +16,27 @@ public class LicenseController : ControllerBase
     }
 
     /// <summary>وضعیت لایسنس (بدون نیاز به Login — برای نمایش توی صفحه‌ی Login)</summary>
+    /// <summary>وضعیت لایسنس (بدون نیاز به Login — برای نمایش توی صفحه‌ی Login)</summary>
     [HttpGet("status")]
     [AllowAnonymous]
     public IActionResult Status()
     {
         var status = _license.GetStatus();
 
+        // ⭐ خروجی استاندارد برای همه‌ی حالت‌ها
         if (!status.IsValid)
         {
             return Ok(new
             {
-                isValid = false,
-                errorMessage = status.ErrorMessage
+                valid = false,
+                error = status.ErrorMessage,
+                authorizedOrgs = Array.Empty<long>()
             });
         }
 
         return Ok(new
         {
-            isValid = true,
+            valid = true,
             customerName = status.Payload!.CustomerName,
             customerId = status.Payload.CustomerId,
             licenseId = status.Payload.LicenseId,

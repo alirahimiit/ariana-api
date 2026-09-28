@@ -54,6 +54,23 @@ window.App = Object.assign(window.App || {}, {
         // ⭐ Sidebar موبایل
         this.initSidebar();
 
+        // ⭐ سال جاری در فوتر لاگین
+        const yearEl = document.getElementById('loginYear');
+        if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+        // ⭐ toggle نمایش رمز عبور
+        document.getElementById('togglePwdBtn')?.addEventListener('click', function () {
+            const pwd = document.getElementById('password');
+            if (!pwd) return;
+            if (pwd.type === 'password') {
+                pwd.type = 'text';
+                this.textContent = '🙈';
+            } else {
+                pwd.type = 'password';
+                this.textContent = '👁️';
+            }
+        });
+
         // ⭐ رصد خودکار جدول‌های جدید
         this._initTableObserver();
 
@@ -78,13 +95,16 @@ window.App = Object.assign(window.App || {}, {
             this.loadFiscalYears(e.target.value);
         });
 
+        
         // شروع
         if (this.state.token) {
             this.showApp();
             this.navigate('dashboard');
         } else {
             this.showLogin();
-            this.checkLicense();
+            // ⭐ اول لایسنس، بعد سازمان‌ها (به صورت موازی)
+            //    همیشه showLogin انجام می‌شه ولی لایسنس هم صدا زده می‌شه
+            this.checkLicense().catch(() => { });
             this.loadOrganizations();
         }
         // ⭐ لود رجیستری منوها (اگه کاربر لاگین هست)
