@@ -328,6 +328,7 @@ window.App.Features.Sanad = (function () {
             : itemsWithErrors.filter(x => x._errors.some(e => e.code === f));
 
         // ─── فیلتر bar ───
+        // ─── فیلتر bar با ایکن + متن واضح ───
         const filterBar = `
             <div class="sanad-error-filter">
                 <div class="sanad-filter-info">
@@ -340,25 +341,42 @@ window.App.Features.Sanad = (function () {
                     <label>فیلتر:</label>
                     <select id="sanadErrFilter">
                         <option value="all" ${f === 'all' ? 'selected' : ''}>
-                            همه ردیف‌ها (${H.fmt(itemsWithErrors.length)})
+                            📋 همه ردیف‌ها (${H.fmt(itemsWithErrors.length)})
                         </option>
                         <option value="missingCoding" ${f === 'missingCoding' ? 'selected' : ''}>
-                            کدینگ ناقص (${H.fmt(errorCounts.missingCoding)})
+                            ⛔ کدینگ ناقص — بدون کد کل (${H.fmt(errorCounts.missingCoding)})
                         </option>
                         <option value="missingMoein" ${f === 'missingMoein' ? 'selected' : ''}>
-                            بدون معین (${H.fmt(errorCounts.missingMoein)})
+                            ⚠️ بدون معین (${H.fmt(errorCounts.missingMoein)})
                         </option>
                         <option value="noMeghdar" ${f === 'noMeghdar' ? 'selected' : ''}>
-                            مقدار خالی انباری (${H.fmt(errorCounts.noMeghdar)})
+                            ⛔ مقدار خالی انباری (${H.fmt(errorCounts.noMeghdar)})
                         </option>
                         <option value="noAmount" ${f === 'noAmount' ? 'selected' : ''}>
-                            مبلغ صفر (${H.fmt(errorCounts.noAmount)})
+                            ⚠️ مبلغ صفر (${H.fmt(errorCounts.noAmount)})
                         </option>
                         <option value="noDescr" ${f === 'noDescr' ? 'selected' : ''}>
-                            بدون شرح (${H.fmt(errorCounts.noDescr)})
+                            ℹ️ بدون شرح (${H.fmt(errorCounts.noDescr)})
                         </option>
                     </select>
                 </div>
+            </div>
+
+            <!-- ⭐ راهنمای ایکن‌ها (همیشه دیده می‌شه) -->
+            <div class="sanad-legend">
+                <span class="sanad-legend-title">راهنمای ایکن‌ها:</span>
+                <span class="sanad-legend-item">
+                    <span class="sanad-row-err sanad-err-error">⛔</span>
+                    خطای جدی
+                </span>
+                <span class="sanad-legend-item">
+                    <span class="sanad-row-err sanad-err-warn">⚠️</span>
+                    هشدار
+                </span>
+                <span class="sanad-legend-item">
+                    <span class="sanad-row-err sanad-err-info">ℹ️</span>
+                    اطلاعاتی
+                </span>
             </div>`;
 
         // ─── ردیف‌ها ───

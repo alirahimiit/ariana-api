@@ -8,6 +8,10 @@ public class DashboardStatsDto
     public int TotalTafzilis { get; set; }
     public int TotalArticles { get; set; }
 
+    // ⭐ جدید
+    public decimal TotalIncome { get; set; }    
+    public decimal TotalExpense { get; set; }   
+
     public List<ChartItemDto> FactorsByKind { get; set; } = new();
     public List<ChartItemDto> SanadsByVazeit { get; set; } = new();
     public List<ChartItemDto> AccountsByGroupType { get; set; } = new();

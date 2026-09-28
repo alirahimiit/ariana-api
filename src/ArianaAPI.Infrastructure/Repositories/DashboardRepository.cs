@@ -139,6 +139,45 @@ public class DashboardRepository : IDashboardRepository
                 IsMoney = false
             });
         }
+        // ═══ درآمد و هزینه (بر اساس GroupType) ═══
+        // GroupType: 3=فروش, 6=درآمد → income
+        //           4=خرید,  5=هزینه → expense
+        var incomeExpenseSql = @"
+            SELECT 
+                CASE 
+                    WHEN GT.GroupTypeCode IN (3, 6) THEN 'income'
+                    WHEN GT.GroupTypeCode IN (4, 5) THEN 'expense'
+                    ELSE 'other'
+                END AS Kind,
+                ISNULL(SUM(S.Mab_Bed + S.Mab_Bes), 0) AS Total
+            FROM Sanad S
+            INNER JOIN Hesab H 
+                ON H.Code_Col = S.Code_Col 
+               AND H.Code_Moein = 0 
+               AND H.Code_Tafzil = 0
+            INNER JOIN Hesab G 
+                ON G.Code_Group = H.Code_Group 
+               AND G.Code_Col = 0
+               AND G.Code_Moein = 0
+               AND G.Code_Tafzil = 0
+            INNER JOIN GroupType GT 
+                ON GT.GroupTypeCode = G.GroupTypeCode
+            WHERE S.Code_Col > 0
+            GROUP BY 
+                CASE 
+                    WHEN GT.GroupTypeCode IN (3, 6) THEN 'income'
+                    WHEN GT.GroupTypeCode IN (4, 5) THEN 'expense'
+                    ELSE 'other'
+                END";
+
+        var ieRows = await conn.QueryAsync<(string Kind, decimal Total)>(
+            new CommandDefinition(incomeExpenseSql, cancellationToken: ct));
+
+        foreach (var r in ieRows)
+        {
+            if (r.Kind == "income") stats.TotalIncome = r.Total;
+            else if (r.Kind == "expense") stats.TotalExpense = r.Total;
+        }
 
         return stats;
     }
