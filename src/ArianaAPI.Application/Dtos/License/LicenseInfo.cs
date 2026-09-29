@@ -30,6 +30,9 @@ public class LicensePayload
 
     [JsonPropertyName("notes")]
     public string? Notes { get; set; }
+
+    [JsonPropertyName("systemId")]
+    public string SystemId { get; set; } = string.Empty;
 }
 
 public class LicenseFile

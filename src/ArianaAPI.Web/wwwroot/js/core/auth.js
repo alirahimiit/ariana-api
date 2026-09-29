@@ -40,9 +40,9 @@ window.App.Auth = (function () {
                         const orgCount = (data.authorizedOrgs || []).length;
                         const expires = data.expiresAt || '-';
                         el.className = 'license-status license-valid';
-                        el.textContent = '✅ لایسنس معتبر | ' +
+                        el.textContent = ' لایسنس معتبر | ' +
                             'تعداد سازمان‌های مجاز: ' + orgCount +
-                            ' | انقضا: ' + expires;
+                            ' | انقضا: ' + expires;   
                     } else {
                         el.className = 'license-status license-invalid';
                         const msg = data?.errorMessage || data?.error || 'لطفاً با پشتیبانی تماس بگیرید';

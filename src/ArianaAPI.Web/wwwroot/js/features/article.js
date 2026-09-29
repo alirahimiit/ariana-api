@@ -239,16 +239,16 @@ window.App.Features.Article = (function () {
                 <td class="num text-center" style="font-weight:600;">${a.code || ''}</td>
                 <td>${H.esc(a.name || '')}</td>
                 <td class="text-center">${H.esc(a.articleUnitName || '')}</td>
-                <td class="num text-left">${H.fmt(a.amountFirst)}</td>
-                <td class="num text-left">${H.fmt(a.costFirst)}</td>
-                <td class="num text-left" style="color:#DC2626;">${H.fmt(a.outAmount1)}</td>
-                <td class="num text-left" style="color:#DC2626;">${H.fmt(a.outVal1)}</td>
-                <td class="num text-left" style="color:#059669;">${H.fmt(a.inAmount1)}</td>
-                <td class="num text-left" style="color:#059669;">${H.fmt(a.inVal1)}</td>
-                <td class="num text-left">${H.fmt(a.backAmount1)}</td>
-                <td class="num text-left">${H.fmt(a.backVal1)}</td>
-                <td class="num text-left" style="${stockClass}">${H.fmt(stock)}</td>
-                <td class="num text-left">${H.fmt(a.amountSale)}</td>
+                <td class="num text-left">${H.fmtT(a.amountFirst)}</td>
+                <td class="num text-left">${H.fmtT(a.costFirst)}</td>
+                <td class="num text-left" style="color:#DC2626;">${H.fmtT(a.outAmount1)}</td>
+                <td class="num text-left" style="color:#DC2626;">${H.fmtT(a.outVal1)}</td>
+                <td class="num text-left" style="color:#059669;">${H.fmtT(a.inAmount1)}</td>
+                <td class="num text-left" style="color:#059669;">${H.fmtT(a.inVal1)}</td>
+                <td class="num text-left">${H.fmtT(a.backAmount1)}</td>
+                <td class="num text-left">${H.fmtT(a.backVal1)}</td>
+                <td class="num text-left" style="${stockClass}">${H.fmtT(stock)}</td>
+                <td class="num text-left">${H.fmtT(a.amountSale)}</td>
                 <td class="text-center">${H.esc(a.statusName || '')}</td>
                 <td class="text-center">
                     <button class="btn btn-sm btn-ghost"
@@ -347,16 +347,16 @@ window.App.Features.Article = (function () {
                 '<td class="num text-center">' + (a.code || '') + '</td>' +
                 '<td>' + H.esc(a.name || '') + '</td>' +
                 '<td class="text-center">' + H.esc(a.articleUnitName || '') + '</td>' +
-                '<td class="num text-left">' + H.fmt(a.amountFirst) + '</td>' +
-                '<td class="num text-left">' + H.fmt(a.costFirst) + '</td>' +
-                '<td class="num text-left">' + H.fmt(a.outAmount1) + '</td>' +
-                '<td class="num text-left">' + H.fmt(a.outVal1) + '</td>' +
-                '<td class="num text-left">' + H.fmt(a.inAmount1) + '</td>' +
-                '<td class="num text-left">' + H.fmt(a.inVal1) + '</td>' +
-                '<td class="num text-left">' + H.fmt(a.backAmount1) + '</td>' +
-                '<td class="num text-left">' + H.fmt(a.backVal1) + '</td>' +
-                '<td class="num text-left" style="' + stockClass + '">' + H.fmt(stock) + '</td>' +
-                '<td class="num text-left">' + H.fmt(a.amountSale) + '</td>' +
+                '<td class="num text-left">' + H.fmtT(a.amountFirst) + '</td>' +
+                '<td class="num text-left">' + H.fmtT(a.costFirst) + '</td>' +
+                '<td class="num text-left">' + H.fmtT(a.outAmount1) + '</td>' +
+                '<td class="num text-left">' + H.fmtT(a.outVal1) + '</td>' +
+                '<td class="num text-left">' + H.fmtT(a.inAmount1) + '</td>' +
+                '<td class="num text-left">' + H.fmtT(a.inVal1) + '</td>' +
+                '<td class="num text-left">' + H.fmtT(a.backAmount1) + '</td>' +
+                '<td class="num text-left">' + H.fmtT(a.backVal1) + '</td>' +
+                '<td class="num text-left" style="' + stockClass + '">' + H.fmtT(stock) + '</td>' +
+                '<td class="num text-left">' + H.fmtT(a.amountSale) + '</td>' +
                 '<td class="text-center">' + H.esc(a.statusName || '') + '</td>' +
                 '</tr>';
         });
@@ -389,7 +389,7 @@ window.App.Features.Article = (function () {
         if (totalPages <= 1) {
             return `
                 <div class="pagination-bar">
-                    <div class="pagination-info">مجموع: ${H.fmt(totalCount)} کالا</div>
+                    <div class="pagination-info">مجموع: ${H.fmtT(totalCount)} کالا</div>
                 </div>`;
         }
 
@@ -407,7 +407,7 @@ window.App.Features.Article = (function () {
         return `
             <div class="pagination-bar">
                 <div class="pagination-info">
-                    نمایش ${H.fmt(itemCount)} از ${H.fmt(totalCount)} کالا
+                    نمایش ${H.fmtT(itemCount)} از ${H.fmtT(totalCount)} کالا
                 </div>
                 <div class="pagination-controls">
                     <button class="page-btn" ${page <= 1 ? 'disabled' : ''} onclick="App.Features.Article.runList(1)">«</button>
@@ -440,8 +440,8 @@ window.App.Features.Article = (function () {
                 <td>${H.esc(a.articleGroupName || '')}</td>
                 <td>${H.esc(a.stockTypeName || '')}</td>
                 <td>${H.esc(a.articleUnitName || '')}</td>
-                <td class="num text-left">${H.fmt(a.finallExistence)}</td>
-                <td class="num text-left">${H.fmt(a.amountSale)}</td>
+                <td class="num text-left">${H.fmtT(a.finallExistence)}</td>
+                <td class="num text-left">${H.fmtT(a.amountSale)}</td>
                 <td class="text-center">${H.esc(a.statusName || '')}</td>
             </tr>
         `).join('');
@@ -546,24 +546,24 @@ window.App.Features.Article = (function () {
 
                 <div class="art-card">
                     <div class="art-card-title">📦 موجودی</div>
-                    <div class="art-row"><span>موجودی اول دوره</span><span class="art-num">${H.fmt(d.firstExistence)}</span></div>
-                    <div class="art-row"><span>ورودی</span><span class="art-num art-green">${H.fmt(d.inputed)}</span></div>
-                    <div class="art-row"><span>خروجی</span><span class="art-num art-red">${H.fmt(d.outPuted)}</span></div>
-                    <div class="art-row art-row-hl"><span>موجودی فعلی</span><span class="art-num">${H.fmt(d.finallExistence)}</span></div>
+                    <div class="art-row"><span>موجودی اول دوره</span><span class="art-num">${H.fmtT(d.firstExistence)}</span></div>
+                    <div class="art-row"><span>ورودی</span><span class="art-num art-green">${H.fmtT(d.inputed)}</span></div>
+                    <div class="art-row"><span>خروجی</span><span class="art-num art-red">${H.fmtT(d.outPuted)}</span></div>
+                    <div class="art-row art-row-hl"><span>موجودی فعلی</span><span class="art-num">${H.fmtT(d.finallExistence)}</span></div>
                 </div>
 
                 <div class="art-card">
                     <div class="art-card-title">💰 قیمت‌ها</div>
-                    <div class="art-row"><span>موجودی اولیه</span><span class="art-num">${H.fmt(d.amountFirst)}</span></div>
-                    <div class="art-row"><span>بهای اولیه</span><span class="art-num">${H.fmt(d.costFirst)}</span></div>
-                    <div class="art-row art-row-hl"><span>قیمت فروش</span><span class="art-num">${H.fmt(d.amountSale)}</span></div>
+                    <div class="art-row"><span>موجودی اولیه</span><span class="art-num">${H.fmtT(d.amountFirst)}</span></div>
+                    <div class="art-row"><span>بهای اولیه</span><span class="art-num">${H.fmtT(d.costFirst)}</span></div>
+                    <div class="art-row art-row-hl"><span>قیمت فروش</span><span class="art-num">${H.fmtT(d.amountSale)}</span></div>
                 </div>
 
                 <div class="art-card">
                     <div class="art-card-title">⚙️ تنظیمات</div>
                     <div class="art-row"><span>درصد بازاریاب</span><span class="art-num">${d.marketerPercent ? d.marketerPercent + '%' : '-'}</span></div>
-                    <div class="art-row"><span>حد سفارش (ورود)</span><span class="art-num">${H.fmt(d.maxCostOrderBy)}</span></div>
-                    <div class="art-row"><span>حد سفارش (خروج)</span><span class="art-num">${H.fmt(d.minCostOrderBy)}</span></div>
+                    <div class="art-row"><span>حد سفارش (ورود)</span><span class="art-num">${H.fmtT(d.maxCostOrderBy)}</span></div>
+                    <div class="art-row"><span>حد سفارش (خروج)</span><span class="art-num">${H.fmtT(d.minCostOrderBy)}</span></div>
                 </div>
             </div>
 
@@ -574,34 +574,34 @@ window.App.Features.Article = (function () {
                     <div class="art-stat-item">
                         <div class="art-stat-label">📥 موجودی اولیه</div>
                         <div class="art-stat-value">
-                            ${H.fmt(d.amountFirst)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span>
+                            ${H.fmtT(d.amountFirst)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span>
                         </div>
                     </div>
                     <div class="art-stat-item">
                         <div class="art-stat-label">💰 ارزش اولیه</div>
-                        <div class="art-stat-value art-num">${H.fmt(d.costFirst)} <span class="art-stat-unit">ریال</span></div>
+                        <div class="art-stat-value art-num">${H.fmtT(d.costFirst)} <span class="art-stat-unit">ریال</span></div>
                     </div>
 
                     <div class="art-stat-item art-stat-buy">
                         <div class="art-stat-label">📦 خرید</div>
-                        <div class="art-stat-value">${H.fmt(d.inAmount1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
-                        <div class="art-stat-sub art-num">${H.fmt(d.inVal1)} ریال</div>
+                        <div class="art-stat-value">${H.fmtT(d.inAmount1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
+                        <div class="art-stat-sub art-num">${H.fmtT(d.inVal1)} ریال</div>
                     </div>
                     <div class="art-stat-item art-stat-sell">
                         <div class="art-stat-label">💸 فروش</div>
-                        <div class="art-stat-value">${H.fmt(d.outAmount1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
-                        <div class="art-stat-sub art-num">${H.fmt(d.outVal1)} ریال</div>
+                        <div class="art-stat-value">${H.fmtT(d.outAmount1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
+                        <div class="art-stat-sub art-num">${H.fmtT(d.outVal1)} ریال</div>
                     </div>
 
                     <div class="art-stat-item art-stat-return">
                         <div class="art-stat-label">↩️ برگشت</div>
-                        <div class="art-stat-value">${H.fmt(d.backAmount1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
-                        <div class="art-stat-sub art-num">${H.fmt(d.backVal1)} ریال</div>
+                        <div class="art-stat-value">${H.fmtT(d.backAmount1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
+                        <div class="art-stat-sub art-num">${H.fmtT(d.backVal1)} ریال</div>
                     </div>
                     <div class="art-stat-item art-stat-final">
                         <div class="art-stat-label">📊 موجودی فعلی</div>
                         <div class="art-stat-value" style="color:${(d.finallExistence || 0) > 0 ? '#059669' : ((d.finallExistence || 0) < 0 ? '#DC2626' : '#6B7280')};">
-                            ${H.fmt(d.finallExistence)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span>
+                            ${H.fmtT(d.finallExistence)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span>
                         </div>
                     </div>
                 </div>
@@ -732,19 +732,19 @@ window.App.Features.Article = (function () {
             <table class="factor-info-table">
                 <tr>
                     <td class="label">موجودی اول دوره:</td>
-                    <td class="num text-left">${H.fmt(d.firstExistence)}</td>
+                    <td class="num text-left">${H.fmtT(d.firstExistence)}</td>
                     <td class="label">ورودی:</td>
-                    <td class="num text-left">${H.fmt(d.inputed)}</td>
+                    <td class="num text-left">${H.fmtT(d.inputed)}</td>
                     <td class="label">خروجی:</td>
-                    <td class="num text-left">${H.fmt(d.outPuted)}</td>
+                    <td class="num text-left">${H.fmtT(d.outPuted)}</td>
                 </tr>
                 <tr>
                     <td class="label">ضایعات ۱:</td>
-                    <td class="num text-left">${H.fmt(d.loss1)}</td>
+                    <td class="num text-left">${H.fmtT(d.loss1)}</td>
                     <td class="label">ضایعات ۲:</td>
-                    <td class="num text-left">${H.fmt(d.loss2)}</td>
+                    <td class="num text-left">${H.fmtT(d.loss2)}</td>
                     <td class="label">موجودی فعلی:</td>
-                    <td class="num text-left" style="font-weight:bold; color:#4F46E5;">${H.fmt(d.finallExistence)}</td>
+                    <td class="num text-left" style="font-weight:bold; color:#4F46E5;">${H.fmtT(d.finallExistence)}</td>
                 </tr>
             </table>
 
@@ -752,11 +752,11 @@ window.App.Features.Article = (function () {
             <table class="factor-info-table">
                 <tr>
                     <td class="label">موجودی اولیه:</td>
-                    <td class="num text-left">${H.fmt(d.amountFirst)}</td>
+                    <td class="num text-left">${H.fmtT(d.amountFirst)}</td>
                     <td class="label">بهای اولیه:</td>
-                    <td class="num text-left">${H.fmt(d.costFirst)}</td>
+                    <td class="num text-left">${H.fmtT(d.costFirst)}</td>
                     <td class="label">قیمت فروش:</td>
-                    <td class="num text-left" style="font-weight:bold;">${H.fmt(d.amountSale)}</td>
+                    <td class="num text-left" style="font-weight:bold;">${H.fmtT(d.amountSale)}</td>
                 </tr>
             </table>
 
@@ -782,9 +782,9 @@ window.App.Features.Article = (function () {
                     <td class="label">درصد بازاریاب:</td>
                     <td class="num text-left">${d.marketerPercent ? d.marketerPercent + '%' : '-'}</td>
                     <td class="label">حد سفارش (ورود):</td>
-                    <td class="num text-left">${H.fmt(d.maxCostOrderBy)}</td>
+                    <td class="num text-left">${H.fmtT(d.maxCostOrderBy)}</td>
                     <td class="label">حد سفارش (خروج):</td>
-                    <td class="num text-left">${H.fmt(d.minCostOrderBy)}</td>
+                    <td class="num text-left">${H.fmtT(d.minCostOrderBy)}</td>
                 </tr>
                 <tr>
                     <td class="label">استهلاک:</td>

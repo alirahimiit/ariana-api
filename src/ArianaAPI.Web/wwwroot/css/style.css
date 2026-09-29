@@ -375,6 +375,13 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     animation: licenseIn 0.3s ease;
+    /**/
+    white-space: normal !important; /* ⭐ اجازه‌ی شکستن خط */
+    word-break: break-word !important; /* ⭐ کلمات بلند رو بشکن */
+    overflow-wrap: anywhere !important; /* ⭐ حتی وسط کلمه */
+    line-height: 1.6 !important; /* ⭐ فاصله‌ی خطوط */
+    max-width: 100% !important;
+    display: block !important;
 }
 
 @keyframes licenseIn {
@@ -1628,7 +1635,7 @@ tfoot td {
 }
 
 /* ═══════════════ Quick Actions ═══════════════ */
-.quick-actions {
+/*.quick-actions {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 12px;
@@ -1662,7 +1669,7 @@ tfoot td {
 .quick-icon {
     font-size: 22px;
     line-height: 1;
-}
+}*/
 
 /* ═══════════════ Export Bar ═══════════════ */
 .export-bar {
@@ -1845,9 +1852,9 @@ tfoot td {
         }
 
     /* Quick actions */
-    .quick-actions {
+    /*.quick-actions {
         grid-template-columns: 1fr 1fr;
-    }
+    }*/
 
     /* Modal */
     .modal {
@@ -1933,9 +1940,9 @@ tfoot td {
         grid-template-columns: 1fr;
     }
 
-    .quick-actions {
+ /*   .quick-actions {
         grid-template-columns: 1fr;
-    }
+    }*/
 
     .radio-group {
         grid-template-columns: 1fr;
@@ -1945,9 +1952,9 @@ tfoot td {
         padding: 14px;
     }
 
-    .login-card {
+    /*   .login-card {
         padding: 28px 20px;
-    }
+    }*/
 
     .form-row {
         grid-template-columns: 1fr;
@@ -2244,44 +2251,10 @@ tfoot td {
         color: var(--primary);
     }
 
-@media (max-width: 768px) {
-    .factor-header {
-        grid-template-columns: 1fr;
-    }
-
     .factor-party-grid {
         grid-template-columns: 1fr;
     }
-}
 
-.license-warning {
-    background: #FEF2F2;
-    color: #991B1B;
-    padding: 12px 16px;
-    border-radius: 10px;
-    margin-bottom: 16px;
-    font-size: 13px;
-    border: 2px solid #FCA5A5;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-    .license-warning::before {
-        content: '⚠️';
-        font-size: 20px;
-    }
-
-.license-valid-info {
-    background: #D1FAE5;
-    color: #065F46;
-    padding: 8px 12px;
-    border-radius: 8px;
-    margin-bottom: 12px;
-    font-size: 12px;
-    text-align: center;
-    border: 1px solid #6EE7B7;
-}
 
 /* ═══════════════ Form Select (RTL fix) ═══════════════ */
 .form-select {
@@ -2640,54 +2613,6 @@ tfoot td {
     .clickable-row:active {
         background: #E0E7FF !important;
     }
-/* ═══════════════ Dashboard Charts ═══════════════ */
-.dash-charts {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    margin-bottom: 16px;
-}
-
-    .dash-charts .card {
-        padding: 14px;
-        margin-bottom: 0;
-    }
-
-    .dash-charts .card-title {
-        font-size: 13px;
-        margin-bottom: 8px;
-        justify-content: center;
-        text-align: center;
-    }
-
-.chart-wrapper {
-    position: relative;
-    height: 220px;
-    padding: 4px;
-}
-
-.chart-wrapper-wide {
-    height: 280px;
-}
-
-/* برای رنگ آبی در stat-icon */
-.stat-icon.blue {
-    background: #DBEAFE;
-}
-
-/* ═══════ Responsive ═══════ */
-
-/* تبلت: 3 تا باریک — می‌رن به 2 تا */
-@media (max-width: 1100px) {
-    .dash-charts {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-        /* سومین کارت تمام عرض بشه */
-        .dash-charts .card:nth-child(3) {
-            grid-column: 1 / -1;
-        }
-}
 
 /* موبایل: تک‌ستونی */
 @media (max-width: 768px) {
@@ -3174,17 +3099,8 @@ table .code-col {
     align-items: center;
     padding-bottom: 4px;
 }
+/*1*/
 
-.kbd-hint {
-    display: inline-block;
-    font-size: 10px;
-    padding: 1px 6px;
-    background: rgba(0,0,0,0.08);
-    border-radius: 4px;
-    margin-right: 4px;
-    font-family: monospace;
-    color: #4B5563;
-}
 
 .sanad-row-count {
     margin-right: auto;
@@ -3573,11 +3489,7 @@ th.sortable-th {
         border-color: var(--primary);
     }
 
-.num-input {
-    text-align: left;
-    direction: ltr;
-    font-variant-numeric: tabular-nums;
-}
+
 
 /* Picker */
 .af-picker-overlay {
@@ -3708,16 +3620,6 @@ th.sortable-th {
     margin-top: 8px;
 }
 
-.kbd-hint {
-    display: inline-block;
-    font-size: 10px;
-    padding: 1px 6px;
-    background: rgba(0,0,0,0.08);
-    border-radius: 4px;
-    margin-right: 4px;
-    font-family: monospace;
-    color: #4B5563;
-}
 
 @media (max-width: 900px) {
     .af-grid-3 {
@@ -4304,15 +4206,16 @@ th.sortable-th {
         min-width: 110px;
     }
 
-/* ─── kbd-hint ─── */
+
 .kbd-hint {
     display: inline-block;
     font-size: 10px;
     padding: 1px 6px;
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(0,0,0,0.08);
     border-radius: 4px;
     margin-right: 4px;
     font-family: monospace;
+    color: #4B5563;
 }
 
 .btn-ghost .kbd-hint {
@@ -5234,11 +5137,6 @@ th.sortable-th {
     cursor: not-allowed;
 }
 
-.num-input {
-    text-align: left;
-    direction: ltr;
-    font-variant-numeric: tabular-nums;
-}
 
 /* ═══ Input with button ═══ */
 .ff-input-with-btn {
@@ -5451,16 +5349,6 @@ th.sortable-th {
     font-size: 12.5px;
     color: var(--text-muted);
     font-weight: 600;
-}
-
-.kbd-hint {
-    display: inline-block;
-    font-size: 10px;
-    padding: 1px 6px;
-    background: rgba(0, 0, 0, 0.08);
-    border-radius: 4px;
-    margin-right: 4px;
-    font-family: monospace;
 }
 
 /* ═══ Picker (Tafzili/Marketer) ═══ */
@@ -6379,9 +6267,7 @@ tr.row-has-errors {
         grid-column: 1 / -1;
     }
 
-    .dash-charts {
-        grid-template-columns: 1fr 1fr;
-    }
+
 
         .dash-charts .dash-chart:nth-child(3) {
             grid-column: 1 / -1;
@@ -6454,10 +6340,7 @@ tr.row-has-errors {
         height: 120px;
     }
 
-    /* Charts → تک‌ستون */
-    .dash-charts {
-        grid-template-columns: 1fr;
-    }
+
 
         .dash-charts .dash-chart:nth-child(3) {
             grid-column: auto;
@@ -6471,5 +6354,304 @@ tr.row-has-errors {
     .dash-conn-row {
         gap: 10px 16px;
         font-size: 11.5px;
+    }
+}
+/* ═══════════════════════════════════════════════════
+   FilterPanel — استایل یکدست با SanadForm
+   ═══════════════════════════════════════════════════ */
+
+/* فیلدهای داخل FilterPanel */
+.fp-field input,
+.fp-field select,
+.fp-field textarea,
+.filters input,
+.filters select,
+.filter-panel input,
+.filter-panel select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    background: #fff;
+    color: var(--text);
+    min-height: 38px;
+    box-sizing: border-box;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    -webkit-appearance: none; /* ⭐ حذف استایل بومی */
+    appearance: none;
+}
+
+    .fp-field input:focus,
+    .fp-field select:focus,
+    .fp-field textarea:focus,
+    .filters input:focus,
+    .filters select:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light);
+    }
+
+/* ⭐ حذف spinner (فلش‌های بالا/پایین) از input type=number */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* ⭐ حذف آیکن تقویم بومی از input type=date */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.5;
+    filter: invert(0.4);
+}
+
+input[type="date"]::-webkit-inner-spin-button {
+    display: none;
+}
+
+/* ⭐ تاریخ‌هایی که با type=text هستن و placeholder فارسی دارن */
+input[placeholder*="1404"],
+input[placeholder*="1403"],
+input[placeholder*="1405"] {
+    direction: ltr;
+    text-align: left;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ⭐ Label فیلدهای FilterPanel */
+.fp-field label,
+.filter-panel label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #4B5563;
+    margin-bottom: 4px;
+    display: block;
+}
+
+/* ⭐ Select در FilterPanel (اگر Custom Select نیست) */
+.fp-field select,
+.filters select {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat: no-repeat;
+    background-position: left 12px center;
+    padding-left: 32px;
+    cursor: pointer;
+}
+
+/* ⭐ Grid فیلترهای عادی (در صورت نیاز) */
+.filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+    .filters .form-group {
+        margin-bottom: 0;
+    }
+
+
+/* ═══════════════════════════════════════════
+   Dashboard Charts — Fix موبایل (ساده و قطعی)
+   ═══════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+    .dash-charts {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+        .dash-charts .dash-chart {
+            grid-column: auto !important;
+        }
+
+    .dash-chart-body {
+        height: 260px !important;
+    }
+}
+/* ═══════════════════════════════════════════════════
+   Dashboard Collapsible Cards (موبایل)
+   ═══════════════════════════════════════════════════ */
+
+/* ⭐ دکمه‌ی toggle — فقط در موبایل نمایش داده می‌شه */
+.dash-collapse-btn {
+    display: none;
+    position: absolute;
+    top: 10px;
+    inset-inline-start: 10px; /* RTL: right side */
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text-muted);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    transition: all 0.15s;
+}
+
+    .dash-collapse-btn:hover {
+        background: var(--primary-light);
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+.dash-collapse-icon {
+    font-size: 10px;
+    line-height: 1;
+    display: block;
+}
+
+/* ⭐ نمایش خلاصه (فقط در حالت بسته موبایل) */
+.dash-ie-summary {
+    display: none;
+    text-align: center;
+    margin-top: 4px;
+}
+
+.dash-ie-value-small {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+}
+
+    .dash-ie-value-small small {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+
+/* ═══════════════════════════════════════════════════
+   فقط در موبایل: رفتار تاشو
+   ═══════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+    /* دکمه‌ی toggle رو نشون بده */
+    .dash-collapse-btn {
+        display: flex;
+    }
+
+    /* پیش‌فرض: بدنه‌ی collapsible بسته */
+    .dash-collapsible .dash-collapse-body {
+        display: none;
+    }
+
+    /* وقتی باز: بدنه نشون داده می‌شه */
+    .dash-collapsible.open .dash-collapse-body {
+        display: block;
+        animation: dashSlideIn 0.25s ease;
+    }
+
+    @keyframes dashSlideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-6px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* در حالت بسته: کارت‌ها جمع و جور */
+    .dash-collapsible:not(.open) {
+        padding: 14px 16px;
+    }
+
+    /* خلاصه رو نشون بده */
+    .dash-ie-summary {
+        display: block;
+    }
+
+    /* کارت درآمد/هزینه در حالت بسته */
+    .dash-ie-box.dash-collapsible:not(.open) {
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        min-height: auto;
+    }
+
+        .dash-ie-box.dash-collapsible:not(.open) .dash-ie-icon-wrap {
+            position: static;
+            margin: 0;
+            flex-shrink: 0;
+        }
+
+        .dash-ie-box.dash-collapsible:not(.open) .dash-ie-summary {
+            flex: 1;
+            text-align: right;
+            margin: 0;
+        }
+
+        /* دکمه‌ی تاشو در سمت چپ (RTL) */
+        .dash-ie-box.dash-collapsible:not(.open) .dash-collapse-btn {
+            position: static;
+            margin-inline-start: auto;
+        }
+
+    /* کارت‌های چارت در حالت بسته */
+    .dash-chart.dash-collapsible:not(.open) {
+        padding: 14px 16px;
+    }
+
+        .dash-chart.dash-collapsible:not(.open) .dash-chart-head {
+            margin: 0;
+            padding: 0;
+            border-bottom: none;
+        }
+
+    /* کاهش ارتفاع چارت در موبایل */
+    .dash-chart-body {
+        height: 260px !important;
+    }
+}
+
+/* ═══ دسکتاپ: همه همیشه باز ═══ */
+@media (min-width: 769px) {
+    .dash-collapse-body {
+        display: block !important;
+    }
+
+    .dash-collapse-btn {
+        display: none !important;
+    }
+
+    .dash-ie-summary {
+        display: none !important;
+    }
+}
+/* ═══════════════════════════════════════════
+   Fix دکمه‌ی تاشو در کارت‌های چارت
+   ═══════════════════════════════════════════ */
+
+/* ⭐ position relative برای کارت چارت */
+.dash-chart.dash-collapsible {
+    position: relative;
+}
+
+@media (max-width: 768px) {
+    /* ⭐ دکمه در سمت چپ (RTL) — نزدیک آیکن تداخل نکنه */
+    .dash-chart.dash-collapsible .dash-collapse-btn {
+        top: 14px;
+        inset-inline-start: auto; /* بازنویسی مقدار قبلی */
+        inset-inline-end: 14px; /* ← چپ در RTL */
+    }
+
+    /* ⭐ فضای کافی برای دکمه در هدر */
+    .dash-chart.dash-collapsible .dash-chart-head {
+        padding-inline-end: 46px;
     }
 }

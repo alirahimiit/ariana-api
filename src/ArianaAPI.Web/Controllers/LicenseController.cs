@@ -41,7 +41,8 @@ public class LicenseController : ControllerBase
             customerId = status.Payload.CustomerId,
             licenseId = status.Payload.LicenseId,
             expiresAt = status.Payload.ExpiresAt,
-            authorizedOrgs = status.Payload.AuthorizedOrgs
+            authorizedOrgs = status.Payload.AuthorizedOrgs,
+            systemId = status.Payload.SystemId
         });
     }
 }

@@ -38,10 +38,8 @@ public static class DependencyInjection
         services.AddScoped<IHesabRepository, HesabRepository>();
         services.AddScoped<ISharhRepository, SharhRepository>();
         services.AddScoped<IKindSanadRepository, KindSanadRepository>();
-       
         services.AddSingleton<ILicenseService, LicenseService>();
         services.AddScoped<ILookupRepository, LookupRepository>();
-
         services.AddScoped<ILookupRepository, LookupRepository>();
         services.AddSingleton<ITenantDbNameProvider, TenantDbNameProvider>();
         services.AddScoped<ILedgerRepository, LedgerRepository>();

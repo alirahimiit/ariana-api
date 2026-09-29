@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows;
@@ -55,7 +56,21 @@ public partial class MainWindow : Window
         TxtStatus.Text = message;
         TxtStatus.Foreground = new SolidColorBrush(color);
     }
-
+    private void TxtSystemId_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        if (TxtSystemIdHash == null) return;
+        var sysId = TxtSystemId.Text.Trim();
+        TxtSystemIdHash.Text = string.IsNullOrEmpty(sysId)
+            ? "(SystemId را وارد کنید)"
+            : ComputeSystemIdHash(sysId);
+    }
+    public static string ComputeSystemIdHash(string systemId)
+    {
+        var normalized = new string(systemId.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+        var bytes = Encoding.UTF8.GetBytes(normalized);
+        var hash = SHA256.HashData(bytes);
+        return "sha256:" + Convert.ToHexString(hash).ToLowerInvariant();
+    }
     // ═══════════════════════════════════════════
     //  ساخت جفت کلید
     // ═══════════════════════════════════════════
@@ -189,6 +204,14 @@ public partial class MainWindow : Window
             TxtCustomerId.Focus();
             return;
         }
+        var systemId = TxtSystemId.Text.Trim();
+        if (string.IsNullOrWhiteSpace(systemId))
+        {
+            MessageBox.Show("SystemId الزامی است.", "خطا",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            TxtSystemId.Focus();
+            return;
+        }
 
         long[] authorizedOrgs;
         try
@@ -227,6 +250,8 @@ public partial class MainWindow : Window
             return;
         }
 
+
+
         try
         {
             // ─── ساخت payload ───
@@ -240,7 +265,8 @@ public partial class MainWindow : Window
                 ExpiresAt = expiresAt,
                 AuthorizedOrgs = authorizedOrgs,
                 Features = new[] { "web", "api" },
-                Notes = string.IsNullOrWhiteSpace(notes) ? null : notes
+                Notes = string.IsNullOrWhiteSpace(notes) ? null : notes,
+                SystemId = systemId
             };
 
             // ─── امضا ───
@@ -272,12 +298,17 @@ public partial class MainWindow : Window
             var finalJson = JsonSerializer.Serialize(licenseFile, options);
             File.WriteAllText(outputPath, finalJson, Encoding.UTF8);
 
+            var hash = ComputeSystemIdHash(systemId);
             MessageBox.Show(
                 "✅ لایسنس با موفقیت ساخته شد!\n\n" +
                 $"👤 مشتری: {customerName} ({customerId})\n" +
                 $"🏢 سازمان‌های مجاز: {string.Join(", ", authorizedOrgs)}\n" +
                 $"📅 انقضا: {expiresAt}\n" +
+                $"🔑 SystemId: {systemId}\n" +
                 $"📂 مسیر: {outputPath}\n\n" +
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+                "📋 این Hash رو در appsettings.Production.json بذار:\n\n" +
+                $"\"License\": {{\n  \"SystemIdHash\": \"{hash}\"\n}}\n\n" +
                 "این فایل رو کنار برنامه‌ی Web بذار و اسمش رو به ariana.lic تغییر بده.",
                 "موفق",
                 MessageBoxButton.OK,
@@ -306,7 +337,7 @@ public partial class MainWindow : Window
             ? "null"
             : "\"" + p.Notes.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
-        return "{" +
+        var baseJson = "{" +
                $"\"version\":{p.Version}," +
                $"\"licenseId\":\"{p.LicenseId}\"," +
                $"\"customerName\":\"{p.CustomerName}\"," +
@@ -315,9 +346,15 @@ public partial class MainWindow : Window
                $"\"expiresAt\":\"{p.ExpiresAt}\"," +
                $"\"authorizedOrgs\":{orgsJson}," +
                $"\"features\":{featuresJson}," +
-               $"\"notes\":{notesJson}" +
-               "}";
+               $"\"notes\":{notesJson}";
+
+        if (!string.IsNullOrEmpty(p.SystemId))
+            return baseJson + $",\"systemId\":\"{p.SystemId}\"}}";
+
+        return baseJson + "}";
     }
+
+   
 }
 
 // ═══════════════════════════════════════════
@@ -351,6 +388,9 @@ public class LicensePayload
 
     [JsonPropertyName("notes")]
     public string? Notes { get; set; }
+
+    [JsonPropertyName("systemId")]
+    public string SystemId { get; set; } = "";
 }
 
 public class LicenseFile

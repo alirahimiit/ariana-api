@@ -26,6 +26,15 @@ App.Helpers = (function () {
         if (isNaN(num)) return esc(String(n));
         return num.toLocaleString('fa-IR');
     }
+    /**
+ * فرمت مخصوص جدول — برای صفر/null خط تیره برمی‌گردونه
+ */
+    function fmtT(n) {
+        if (n == null || n === '' || n === 0) return '-';
+        const num = Number(n);
+        if (isNaN(num)) return esc(String(n));
+        return num.toLocaleString('fa-IR');
+    }
 
     /**
      * فرمت عدد علامت‌دار — صفر با "-" نمایش داده می‌شود
@@ -122,6 +131,7 @@ App.Helpers = (function () {
 
     return {
         fmt,
+        fmtT,
         fmtSigned,
         fmtAcc,
         esc,

@@ -58,8 +58,34 @@
 								<TextBox x:Name="TxtCustomerId"
                                          Style="{StaticResource AppTextBox}"
                                          Margin="0,0,0,12"/>
+                                
+                                <TextBlock Text="System ID * (کد ۱۲ رقمی مثل 5512-7770-2047)" 
+                                   Style="{StaticResource AppLabel}"/>
+                                 <TextBox x:Name="TxtSystemId"
+                                     Style="{StaticResource AppTextBox}"
+                                     Margin="0,0,0,8"
+                                     FontFamily="Consolas"
+                                     TextChanged="TxtSystemId_TextChanged"/>
 
-								<TextBlock Text="کدهای سازمان مجاز * (با کاما جدا کن: 1,2,5)"
+                                <!-- ⭐ نمایش زنده‌ی hash -->
+                                <Border Background="#EEF2FF" CornerRadius="8" Padding="10" Margin="0,0,0,12"
+                                       BorderBrush="#C7D2FE" BorderThickness="1">
+                                    <StackPanel>
+                                        <TextBlock Text="SystemId Hash (این رو در appsettings.Production.json بذار):"
+                                           FontSize="11" FontWeight="Bold"
+                                           Foreground="#3730A3" Margin="0,0,0,4"/>
+                                        <TextBox x:Name="TxtSystemIdHash"
+                                             IsReadOnly="True"
+                                             Background="Transparent"
+                                             BorderThickness="0"
+                                             FontFamily="Consolas"
+                                             FontSize="11"
+                                             TextWrapping="Wrap"
+                                             Foreground="#1E3A8A"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Text="کدهای سازمان مجاز * (با کاما جدا کن: 1,2,5)"
                                            Style="{StaticResource AppLabel}"/>
 								<TextBox x:Name="TxtOrgs"
                                          Style="{StaticResource AppTextBox}"

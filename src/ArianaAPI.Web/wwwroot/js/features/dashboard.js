@@ -142,12 +142,20 @@ window.App.Features.Dashboard = (function () {
 
         return `
             <div class="dash-ie">
-                <div class="dash-ie-box">
+                <div class="dash-ie-box dash-collapsible">
+                    <button type="button" class="dash-collapse-btn" onclick="App.Features.Dashboard.toggleCard(this)">
+                        <span class="dash-collapse-icon">▼</span>
+                    </button>
                     <div class="dash-ie-icon-wrap dash-ie-icon-income">${_iconCache.income}</div>
-                    <div class="dash-ie-donut"><canvas id="chartIncome"></canvas></div>
-                    <div class="dash-ie-meta">
+                    <div class="dash-ie-summary">
                         <div class="dash-ie-label">درآمد</div>
-                        <div class="dash-ie-value">${H.fmt(income)} <small>ریال</small></div>
+                        <div class="dash-ie-value-small">${H.fmt(income)} <small>ریال</small></div>
+                    </div>
+                    <div class="dash-collapse-body">
+                        <div class="dash-ie-donut"><canvas id="chartIncome"></canvas></div>
+                        <div class="dash-ie-meta">
+                            <div class="dash-ie-value">${H.fmt(income)} <small>ریال</small></div>
+                        </div>
                     </div>
                 </div>
 
@@ -160,12 +168,20 @@ window.App.Features.Dashboard = (function () {
                     </div>
                 </div>
 
-                <div class="dash-ie-box">
+                <div class="dash-ie-box dash-collapsible">
+                    <button type="button" class="dash-collapse-btn" onclick="App.Features.Dashboard.toggleCard(this)">
+                        <span class="dash-collapse-icon">▼</span>
+                    </button>
                     <div class="dash-ie-icon-wrap dash-ie-icon-expense">${_iconCache.expense}</div>
-                    <div class="dash-ie-donut"><canvas id="chartExpense"></canvas></div>
-                    <div class="dash-ie-meta">
+                    <div class="dash-ie-summary">
                         <div class="dash-ie-label">هزینه</div>
-                        <div class="dash-ie-value">${H.fmt(expense)} <small>ریال</small></div>
+                        <div class="dash-ie-value-small">${H.fmt(expense)} <small>ریال</small></div>
+                    </div>
+                    <div class="dash-collapse-body">
+                        <div class="dash-ie-donut"><canvas id="chartExpense"></canvas></div>
+                        <div class="dash-ie-meta">
+                            <div class="dash-ie-value">${H.fmt(expense)} <small>ریال</small></div>
+                        </div>
                     </div>
                 </div>
             </div>`;
@@ -173,30 +189,39 @@ window.App.Features.Dashboard = (function () {
 
     // ─── ۳ چارت موجود (فشرده) ───
     function buildMiniCharts(stats) {
+        const charts = [
+            { id: 'chartFactors', title: 'فاکتورها بر اساس نوع', icon: 'factor' },
+            { id: 'chartSanads', title: 'اسناد بر اساس وضعیت', icon: 'sanad' },
+            { id: 'chartGroups', title: 'گردش حساب‌ها بر اساس گروه', icon: 'hesab' }
+        ];
+
         return `
             <div class="dash-charts">
-                <div class="dash-chart">
-                    <div class="dash-chart-head">
-                        <span class="dash-chart-ico">${_iconCache.factor}</span>
-                        <span>فاکتورها بر اساس نوع</span>
-                    </div>
-                    <div class="dash-chart-body"><canvas id="chartFactors"></canvas></div>
-                </div>
-                <div class="dash-chart">
-                    <div class="dash-chart-head">
-                        <span class="dash-chart-ico">${_iconCache.sanad}</span>
-                        <span>اسناد بر اساس وضعیت</span>
-                    </div>
-                    <div class="dash-chart-body"><canvas id="chartSanads"></canvas></div>
-                </div>
-                <div class="dash-chart">
-                    <div class="dash-chart-head">
-                        <span class="dash-chart-ico">${_iconCache.hesab}</span>
-                        <span>گردش حساب‌ها بر اساس گروه</span>
-                    </div>
-                    <div class="dash-chart-body"><canvas id="chartGroups"></canvas></div>
-                </div>
+                ${charts.map(c => `
+                    <div class="dash-chart dash-collapsible">
+                        <button type="button" class="dash-collapse-btn" onclick="App.Features.Dashboard.toggleCard(this)">
+                            <span class="dash-collapse-icon">▼</span>
+                        </button>
+                        <div class="dash-chart-head">
+                            <span class="dash-chart-ico">${_iconCache[c.icon]}</span>
+                            <span>${c.title}</span>
+                        </div>
+                        <div class="dash-collapse-body">
+                            <div class="dash-chart-body"><canvas id="${c.id}"></canvas></div>
+                        </div>
+                    </div>`).join('')}
             </div>`;
+    }
+    // ⭐ باز/بسته کردن کارت (فقط موبایل کاربرد داره)
+    function toggleCard(btn) {
+        const card = btn.closest('.dash-collapsible');
+        if (!card) return;
+
+        const isOpen = card.classList.toggle('open');
+
+        // تغییر آیکن
+        const icon = btn.querySelector('.dash-collapse-icon');
+        if (icon) icon.textContent = isOpen ? '▲' : '▼';
     }
 
     // ─── Shortcuts ───
@@ -418,7 +443,7 @@ window.App.Features.Dashboard = (function () {
         _charts = [];
     }
 
-    return { render, destroyCharts };
+    return { render, destroyCharts, toggleCard };
 })();
 
 window.App.renderDashboard = window.App.Features.Dashboard.render;

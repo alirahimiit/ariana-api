@@ -3,22 +3,28 @@ using System.Text;
 using System.Text.Json;
 using ArianaAPI.Application.DTOs.License;
 using ArianaAPI.Application.Interfaces;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+
+
 
 namespace ArianaAPI.Infrastructure.Services;
 
 public class LicenseService : ILicenseService
 {
     // ⚠️ این کلید رو از فایل public.key کپی کن (متن XML)
-    private const string PUBLIC_KEY_XML = @"<RSAKeyValue><Modulus>myZ8bNhkuZ3IIhRqUG0QLEISJ231nMJ6gKRpBBqclaa88l0B7OQY4I14pbuikWIhaSGlA31v+W0pybmSagz/Z0K6NGxPhLD5dNggRxzk3cLuT8YrWtsnbmbjrAT9YVbaSlq4wEAAkoKnToU29SOQAgIlA8WMmftAQC7qVgcBAZrxkn+Z8VEahL1w2NLqbumluR3ha6ByAjkafey7JksKrvlHj+Q7nXYrtFfoY8kXf6cfnzFb2z6+mq77lJHU0U/VqeJ4fn8G/VooLAF+ACmHT7d5ri0FJLje++zXe5qxxouiDpgw/0gBTW7cY++2FC+cYAtp5aJqFLU6C3oJZTtrqQ==</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>";
+    private const string PUBLIC_KEY_XML = @"<RSAKeyValue><Modulus>pxQVrGKMBvPiKZebpKm1hHwCKR8FM21gfbZmPQPXJE/VpfXYRrZTXLl7SPrUWBAZSqwKZbGlx2ONYbJLP9WCEk0pJdjkWc+DiGjBEsEY2Xnr/qzK1yHFBLu6W/elDJY8J23I1o/2lKJsdwNG+VV1WC0tgKJ2z2Tw1c2ucHt64g7qtMeSKe1nf95NNYPn2jHk/gNccHbqItkAIzwgsL1eWLaFbJERIDHzotOHzBGJfHegb6+jFPtD3wQIFInWjZ5t/QsuxDMYdt8kzUieI4tcR+jtbaKkRpGmfV69Tl1xBSryZGpcT5rj7s3ZeDTrgzcwNLjp4nV5+vVh0qORYOkdQQ==</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>";
     private readonly ILogger<LicenseService> _logger;
+    private readonly IConfiguration _config;
     private readonly LicenseStatus _status;
     private readonly object _lock = new();
 
-    public LicenseService(ILogger<LicenseService> logger)
+    public LicenseService(ILogger<LicenseService> logger, IConfiguration config)
     {
         _logger = logger;
+        _config = config;
         _status = LoadLicense();
+        _config = config;
     }
 
     public LicenseStatus GetStatus() => _status;
@@ -66,7 +72,12 @@ public class LicenseService : ILicenseService
                 _logger.LogError("❌ امضای لایسنس نامعتبر است");
                 return LicenseStatus.Invalid("امضای لایسنس نامعتبر است (فایل دست‌کاری شده)");
             }
-
+            // ⭐ جدید — چک SystemId Hash
+            if (!VerifySystemIdHash(file.Payload.SystemId))
+            {
+                _logger.LogError("❌ SystemId تطابق ندارد");
+                return LicenseStatus.Invalid("این لایسنس برای این سرور صادر نشده است");
+            }
             // ─── چک انقضا ───
             if (!IsNotExpired(file.Payload.ExpiresAt))
             {
@@ -141,7 +152,8 @@ public class LicenseService : ILicenseService
                $"\"expiresAt\":\"{p.ExpiresAt}\"," +
                $"\"authorizedOrgs\":{orgsJson}," +
                $"\"features\":{featuresJson}," +
-               $"\"notes\":{notesJson}}}";
+               $"\"notes\":{notesJson}," +
+               $"\"systemId\":\"{p.SystemId}\"}}";
     }
 
     private static bool IsNotExpired(string? expiresAt)
@@ -160,5 +172,41 @@ public class LicenseService : ILicenseService
         // کنار exe اصلی
         var baseDir = AppContext.BaseDirectory;
         return Path.Combine(baseDir, "ariana.lic");
+    }
+
+    // ⭐ متدهای جدید
+    private bool VerifySystemIdHash(string licenseSystemId)
+    {
+        var expected = _config["License:SystemIdHash"];
+
+        // اگه تنظیم نشده → skip (چون هنوز مشتری hash نذاشته)
+        if (string.IsNullOrWhiteSpace(expected))
+        {
+            _logger.LogWarning("⚠️ License:SystemIdHash تنظیم نشده — از چک SystemId صرف‌نظر شد");
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(licenseSystemId))
+        {
+            _logger.LogError("❌ systemId در لایسنس خالیه ولی hash تنظیم شده");
+            return false;
+        }
+
+        var actual = ComputeSystemIdHash(licenseSystemId);
+        if (!string.Equals(expected.Trim(), actual, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError("❌ hash mismatch. Expected={Exp}, Actual={Act}", expected, actual);
+            return false;
+        }
+
+        return true;
+    }
+
+    public static string ComputeSystemIdHash(string systemId)
+    {
+        var normalized = new string(systemId.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+        var bytes = Encoding.UTF8.GetBytes(normalized);
+        var hash = SHA256.HashData(bytes);
+        return "sha256:" + Convert.ToHexString(hash).ToLowerInvariant();
     }
 }
