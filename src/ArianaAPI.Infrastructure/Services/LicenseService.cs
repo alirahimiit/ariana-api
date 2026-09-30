@@ -16,8 +16,10 @@ public class LicenseService : ILicenseService
     private const string PUBLIC_KEY_XML = @"<RSAKeyValue><Modulus>pxQVrGKMBvPiKZebpKm1hHwCKR8FM21gfbZmPQPXJE/VpfXYRrZTXLl7SPrUWBAZSqwKZbGlx2ONYbJLP9WCEk0pJdjkWc+DiGjBEsEY2Xnr/qzK1yHFBLu6W/elDJY8J23I1o/2lKJsdwNG+VV1WC0tgKJ2z2Tw1c2ucHt64g7qtMeSKe1nf95NNYPn2jHk/gNccHbqItkAIzwgsL1eWLaFbJERIDHzotOHzBGJfHegb6+jFPtD3wQIFInWjZ5t/QsuxDMYdt8kzUieI4tcR+jtbaKkRpGmfV69Tl1xBSryZGpcT5rj7s3ZeDTrgzcwNLjp4nV5+vVh0qORYOkdQQ==</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>";
     private readonly ILogger<LicenseService> _logger;
     private readonly IConfiguration _config;
-    private readonly LicenseStatus _status;
+    private LicenseStatus _status;               
+    private DateTime _lastWriteTimeUtc;          
     private readonly object _lock = new();
+
 
     public LicenseService(ILogger<LicenseService> logger, IConfiguration config)
     {
@@ -25,9 +27,59 @@ public class LicenseService : ILicenseService
         _config = config;
         _status = LoadLicense();
         _config = config;
+        _lastWriteTimeUtc = GetLicenseFileWriteTimeUtc();
     }
 
-    public LicenseStatus GetStatus() => _status;
+    public LicenseStatus GetStatus()
+    {
+        var path = GetLicensePath();
+        var fileExists = File.Exists(path);
+        var currentWriteTime = fileExists
+            ? File.GetLastWriteTimeUtc(path)
+            : DateTime.MinValue;
+
+        lock (_lock)
+        {
+            // ⭐ حالت ۱: فایل قبلاً بود، الان نیست → invalidate
+            if (!fileExists && _lastWriteTimeUtc != DateTime.MinValue)
+            {
+                _logger.LogWarning("⚠️ فایل لایسنس حذف/rename شد — invalidate");
+                _status = LicenseStatus.Invalid(
+                    $"فایل لایسنس پیدا نشد. باید 'ariana.lic' کنار برنامه باشه.");
+                _lastWriteTimeUtc = DateTime.MinValue;
+                return _status;
+            }
+
+            // ⭐ حالت ۲: فایل mtime جدید → reload
+            if (currentWriteTime != DateTime.MinValue
+                && currentWriteTime > _lastWriteTimeUtc)
+            {
+                _logger.LogInformation(
+                    "🔄 فایل لایسنس تغییر کرد — دوباره خوانده می‌شه. mtime={Time}",
+                    currentWriteTime);
+
+                _status = LoadLicense();
+                _lastWriteTimeUtc = currentWriteTime;
+            }
+        }
+
+        return _status;
+    }
+    // ⭐ جدید — گرفتن زمان آخرین تغییر فایل
+    private static DateTime GetLicenseFileWriteTimeUtc()
+    {
+        try
+        {
+            var path = GetLicensePath();
+            return File.Exists(path)
+                ? File.GetLastWriteTimeUtc(path)
+                : DateTime.MinValue;
+        }
+        catch
+        {
+            return DateTime.MinValue;
+        }
+    }
 
     public bool IsOrgAuthorized(long orgId)
     {
@@ -84,6 +136,7 @@ public class LicenseService : ILicenseService
                 _logger.LogWarning("⚠️ لایسنس منقضی شده است. انقضا: {Exp}", file.Payload.ExpiresAt);
                 return LicenseStatus.Invalid($"لایسنس منقضی شده است (تاریخ انقضا: {file.Payload.ExpiresAt})");
             }
+   
 
             _logger.LogInformation(
                 "✅ لایسنس معتبر: {Customer} | سازمان‌های مجاز: {Orgs}",
@@ -142,18 +195,23 @@ public class LicenseService : ILicenseService
     {
         var featuresJson = "[" + string.Join(",", p.Features.Select(f => $"\"{f}\"")) + "]";
         var orgsJson = "[" + string.Join(",", p.AuthorizedOrgs) + "]";
-        var notesJson = p.Notes is null ? "null" : $"\"{p.Notes.Replace("\"", "\\\"")}\"";
+        var notesJson = p.Notes is null ? "null" : $"\"{p.Notes.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
 
-        return $"{{\"version\":{p.Version}," +
-               $"\"licenseId\":\"{p.LicenseId}\"," +
-               $"\"customerName\":\"{p.CustomerName}\"," +
-               $"\"customerId\":\"{p.CustomerId}\"," +
-               $"\"issuedAt\":\"{p.IssuedAt}\"," +
-               $"\"expiresAt\":\"{p.ExpiresAt}\"," +
-               $"\"authorizedOrgs\":{orgsJson}," +
-               $"\"features\":{featuresJson}," +
-               $"\"notes\":{notesJson}," +
-               $"\"systemId\":\"{p.SystemId}\"}}";
+        var baseJson = $"{{\"version\":{p.Version}," +
+                       $"\"licenseId\":\"{p.LicenseId}\"," +
+                       $"\"customerName\":\"{p.CustomerName}\"," +
+                       $"\"customerId\":\"{p.CustomerId}\"," +
+                       $"\"issuedAt\":\"{p.IssuedAt}\"," +
+                       $"\"expiresAt\":\"{p.ExpiresAt}\"," +
+                       $"\"authorizedOrgs\":{orgsJson}," +
+                       $"\"features\":{featuresJson}," +
+                       $"\"notes\":{notesJson}";
+
+        // ⭐ جدید — اگه systemId داره، سریال هم داره
+        if (!string.IsNullOrEmpty(p.SystemId))
+            return baseJson + $",\"systemId\":\"{p.SystemId}\"}}";
+
+        return baseJson + "}";
     }
 
     private static bool IsNotExpired(string? expiresAt)
@@ -166,6 +224,7 @@ public class LicenseService : ILicenseService
 
         return true; // موقتاً غیرفعال
     }
+
 
     private static string GetLicensePath()
     {

@@ -19,7 +19,6 @@
 </head>
 <body>
     <!-- ═══════════════ صفحه ورود ═══════════════ -->
-    <!-- ═══════════════ صفحه ورود ═══════════════ -->
     <div id="loginView" class="login-wrapper">
 
         <!-- ═══ تزئینات پس‌زمینه ═══ -->
@@ -187,6 +186,135 @@
         </div>
     </div>
 
+    <!-- ⭐ Activation View -->
+    <div id="activationView" class="login-wrap hidden">
+        <div class="login-decor"></div>
+        <div class="login-card-v2">
+            <!-- پنل برند -->
+            <div class="login-brand-panel">
+                <div class="login-brand-content">
+                    <div class="login-brand-logo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="56" height="56">
+                            <rect x="4" y="11" width="16" height="10" rx="2" />
+                            <path d="M8 11V7a4 4 0 018 0v4" />
+                            <circle cx="12" cy="16" r="1.5" fill="currentColor" />
+                        </svg>
+                    </div>
+                    <h1>فعال‌سازی نرم‌افزار</h1>
+                    <p class="login-brand-sub">یک مرحله تا شروع کار با سیستم حسابداری آریانا</p>
+
+                    <ul class="activation-steps">
+                        <li>
+                            <span class="step-num">۱</span>
+                            <span>System ID زیر را کپی کنید</span>
+                        </li>
+                        <li>
+                            <span class="step-num">۲</span>
+                            <span>برای پشتیبانی ارسال کنید</span>
+                        </li>
+                        <li>
+                            <span class="step-num">۳</span>
+                            <span>سریال دریافتی را وارد نمایید</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="login-brand-footer">
+                    <div class="brand-contact">
+                        <span class="brand-contact-item">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z" />
+                            </svg>
+                            0932016851
+                        </span>
+                        <span class="brand-contact-item">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+                            </svg>
+                            iewco.com
+                        </span>
+                    </div>
+                    <div class="brand-name">گروه نرم‌افزاری آریانا</div>
+                </div>
+            </div>
+
+            <!-- پنل فرم -->
+            <div class="login-form-panel">
+                <div class="login-form-content">
+                    <div class="activation-header">
+                        <div class="activation-icon-badge">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2>فعال‌سازی</h2>
+                            <p class="activation-sub">این مرحله فقط یک بار انجام می‌شود</p>
+                        </div>
+                    </div>
+
+                    <!-- System ID Box -->
+                    <div class="activation-system-id">
+                        <div class="sysid-label">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                <rect x="3" y="11" width="18" height="11" rx="2" />
+                                <path d="M7 11V7a5 5 0 0110 0v4" />
+                            </svg>
+                            System ID سرور شما
+                        </div>
+                        <div class="sysid-box">
+                            <span id="activationSystemId">-</span>
+                            <button type="button" onclick="App.Auth.copySystemId()" title="کپی">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                                </svg>
+                            </button>
+                        </div>
+                        <p class="sysid-hint">
+                            این کد را برای پشتیبانی ارسال کنید تا سریال فعال‌سازی را دریافت نمایید
+                        </p>
+                    </div>
+
+                    <form id="activationForm" onsubmit="App.Auth.handleActivate(event)">
+                        <div class="form-group">
+                            <label class="activation-form-label">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                    <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                                </svg>
+                                سریال فعال‌سازی
+                            </label>
+                            <input type="text"
+                                   id="activationSerial"
+                                   placeholder="XXXX-XXXX-XXXX"
+                                   class="activation-input"
+                                   dir="ltr"
+                                   autocomplete="off"
+                                   maxlength="14"
+                                   required>
+                        </div>
+
+                        <div id="activationError" class="error-box hidden"></div>
+
+                        <button type="submit" class="btn btn-primary btn-block activation-submit">
+                            <span id="activationBtnText">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16" style="vertical-align:middle; margin-left:6px;">
+                                    <path d="M20 6L9 17l-5-5" />
+                                </svg>
+                                فعال‌سازی
+                            </span>
+                        </button>
+                    </form>
+
+                    <div class="activation-footer">
+                        <span>نسخه 1.0</span>
+                        <span>© Ariana Software Group</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- ═══════════════ اپلیکیشن اصلی ═══════════════ -->
     <div id="appView" class="app-wrapper hidden">
 

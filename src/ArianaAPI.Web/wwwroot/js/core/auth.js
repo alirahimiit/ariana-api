@@ -36,6 +36,12 @@ window.App.Auth = (function () {
                 const isValid = data && (data.isValid === true || data.valid === true);
 
                 if (el) {
+                    // ⭐ اگه نیاز به activation
+                    if (isValid && data.requiresActivation === true) {
+                        window.App.Auth._licenseData = { valid: true, raw: data };
+                        showActivation(data.systemId);
+                        return data;
+                    }
                     if (isValid) {
                         const orgCount = (data.authorizedOrgs || []).length;
                         const expires = data.expiresAt || '-';
@@ -57,6 +63,13 @@ window.App.Auth = (function () {
                 };
 
                 return data;
+                // ⭐ اگه نیاز به activation
+                if (data && data.valid === true && data.requiresActivation === true) {
+                    showActivation(data.systemId);
+                    window.App.Auth._licenseData = { valid: true, raw: data };
+                    return data;
+                }
+
             } catch (err) {
                 if (attempt === 2) {
                     if (el) {
@@ -70,6 +83,7 @@ window.App.Auth = (function () {
             }
         }
     }
+
     // ═══════════════════════════════════════════
     //  LOOKUPS
     // ═══════════════════════════════════════════
@@ -231,8 +245,10 @@ window.App.Auth = (function () {
     //  SHOW LOGIN / SHOW APP
     // ═══════════════════════════════════════════
     function showLogin() {
+        document.getElementById('activationView')?.classList.add('hidden');
         document.getElementById('loginView').classList.remove('hidden');
         document.getElementById('appView').classList.add('hidden');
+        
 
         // ⭐ پاک کردن رمز + برگرداندن به حالت password
         const pw = document.getElementById('password');
@@ -281,7 +297,70 @@ window.App.Auth = (function () {
         if (sidebarOrg) sidebarOrg.textContent = u.orgName || '';
         if (sidebarSubtitle && u.dbName) sidebarSubtitle.textContent = u.dbName;
     }
+    // ═══════════════════════════════════════════
+    //  ACTIVATION
+    // ═══════════════════════════════════════════
+    function showActivation(systemId) {
+        document.getElementById('loginView').classList.add('hidden');
+        document.getElementById('appView').classList.add('hidden');
+        document.getElementById('activationView').classList.remove('hidden');
 
+        const el = document.getElementById('activationSystemId');
+        if (el) el.textContent = systemId || '-';
+    }
+
+    function copySystemId() {
+        const el = document.getElementById('activationSystemId');
+        if (el) {
+            navigator.clipboard.writeText(el.textContent);
+            window.App.toast('System ID کپی شد');
+        }
+    }
+
+    async function handleActivate(e) {
+        e.preventDefault();
+
+        const serial = document.getElementById('activationSerial').value.trim();
+        const errBox = document.getElementById('activationError');
+        const btnText = document.getElementById('activationBtnText');
+
+        if (!serial) {
+            errBox.textContent = 'سریال را وارد کنید';
+            errBox.classList.remove('hidden');
+            return;
+        }
+
+        errBox.classList.add('hidden');
+        const orig = btnText.textContent;
+        btnText.textContent = 'در حال فعال‌سازی...';
+
+        try {
+            const res = await fetch(`${BASE}/api/license/activate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ serial })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'خطا در فعال‌سازی');
+            }
+
+            window.App.toast('✅ برنامه با موفقیت ثبت شد', 'success');
+
+            // برگرد به Login
+            setTimeout(() => {
+                showLogin();
+                window.App.Auth.checkLicense();
+            }, 1500);
+        } catch (err) {
+            errBox.textContent = err.message;
+            errBox.classList.remove('hidden');
+        } finally {
+            btnText.textContent = orig;
+        }
+    }
     // ═══════════════════════════════════════════
     //  API عمومی
     // ═══════════════════════════════════════════
@@ -292,6 +371,9 @@ window.App.Auth = (function () {
         handleLogin,
         handleLogout,
         showLogin,
-        showApp
+        showApp,
+        showActivation,
+        copySystemId,
+        handleActivate
     };
 })();

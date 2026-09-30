@@ -322,7 +322,7 @@ body {
 }
 
 /* فوتر */
-.login-brand-footer {
+/*.login-brand-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -331,7 +331,7 @@ body {
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     font-size: 11px;
     color: rgba(255, 255, 255, 0.55);
-}
+}*/
 
     .login-brand-footer a {
         color: rgba(255, 255, 255, 0.8);
@@ -6653,5 +6653,425 @@ input[placeholder*="1405"] {
     /* ⭐ فضای کافی برای دکمه در هدر */
     .dash-chart.dash-collapsible .dash-chart-head {
         padding-inline-end: 46px;
+    }
+}
+/* ═══════════════════════════════════════════
+   Activation Page — Professional
+   ═══════════════════════════════════════════ */
+
+/* ─── Steps (پنل برند) ─── */
+.activation-steps {
+    list-style: none;
+    padding: 0;
+    margin: 28px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.activation-steps li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.activation-steps .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    font-weight: 700;
+    font-size: 13px;
+    flex-shrink: 0;
+    backdrop-filter: blur(6px);
+}
+
+/* ─── Brand Footer ─── */
+.login-brand-footer {
+    position: absolute;
+    bottom: 24px;
+    right: 32px;
+    left: 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 12px;
+}
+
+.brand-contact {
+    display: flex;
+    gap: 16px;
+}
+
+.brand-contact-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 500;
+    direction: ltr;
+}
+
+.brand-contact-item svg {
+    opacity: 0.8;
+}
+
+.brand-name {
+    font-weight: 700;
+    font-size: 12px;
+    color: #fff;
+    letter-spacing: 0.3px;
+}
+
+/* ─── Activation Header ─── */
+.activation-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #F1F5F9;
+}
+
+.activation-icon-badge {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.35);
+}
+
+.activation-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 800;
+    color: #111827;
+}
+
+.activation-sub {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #6B7280;
+}
+
+/* ─── System ID Box ─── */
+.activation-system-id {
+    background: linear-gradient(135deg, #F5F3FF 0%, #EEF2FF 100%);
+    border: 1px solid #DDD6FE;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 22px;
+}
+
+.sysid-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #4C1D95;
+    margin-bottom: 10px;
+    letter-spacing: 0.2px;
+}
+
+.sysid-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #fff;
+    border: 2px solid #6366F1;
+    border-radius: 10px;
+    padding: 8px 10px 8px 14px;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+}
+
+.sysid-box span {
+    flex: 1;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 22px;
+    font-weight: 800;
+    color: #3730A3;
+    letter-spacing: 3px;
+    direction: ltr;
+    text-align: center;
+    user-select: all;
+}
+
+.sysid-box button {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
+}
+
+.sysid-box button:hover {
+    transform: scale(1.06);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+.sysid-box button:active {
+    transform: scale(0.96);
+}
+
+.sysid-hint {
+    margin: 10px 0 0;
+    font-size: 12px;
+    color: #6D28D9;
+    line-height: 1.7;
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+/* ─── Serial Input ─── */
+.activation-form-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 8px;
+}
+
+.activation-input {
+    width: 100%;
+    height: 52px;
+    padding: 0 16px;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-align: center;
+    direction: ltr;
+    color: #111827;
+    background: #F9FAFB;
+    border: 2px solid #E5E7EB;
+    border-radius: 10px;
+    transition: all 0.2s;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.activation-input::placeholder {
+    color: #9CA3AF;
+    letter-spacing: 3px;
+    font-weight: 500;
+}
+
+.activation-input:focus {
+    border-color: #6366F1;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+}
+
+/* ─── Submit Button ─── */
+.activation-submit {
+    width: 100%;
+    height: 50px;
+    margin-top: 18px;
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.activation-submit:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.4);
+}
+
+.activation-submit:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.activation-submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ─── Footer ─── */
+.activation-footer {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #F1F5F9;
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #9CA3AF;
+}
+
+/* ─── Error Box ─── */
+.error-box {
+    background: linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%);
+    border: 1px solid #FECACA;
+    color: #991B1B;
+    padding: 12px 14px;
+    border-radius: 10px;
+    margin-top: 12px;
+    font-size: 13px;
+    line-height: 1.6;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    animation: shakeError 0.35s ease;
+}
+
+.error-box.hidden {
+    display: none;
+}
+
+@keyframes shakeError {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 900px) {
+    .login-brand-footer {
+        position: static;
+        margin-top: 24px;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+
+    .activation-steps {
+        display: none;
+    }
+}
+/* ═══════════════════════════════════════════
+   Activation Layout — Centering & Polish
+   ═══════════════════════════════════════════ */
+
+/* کارت رو وسط صفحه عمودی نگه‌دار */
+#activationView.login-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    box-sizing: border-box;
+}
+
+/* کارت نهایتاً 1000px */
+#activationView .login-card-v2 {
+    max-width: 1000px;
+    width: 100%;
+    min-height: 580px;
+}
+
+/* پنل برند: چیدمان عمودی منظم */
+#activationView .login-brand-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 40px 36px;
+    overflow: hidden;
+}
+
+#activationView .login-brand-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* footer داخل پنل برند — پایین ثابت */
+#activationView .login-brand-footer {
+    position: static;
+    margin-top: auto;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+}
+
+/* آیکن لوگو بالای برند */
+#activationView .login-brand-logo {
+    margin-bottom: 20px;
+}
+
+/* steps تمیز */
+#activationView .activation-steps {
+    margin-top: 24px;
+}
+
+/* ─── Header: آیکن کوچیک‌تر ─── */
+#activationView .activation-header {
+    gap: 12px;
+}
+
+#activationView .activation-icon-badge {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+}
+
+/* ─── پنل فرم: پدینگ بهتر ─── */
+#activationView .login-form-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 40px 36px;
+}
+
+#activationView .login-form-content {
+    max-width: 420px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+/* ─── موبایل ─── */
+@media (max-width: 900px) {
+    #activationView .login-card-v2 {
+        min-height: auto;
+    }
+
+    #activationView .login-brand-panel {
+        padding: 28px 20px;
+    }
+
+    #activationView .login-form-panel {
+        padding: 28px 20px;
     }
 }

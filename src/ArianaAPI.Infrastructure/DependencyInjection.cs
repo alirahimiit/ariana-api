@@ -7,6 +7,7 @@ using ArianaAPI.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
+
 namespace ArianaAPI.Infrastructure;
 
 public static class DependencyInjection
@@ -39,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<ISharhRepository, SharhRepository>();
         services.AddScoped<IKindSanadRepository, KindSanadRepository>();
         services.AddSingleton<ILicenseService, LicenseService>();
+        services.AddScoped<ILicenseRegistryService, LicenseRegistryService>();
         services.AddScoped<ILookupRepository, LookupRepository>();
         services.AddScoped<ILookupRepository, LookupRepository>();
         services.AddSingleton<ITenantDbNameProvider, TenantDbNameProvider>();
