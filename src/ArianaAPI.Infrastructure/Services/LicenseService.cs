@@ -1,4 +1,5 @@
 ﻿using System.Security.Cryptography;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using ArianaAPI.Application.DTOs.License;
@@ -131,6 +132,11 @@ public class LicenseService : ILicenseService
                 return LicenseStatus.Invalid("این لایسنس برای این سرور صادر نشده است");
             }
             // ─── چک انقضا ───
+
+            _logger.LogInformation("🔍 بررسی انقضا: expiresAt={Exp}, isNotExpired={Ok}",
+                file.Payload.ExpiresAt, 
+                IsNotExpired(file.Payload.ExpiresAt));
+
             if (!IsNotExpired(file.Payload.ExpiresAt))
             {
                 _logger.LogWarning("⚠️ لایسنس منقضی شده است. انقضا: {Exp}", file.Payload.ExpiresAt);
@@ -216,13 +222,44 @@ public class LicenseService : ILicenseService
 
     private static bool IsNotExpired(string? expiresAt)
     {
-        if (string.IsNullOrWhiteSpace(expiresAt)) return true;
+        // اگه خالی → منقضی محسوب می‌شه (امن‌تر از valid)
+        if (string.IsNullOrWhiteSpace(expiresAt))
+            return false;
 
-        // ⚠️ اینجا باید تاریخ شمسی رو با تاریخ امروز مقایسه کنی
-        // فعلاً فقط یه placeholder ساده
-        // TODO: from PersianCalendar
+        try
+        {
+            // parse: "1405/12/29"
+            var parts = expiresAt.Trim().Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 3)
+                return false;
 
-        return true; // موقتاً غیرفعال
+            if (!int.TryParse(parts[0], out var year)) return false;
+            if (!int.TryParse(parts[1], out var month)) return false;
+            if (!int.TryParse(parts[2], out var day)) return false;
+
+            // اعتبارسنجی محدوده
+            if (year < 1300 || year > 1500) return false;
+            if (month < 1 || month > 12) return false;
+            if (day < 1 || day > 31) return false;
+
+            // تاریخ امروز به شمسی
+            var pc = new PersianCalendar();
+            var now = DateTime.Now;
+            var todayYear = pc.GetYear(now);
+            var todayMonth = pc.GetMonth(now);
+            var todayDay = pc.GetDayOfMonth(now);
+
+            // مقایسه: امروز vs تاریخ انقضا
+            if (todayYear > year) return false;   // سال گذشته
+            if (todayYear < year) return true;    // سال آینده
+            if (todayMonth > month) return false; // ماه گذشته
+            if (todayMonth < month) return true;  // ماه آینده
+            return todayDay <= day;               // امروز یا قبل‌تر
+        }
+        catch
+        {
+            return false;
+        }
     }
 
 
