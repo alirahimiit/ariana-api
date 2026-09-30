@@ -54,6 +54,8 @@ public static class DependencyInjection
         services.AddScoped<IDayBookRepository, DayBookRepository>();
         services.AddScoped<IMenuRegistryRepository, MenuRegistryRepository>();
         services.AddScoped<IPermissionRepository, PermissionRepository>();
+        services.AddScoped<IKardexRepository, KardexRepository>();
+        services.AddScoped<IArticleRotateRepository, ArticleRotateRepository>();
 
         return services;
     }

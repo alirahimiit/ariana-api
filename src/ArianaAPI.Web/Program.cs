@@ -1,11 +1,11 @@
 ﻿using System.Text;
 using ArianaAPI.Infrastructure;
 using ArianaAPI.Infrastructure.Config;
-using ArianaAPI.Web.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Microsoft.Extensions.Hosting.WindowsServices;
+using ArianaAPI.Web.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService();
@@ -79,8 +79,10 @@ var app = builder.Build();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 // ═══ Middleware Pipeline ═══
+
 app.UseMiddleware<ExceptionMiddleware>();
 app.UseMiddleware<ApiKeyMiddleware>();
+app.UseMiddleware<LicenseGuardMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {

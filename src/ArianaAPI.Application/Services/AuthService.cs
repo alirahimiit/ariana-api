@@ -19,6 +19,7 @@ public class AuthService : IAuthService
     private readonly ILookupRepository _lookup;
     private readonly ITenantDbNameProvider _dbName;
     private readonly IPermissionRepository _permissions;
+    private readonly ILicenseService _licenseService;
 
     public AuthService(
         IUserRepository users,
@@ -26,7 +27,8 @@ public class AuthService : IAuthService
         IRefreshTokenStore refreshStore,
         ILookupRepository lookup,
         ITenantDbNameProvider dbName,
-        IPermissionRepository permissions)
+        IPermissionRepository permissions,
+        ILicenseService licenseService)
     {
         _users = users;
         _tokens = tokens;
@@ -34,10 +36,18 @@ public class AuthService : IAuthService
         _lookup = lookup;
         _dbName = dbName;
         _permissions = permissions;
+        _licenseService = licenseService;
     }
 
     public async Task<LoginResponseDto> LoginAsync(LoginRequestDto request, CancellationToken ct = default)
     {
+        // ⭐ گارد لایسنس
+        var lic = _licenseService.GetStatus();
+        if (!lic.IsValid)
+        {
+            throw new UnauthorizedAccessException(
+                $"لایسنس نامعتبر است: {lic.ErrorMessage}");
+        }
         var user = await _users.AuthenticateAsync(
             request.OrgId, request.FyId, request.Username, request.Password, ct)
             ?? throw new UnauthorizedAccessException("نام کاربری یا رمز عبور اشتباه است");

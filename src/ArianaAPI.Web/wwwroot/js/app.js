@@ -669,6 +669,8 @@ window.App = Object.assign(window.App || {}, {
             article: 'کالاها',
             sharh: 'شرح‌ها',
             kind: 'انواع سند',
+            'article-rotate': 'گردش کالاها',
+            'kardex': 'کاردکس کالا',
             // ⭐ منوی ورود/خروج کالا
             'factor-buy': 'فاکتور خرید',
             'factor-sell': 'فاکتور فروش',
@@ -716,6 +718,8 @@ window.App = Object.assign(window.App || {}, {
             case 'tafzili': window.App.Features.Tafzili.render(); break;
             case 'sharh': window.App.Features.Sharh.render(); break;
             case 'kind': window.App.Features.Kind.render(); break;
+            case 'kardex': window.App.Features.Kardex.render(); break;
+            case 'article-rotate': window.App.Features.ArticleRotate.render(); break;
 
             // ⭐ صفحات در حال توسعه — placeholder نمایش می‌ده
             default:
