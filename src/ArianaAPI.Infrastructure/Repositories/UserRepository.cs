@@ -2,13 +2,18 @@
 using ArianaAPI.Domain.Entities;
 using ArianaAPI.Infrastructure.Data;
 using Dapper;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
 namespace ArianaAPI.Infrastructure.Repositories;
 
 /// <summary>
 /// پیاده‌سازی Repository کاربران
-/// نکته: کاربران در هر دیتابیس Tenant جداگانه ذخیره می‌شن
+/// 
+/// ⭐ حالت Dual-Mode:
+///   - Password (plaintext) → برای Delphi دست‌نخورده
+///   - PasswordHash (BCrypt) → برای وب امن
+///   - اگه hash نبود، از plaintext چک می‌کنه و hash می‌سازه (خودکار)
 /// </summary>
 public class UserRepository : IUserRepository
 {
@@ -23,6 +28,9 @@ public class UserRepository : IUserRepository
         _logger = logger;
     }
 
+    // ═══════════════════════════════════════════════════
+    //  احراز هویت — Dual Mode
+    // ═══════════════════════════════════════════════════
     public async Task<User?> AuthenticateAsync(
         long orgId,
         long fyId,
@@ -32,7 +40,7 @@ public class UserRepository : IUserRepository
     {
         const string sql = @"
             SELECT TOP 1
-                UsersID, UserGroupCode, UserCode, Name, Password,
+                UsersID, UserGroupCode, UserCode, Name, Password, PasswordHash,
                 Code_Op, Time_OP, Date_Op
             FROM Users
             WHERE UserCode = @username";
@@ -48,36 +56,119 @@ public class UserRepository : IUserRepository
             if (user is null)
             {
                 _logger.LogWarning(
-                    "کاربر {Username} در دیتابیس Org={OrgId}/FY={FyId} پیدا نشد",
+                    "کاربر {Username} پیدا نشد — Org={OrgId}/FY={FyId}",
                     username, orgId, fyId);
                 return null;
             }
 
-            // ⚠️ توجه: پسورد فعلاً plain text ذخیره می‌شه
-            // در فاز امنیتی بعدی به BCrypt مهاجرت می‌کنیم
-            if (user.Password != password)
+            // ═══════════════════════════════════════════════
+            //  ۱. اگه hash داره → اول BCrypt چک کن
+            // ═══════════════════════════════════════════════
+            if (!string.IsNullOrEmpty(user.PasswordHash))
             {
-                _logger.LogWarning(
-                    "پسورد نامعتبر برای کاربر {Username} در Org={OrgId}/FY={FyId}",
-                    username, orgId, fyId);
-                return null;
+                try
+                {
+                    if (BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+                    {
+                        _logger.LogInformation(
+                            "✅ ورود موفق (BCrypt) — کاربر {Username}",
+                            username);
+                        return user;
+                    }
+                    // hash داره ولی اشتباهه → ممکنه رمز در Delphi عوض شده باشه
+                    // پس fallback به plaintext
+                    _logger.LogDebug(
+                        "BCrypt fail — fallback به plaintext برای {Username}",
+                        username);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "PasswordHash فرمت اشتباه داره — fallback به plaintext");
+                }
             }
 
-            _logger.LogInformation(
-                "کاربر {Username} با موفقیت احراز هویت شد در Org={OrgId}/FY={FyId}",
-                username, orgId, fyId);
+            // ═══════════════════════════════════════════════
+            //  ۲. Fallback: مقایسه plaintext
+            // ═══════════════════════════════════════════════
+            if (user.Password == password)
+            {
+                _logger.LogInformation(
+                    "✅ ورود موفق (Plaintext) — کاربر {Username}",
+                    username);
 
-            return user;
+                // ⭐ اگه hash نداشت یا hash قدیمی بود → hash جدید بساز
+                bool needNewHash = string.IsNullOrEmpty(user.PasswordHash);
+                if (!needNewHash)
+                {
+                    // hash هست ولی BCrypt verify fail داد (چون رمز در Delphi عوض شده)
+                    needNewHash = true;
+                }
+
+                if (needNewHash)
+                {
+                    // ⚠️ غیرهمزمان، خطا کاربر رو نشکنه
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await SavePasswordHashAsync(orgId, fyId, user.UsersID, password);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex,
+                                "خطا در ساخت hash برای کاربر {UserId}",
+                                user.UsersID);
+                        }
+                    }, ct);
+                }
+
+                return user;
+            }
+
+            // ═══════════════════════════════════════════════
+            //  ۳. هر دو fail → خطا
+            // ═══════════════════════════════════════════════
+            _logger.LogWarning(
+                "❌ پسورد نامعتبر برای {Username} — Org={OrgId}/FY={FyId}",
+                username, orgId, fyId);
+            return null;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "خطا در احراز هویت کاربر {Username} در Org={OrgId}/FY={FyId}",
+                "خطا در احراز هویت {Username} — Org={OrgId}/FY={FyId}",
                 username, orgId, fyId);
             throw;
         }
     }
 
+    // ═══════════════════════════════════════════════════
+    //  ساخت/ذخیره hash (برای مهاجرت خودکار)
+    // ═══════════════════════════════════════════════════
+    private async Task SavePasswordHashAsync(
+        long orgId, long fyId, long userId, string plainPassword)
+    {
+        // ⭐ BCrypt با workFactor پیش‌فرض (۱۱)
+        var hash = BCrypt.Net.BCrypt.HashPassword(plainPassword);
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        await conn.OpenAsync();
+
+        await conn.ExecuteAsync(new CommandDefinition(@"
+            UPDATE Users 
+            SET PasswordHash = @hash
+            WHERE UsersID = @userId",
+            new { hash, userId }));
+
+        _logger.LogInformation(
+            "🔐 hash برای کاربر {UserId} ساخته و ذخیره شد",
+            userId);
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  گرفتن کاربر با ID
+    // ═══════════════════════════════════════════════════
     public async Task<User?> GetByIdAsync(
         long orgId,
         long fyId,
@@ -86,7 +177,7 @@ public class UserRepository : IUserRepository
     {
         const string sql = @"
             SELECT TOP 1
-                UsersID, UserGroupCode, UserCode, Name, Password,
+                UsersID, UserGroupCode, UserCode, Name, Password, PasswordHash,
                 Code_Op, Time_OP, Date_Op
             FROM Users
             WHERE UsersID = @userId";
@@ -96,19 +187,23 @@ public class UserRepository : IUserRepository
             new CommandDefinition(sql, new { userId }, cancellationToken: ct));
     }
 
+    // ═══════════════════════════════════════════════════
+    //  تغییر رمز — هم plaintext هم hash
+    // ═══════════════════════════════════════════════════
     public async Task<bool> ChangePasswordAsync(
         long orgId, long fyId, long userId,
         string currentPassword, string newPassword,
         CancellationToken ct = default)
     {
         const string checkSql = @"
-        SELECT TOP 1 Password 
+        SELECT TOP 1 Password, PasswordHash
         FROM Users 
         WHERE UsersID = @userId";
 
         const string updateSql = @"
         UPDATE Users 
         SET Password = @newPassword,
+            PasswordHash = @newHash,
             Date_Op = @dateOp,
             Time_OP = @timeOp
         WHERE UsersID = @userId";
@@ -118,21 +213,58 @@ public class UserRepository : IUserRepository
             await using var conn = _factory.CreateTenantConnection(orgId, fyId);
             await conn.OpenAsync(ct);
 
-            var current = await conn.ExecuteScalarAsync<string>(
+            var current = await conn.QueryFirstOrDefaultAsync<dynamic>(
                 new CommandDefinition(checkSql, new { userId }, cancellationToken: ct));
 
-            if (current == null) return false;              // کاربر نیست
-            if (current != currentPassword) return false;   // رمز فعلی اشتباهه
+            if (current is null)
+            {
+                _logger.LogWarning("کاربر {UserId} پیدا نشد", userId);
+                return false;
+            }
+
+            var cd = (IDictionary<string, object>)current;
+            var currentPlain = cd["Password"]?.ToString() ?? "";
+            var currentHash = cd["PasswordHash"]?.ToString();
+
+            // ═══ بررسی رمز فعلی ═══
+            bool passwordOk = false;
+            if (!string.IsNullOrEmpty(currentHash))
+            {
+                try
+                {
+                    passwordOk = BCrypt.Net.BCrypt.Verify(currentPassword, currentHash);
+                }
+                catch { /* invalid hash */ }
+            }
+            if (!passwordOk)
+            {
+                // fallback به plaintext
+                passwordOk = currentPlain == currentPassword;
+            }
+
+            if (!passwordOk)
+            {
+                _logger.LogWarning(
+                    "رمز فعلی اشتباه — کاربر {UserId}",
+                    userId);
+                return false;
+            }
+
+            // ═══ ذخیره‌ی رمز جدید (هم plaintext هم hash) ═══
+            var newHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
 
             await conn.ExecuteAsync(new CommandDefinition(updateSql, new
             {
                 userId,
                 newPassword,
+                newHash,
                 dateOp = DateTime.Now.ToString("yyyy/MM/dd"),
                 timeOp = DateTime.Now.ToString("HH:mm:ss")
             }, cancellationToken: ct));
 
-            _logger.LogInformation("رمز کاربر {UserId} تغییر کرد", userId);
+            _logger.LogInformation(
+                "🔐 رمز کاربر {UserId} تغییر کرد (plaintext + BCrypt)",
+                userId);
             return true;
         }
         catch (Exception ex)

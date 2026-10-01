@@ -12,6 +12,7 @@ public class User
     public string? UserCode { get; set; }
     public string? Name { get; set; }
     public string? Password { get; set; }
+    public string? PasswordHash { get; set; }
     public string? Code_Op { get; set; }
     public string? Time_OP { get; set; }
     public string? Date_Op { get; set; }
