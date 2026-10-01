@@ -78,3 +78,49 @@ body {
 .muted {
     color: var(--text-muted);
 }
+/* ═══ SVG Icons در Sidebar ═══ */
+.nav-group-icon.has-svg,
+.nav-icon.has-svg {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+    .nav-group-icon.has-svg svg {
+        width: 16px;
+        height: 16px;
+        opacity: 1;
+    }
+
+    .nav-icon.has-svg svg {
+        width: 18px;
+        height: 18px;
+    }
+
+/* رنگ آیکن‌ها با state */
+.nav-item:hover .nav-icon.has-svg svg {
+    color: #fff;
+}
+
+.nav-item.active .nav-icon.has-svg svg {
+    color: #fff;
+}
+
+.nav-item .nav-icon.has-svg svg {
+    color: #9CA3AF;
+    transition: color 0.15s;
+}
+
+/* آیکن‌های توی کارت‌ها (اختیاری) */
+[data-icon] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+}
+
+    [data-icon] svg {
+        width: 18px;
+        height: 18px;
+        color: currentColor;
+    }

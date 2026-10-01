@@ -732,6 +732,10 @@ window.App = Object.assign(window.App || {}, {
                 window.App.renderComingSoon(page, titles[page] || page);
                 break;
         }
+        // ⭐ اعمال آیکن‌ها بعد از هر route
+        if (window.App.Icons) {
+            setTimeout(function () { window.App.Icons.applyAll(); }, 0);
+        }
     },
 
 
