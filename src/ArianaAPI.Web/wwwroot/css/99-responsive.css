@@ -1,0 +1,300 @@
+﻿/* ═══════════════════════════════════════════════════
+   99-RESPONSIVE — قواعد ریسپانسیو سراسری
+   (سایدبار، topbar، content، جدول‌ها در موبایل)
+   ═══════════════════════════════════════════════════ */
+
+/* ═══ Tablet (≤ 1024px) ═══ */
+@media (max-width: 1024px) {
+    :root {
+        --sidebar-width: 220px;
+    }
+
+    .content {
+        padding: 20px;
+    }
+
+    .filters {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+}
+
+/* ═══ Mobile (≤ 768px) — منوی کشویی ═══ */
+@media (max-width: 768px) {
+
+    /* ─── Sidebar مخفی، از راست باز می‌شود ─── */
+    .sidebar {
+        transform: translateX(100%);
+        width: 280px;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+
+        .sidebar.open {
+            transform: translateX(0);
+        }
+
+    .sidebar-close {
+        display: block;
+    }
+
+    /* ─── Overlay فعال ─── */
+    .sidebar-overlay {
+        display: block;
+        pointer-events: none;
+    }
+
+        .sidebar-overlay.active {
+            pointer-events: auto;
+        }
+
+    /* ─── Main تمام عرض ─── */
+    .main {
+        margin-right: 0;
+    }
+
+    /* ─── همبرگر نمایش داده می‌شود ─── */
+    .topbar-btn.hamburger {
+        display: flex;
+    }
+
+    /* ─── یوزر متا مخفی ─── */
+    .user-meta-desktop {
+        display: none;
+    }
+
+    /* ─── Padding کمتر ─── */
+    .topbar {
+        padding: 10px 16px;
+    }
+
+        .topbar h2 {
+            font-size: 16px;
+        }
+
+    .content {
+        padding: 16px;
+    }
+
+    /* ─── کارت‌ها ─── */
+    .card {
+        padding: 16px;
+        border-radius: 10px;
+    }
+
+    /* ─── Stats ─── */
+    .stats-grid {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+    }
+
+    .stat-card {
+        padding: 14px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .stat-icon {
+        width: 42px;
+        height: 42px;
+        font-size: 20px;
+    }
+
+    .stat-value {
+        font-size: 20px;
+    }
+
+    /* ─── فیلترها تمام عرض ─── */
+    .filters {
+        grid-template-columns: 1fr;
+    }
+
+    /* ─── Info Grid تک ستون ─── */
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .info-item:nth-last-child(-n+2) {
+        border-bottom: 1px dashed var(--border);
+    }
+
+    .info-item:last-child {
+        border-bottom: none;
+    }
+
+    /* ─── Radio Group ─── */
+    .radio-group {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .radio-item {
+        justify-content: center;
+        padding: 10px 8px;
+        font-size: 13px;
+    }
+
+    /* ─── Export Bar ─── */
+    .export-bar {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+        .export-bar button {
+            width: 100%;
+            justify-content: center;
+        }
+
+    /* ─── Modal ─── */
+    .modal {
+        padding: 0;
+    }
+
+    .modal-box {
+        max-width: 100%;
+        max-height: 100vh;
+        height: 100vh;
+        border-radius: 0;
+    }
+
+    /* ─── Table: کوچک‌تر ─── */
+    table {
+        font-size: 12px;
+    }
+
+    th {
+        padding: 10px 8px;
+        font-size: 11px;
+    }
+
+    td {
+        padding: 10px 8px;
+    }
+
+    /* ─── Pagination ─── */
+    .pagination-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .pagination-info {
+        text-align: center;
+    }
+
+    .pagination-controls {
+        justify-content: center;
+    }
+
+    .page-btn {
+        min-width: 32px;
+        height: 32px;
+        padding: 0 8px;
+        font-size: 12px;
+    }
+
+    /* ─── کارت title ─── */
+    .card-title {
+        font-size: 14px;
+    }
+
+    /* ─── user-avatar کوچک ─── */
+    .user-avatar {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+
+    .topbar-btn {
+        width: 38px;
+        height: 38px;
+    }
+}
+
+/* ═══ Small phones (≤ 480px) ═══ */
+@media (max-width: 480px) {
+    .content {
+        padding: 12px;
+    }
+
+    .topbar {
+        padding: 10px 12px;
+    }
+
+        .topbar h2 {
+            font-size: 15px;
+        }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .radio-group {
+        grid-template-columns: 1fr;
+    }
+
+    .card {
+        padding: 14px;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .page-btn {
+        min-width: 30px;
+        height: 30px;
+        padding: 0 6px;
+        font-size: 11px;
+    }
+
+    /* ─── مخفی کردن صفحه‌های میانی در pagination ─── */
+    .pagination-controls .page-btn.dots {
+        display: none;
+    }
+}
+
+/* ═══ Landscape موبایل ═══ */
+@media (max-width: 900px) and (orientation: landscape) {
+    .sidebar {
+        width: 260px;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* ═══ Safe area (نچ‌بار پایین در آیفون/اندروید) ═══ */
+@supports (padding: env(safe-area-inset-bottom)) {
+    .sidebar-footer {
+        padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    }
+
+    .toast {
+        bottom: calc(24px + env(safe-area-inset-bottom));
+    }
+}
+
+/* ═══ Print ═══ */
+@media print {
+    .sidebar,
+    .topbar,
+    .export-bar,
+    .pagination-bar,
+    button {
+        display: none !important;
+    }
+
+    .main {
+        margin-right: 0;
+    }
+
+    .content {
+        padding: 0;
+    }
+
+    .card {
+        box-shadow: none;
+        border: none;
+    }
+}

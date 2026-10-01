@@ -1,0 +1,646 @@
+﻿/* ═══════════════════════════════════════════════════
+   07-DASHBOARD — داشبورد v3
+   ═══════════════════════════════════════════════════ */
+
+.dash {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.dash-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    gap: 12px;
+    color: var(--text-muted, #6B7280);
+}
+
+/* ═══ SVG Icons ═══ */
+.ico {
+    width: 20px;
+    height: 20px;
+    display: block;
+    flex-shrink: 0;
+}
+
+.ico-fallback {
+    font-size: 18px;
+    line-height: 1;
+}
+
+/* ═══ Greeting (باریک) ═══ */
+.dash-greeting {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 4px 4px 8px;
+}
+
+    .dash-greeting h2 {
+        font-size: 15px;
+        font-weight: 500;
+        color: var(--text, #111827);
+        margin: 0;
+    }
+
+        .dash-greeting h2 strong {
+            font-weight: 700;
+            color: var(--primary, #4F46E5);
+        }
+
+    .dash-greeting .muted {
+        font-size: 12px;
+        color: var(--text-muted, #6B7280);
+        margin-top: 2px;
+    }
+
+.dash-date {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-muted, #6B7280);
+    background: #fff;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border, #E5E7EB);
+    direction: ltr;
+    letter-spacing: 0.5px;
+}
+
+/* ═══ KPI Strip (نوار افقی فشرده) ═══ */
+.dash-strip {
+    display: flex;
+    align-items: center;
+    background: #fff;
+    border: 1px solid var(--border, #E5E7EB);
+    border-radius: 12px;
+    padding: 4px;
+    overflow: hidden;
+}
+
+.dash-strip-item {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    transition: background 0.15s;
+    min-width: 0;
+}
+
+    .dash-strip-item:hover {
+        background: #F9FAFB;
+    }
+
+.dash-strip-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+    .dash-strip-icon .ico {
+        width: 17px;
+        height: 17px;
+    }
+
+.dash-strip-primary {
+    background: #EEF2FF;
+    color: #4F46E5;
+}
+
+.dash-strip-success {
+    background: #D1FAE5;
+    color: #059669;
+}
+
+.dash-strip-warning {
+    background: #FEF3C7;
+    color: #D97706;
+}
+
+.dash-strip-info {
+    background: #DBEAFE;
+    color: #2563EB;
+}
+
+.dash-strip-value {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text, #111827);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+
+.dash-strip-label {
+    font-size: 12px;
+    color: var(--text-muted, #6B7280);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.dash-strip-sep {
+    width: 1px;
+    height: 28px;
+    background: var(--border, #E5E7EB);
+    flex-shrink: 0;
+}
+
+/* ═══ Income / Expense / Net ═══ */
+.dash-ie {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+}
+
+.dash-ie-box {
+    background: #fff;
+    border: 1px solid var(--border, #E5E7EB);
+    border-radius: 14px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+.dash-ie-icon-wrap {
+    position: absolute;
+    top: 12px;
+    inset-inline-start: 12px;
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+    .dash-ie-icon-wrap .ico {
+        width: 16px;
+        height: 16px;
+    }
+
+.dash-ie-icon-income {
+    background: #D1FAE5;
+    color: #059669;
+}
+
+.dash-ie-icon-expense {
+    background: #FEE2E2;
+    color: #DC2626;
+}
+
+.dash-ie-donut {
+    width: 140px;
+    height: 140px;
+    position: relative;
+    margin-top: 8px;
+}
+
+.dash-ie-meta {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dash-ie-label {
+    font-size: 12.5px;
+    color: var(--text-muted, #6B7280);
+    font-weight: 600;
+}
+
+.dash-ie-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text, #111827);
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+}
+
+    .dash-ie-value small {
+        font-size: 11px;
+        color: var(--text-muted, #6B7280);
+        font-weight: 500;
+    }
+
+/* ═══ خالص (وسط) ═══ */
+.dash-ie-box-net {
+    background: linear-gradient(160deg, #F5F3FF 0%, #EEF2FF 100%);
+    border-color: #C7D2FE;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px 18px;
+}
+
+.dash-ie-net-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: #fff;
+    color: var(--primary, #4F46E5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.12);
+    margin-bottom: 4px;
+}
+
+    .dash-ie-net-icon .ico {
+        width: 22px;
+        height: 22px;
+    }
+
+.dash-ie-net-label {
+    font-size: 12.5px;
+    color: var(--text-muted, #6B7280);
+    font-weight: 600;
+}
+
+.dash-ie-net-value {
+    font-size: 24px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+    line-height: 1.1;
+}
+
+    .dash-ie-net-value.dash-positive {
+        color: #059669;
+    }
+
+    .dash-ie-net-value.dash-negative {
+        color: #DC2626;
+    }
+
+.dash-ie-net-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 12px;
+    border-radius: 20px;
+    margin-top: 2px;
+}
+
+.dash-ie-net-positive {
+    background: #D1FAE5;
+    color: #065F46;
+}
+
+.dash-ie-net-negative {
+    background: #FEE2E2;
+    color: #991B1B;
+}
+
+/* ═══ ۳ چارت ═══ */
+.dash-charts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.dash-chart {
+    background: #fff;
+    border: 1px solid var(--border, #E5E7EB);
+    border-radius: 14px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    position: relative;
+}
+
+.dash-chart-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text, #111827);
+    padding-bottom: 10px;
+    border-bottom: 1px dashed var(--border, #E5E7EB);
+}
+
+.dash-chart-ico {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: #EEF2FF;
+    color: var(--primary, #4F46E5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+    .dash-chart-ico .ico {
+        width: 14px;
+        height: 14px;
+    }
+
+.dash-chart-body {
+    position: relative;
+    height: 230px;
+}
+
+/* ═══ Connection (باریک) ═══ */
+.dash-section-compact {
+    background: #fff;
+    border: 1px solid var(--border, #E5E7EB);
+    border-radius: 12px;
+    padding: 12px 16px;
+}
+
+.dash-conn-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    font-size: 12.5px;
+}
+
+.dash-conn-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+}
+
+.dash-conn-label {
+    color: var(--text-muted, #6B7280);
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.dash-conn-value {
+    color: var(--text, #111827);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════
+   Collapsible Cards (موبایل)
+   ═══════════════════════════════════════════════════ */
+.dash-collapse-btn {
+    display: none;
+    position: absolute;
+    top: 10px;
+    inset-inline-start: 10px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--border, #E5E7EB);
+    background: #fff;
+    color: var(--text-muted, #6B7280);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    transition: all 0.15s;
+}
+
+    .dash-collapse-btn:hover {
+        background: #EEF2FF;
+        border-color: var(--primary, #4F46E5);
+        color: var(--primary, #4F46E5);
+    }
+
+.dash-collapse-icon {
+    font-size: 10px;
+    line-height: 1;
+    display: block;
+}
+
+.dash-ie-summary {
+    display: none;
+    text-align: center;
+    margin-top: 4px;
+}
+
+.dash-ie-value-small {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text, #111827);
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+}
+
+    .dash-ie-value-small small {
+        font-size: 11px;
+        color: var(--text-muted, #6B7280);
+        font-weight: 500;
+    }
+
+/* ═══ Fix دکمه‌ی تاشو در کارت‌های چارت ═══ */
+.dash-chart.dash-collapsible {
+    position: relative;
+}
+
+/* ═══════════════════════════════════════════════════
+   Responsive
+   ═══════════════════════════════════════════════════ */
+@media (max-width: 1100px) {
+    .dash-ie {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .dash-ie-box-net {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 768px) {
+    .dash {
+        gap: 10px;
+    }
+
+    .dash-greeting h2 {
+        font-size: 13px;
+    }
+
+    .dash-date {
+        font-size: 11px;
+        padding: 5px 10px;
+    }
+
+    /* KPI Strip → 2x2 */
+    .dash-strip {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        padding: 6px;
+        gap: 4px;
+    }
+
+    .dash-strip-sep {
+        display: none;
+    }
+
+    .dash-strip-item {
+        padding: 8px 10px;
+        gap: 8px;
+        background: #F9FAFB;
+    }
+
+    .dash-strip-icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+    }
+
+        .dash-strip-icon .ico {
+            width: 15px;
+            height: 15px;
+        }
+
+    .dash-strip-value {
+        font-size: 15px;
+    }
+
+    .dash-strip-label {
+        font-size: 11px;
+    }
+
+    /* Income/Expense → تک‌ستون */
+    .dash-ie {
+        grid-template-columns: 1fr;
+    }
+
+    .dash-ie-box-net {
+        grid-column: auto;
+        padding: 20px 16px;
+    }
+
+    .dash-ie-donut {
+        width: 120px;
+        height: 120px;
+    }
+
+    .dash-charts {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+        .dash-charts .dash-chart {
+            grid-column: auto !important;
+        }
+
+    .dash-chart-body {
+        height: 260px !important;
+    }
+
+    /* Connection */
+    .dash-conn-row {
+        gap: 10px 16px;
+        font-size: 11.5px;
+    }
+
+    /* ═══ Collapsible در موبایل ═══ */
+    .dash-collapse-btn {
+        display: flex;
+    }
+
+    .dash-collapsible .dash-collapse-body {
+        display: none;
+    }
+
+    .dash-collapsible.open .dash-collapse-body {
+        display: block;
+        animation: dashSlideIn 0.25s ease;
+    }
+
+    @keyframes dashSlideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-6px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .dash-collapsible:not(.open) {
+        padding: 14px 16px;
+    }
+
+    .dash-ie-summary {
+        display: block;
+    }
+
+    .dash-ie-box.dash-collapsible:not(.open) {
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        min-height: auto;
+    }
+
+        .dash-ie-box.dash-collapsible:not(.open) .dash-ie-icon-wrap {
+            position: static;
+            margin: 0;
+            flex-shrink: 0;
+        }
+
+        .dash-ie-box.dash-collapsible:not(.open) .dash-ie-summary {
+            flex: 1;
+            text-align: right;
+            margin: 0;
+        }
+
+        .dash-ie-box.dash-collapsible:not(.open) .dash-collapse-btn {
+            position: static;
+            margin-inline-start: auto;
+        }
+
+    .dash-chart.dash-collapsible:not(.open) {
+        padding: 14px 16px;
+    }
+
+        .dash-chart.dash-collapsible:not(.open) .dash-chart-head {
+            margin: 0;
+            padding: 0;
+            border-bottom: none;
+        }
+
+    /* دکمه‌ی تاشو در سمت چپ کارت چارت */
+    .dash-chart.dash-collapsible .dash-collapse-btn {
+        top: 14px;
+        inset-inline-start: auto;
+        inset-inline-end: 14px;
+    }
+
+    .dash-chart.dash-collapsible .dash-chart-head {
+        padding-inline-end: 46px;
+    }
+}
+
+/* ═══ دسکتاپ: همه همیشه باز ═══ */
+@media (min-width: 769px) {
+    .dash-collapse-body {
+        display: block !important;
+    }
+
+    .dash-collapse-btn {
+        display: none !important;
+    }
+
+    .dash-ie-summary {
+        display: none !important;
+    }
+}

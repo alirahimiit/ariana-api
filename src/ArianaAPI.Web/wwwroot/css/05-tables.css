@@ -1,0 +1,304 @@
+﻿/* ═══════════════════════════════════════════════════
+   05-TABLES — جدول‌ها (سراسری + ویژه)
+   ═══════════════════════════════════════════════════ */
+
+/* ═══ Table Wrapper — اسکرول + گوشه‌گرد ═══ */
+.table-wrapper {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid #E5E7EB;
+    background: #FFFFFF;
+    -webkit-overflow-scrolling: touch;
+}
+
+    /* ═══ Base Table ═══ */
+    .table-wrapper table,
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+
+        /* ═══ Header ═══ */
+        .table-wrapper table thead th,
+        table thead th {
+            padding: 12px 14px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 12px;
+            color: #6B7280;
+            border-bottom: 1px solid #E5E7EB;
+            white-space: nowrap;
+            background: #F9FAFB;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            box-shadow: inset 0 -1px 0 #E5E7EB;
+        }
+
+        /* ═══ Body Cell ═══ */
+        .table-wrapper table td,
+        table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #E5E7EB;
+            vertical-align: middle;
+        }
+
+        /* ═══ Row Hover ═══ */
+        .table-wrapper table tbody tr,
+        table tbody tr {
+            transition: background 0.1s;
+        }
+
+            .table-wrapper table tbody tr:hover,
+            table tbody tr:hover {
+                background: #EEF2FF !important;
+            }
+
+            /* ═══ Zebra Striping ═══ */
+            .table-wrapper table tbody tr:nth-child(even),
+            table tbody tr:nth-child(even) {
+                background: #FAFBFC;
+            }
+
+            /* ═══ آخرین ردیف بدون border ═══ */
+            .table-wrapper table tbody tr:last-child td,
+            table tbody tr:last-child td {
+                border-bottom: none;
+            }
+
+        /* ═══ Footer ═══ */
+        table tfoot td {
+            padding: 12px 14px;
+            border-bottom: none;
+            background: #EEF2FF;
+            font-weight: 700;
+        }
+
+        /* ═══ ستون‌های عمودی ظریف ═══ */
+        .table-wrapper table th:not(:last-child),
+        .table-wrapper table td:not(:last-child) {
+            border-left: 1px solid #F3F4F6;
+        }
+
+    /* ═══ Scrollbar زیبا ═══ */
+    .table-wrapper::-webkit-scrollbar {
+        height: 10px;
+        width: 10px;
+    }
+
+    .table-wrapper::-webkit-scrollbar-track {
+        background: #F9FAFB;
+        border-radius: 6px;
+    }
+
+    .table-wrapper::-webkit-scrollbar-thumb {
+        background: #D1D5DB;
+        border-radius: 6px;
+        border: 2px solid #F9FAFB;
+    }
+
+        .table-wrapper::-webkit-scrollbar-thumb:hover {
+            background: #9CA3AF;
+        }
+
+/* ═══════════════════════════════════════════════════
+   Helpers — ترازبندی
+   ═══════════════════════════════════════════════════ */
+.num {
+    font-variant-numeric: tabular-nums;
+}
+
+.text-left {
+    text-align: left;
+}
+
+.text-center {
+    text-align: center;
+}
+
+/* ═══ ستون‌های عددی (بدون چسبیدن) ═══ */
+table .num-col {
+    text-align: left !important;
+    direction: ltr !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    white-space: nowrap;
+    border-left: 1px solid #E5E7EB;
+}
+
+/* ═══ ستون‌های کد (وسط‌چین) ═══ */
+table .code-col {
+    text-align: center !important;
+    direction: ltr !important;
+    padding: 6px 8px;
+    white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════
+   DayBook Table — ویژه دفتر روزنامه
+   ═══════════════════════════════════════════════════ */
+.daybook-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+    .daybook-table .code-col {
+        text-align: center !important;
+        direction: ltr !important;
+        padding: 8px 10px;
+        white-space: nowrap;
+        background: #FAFBFC;
+        border-left: 1px solid #E5E7EB;
+    }
+
+    .daybook-table .num-col {
+        text-align: left !important;
+        direction: ltr !important;
+        padding: 8px 14px;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+        font-family: 'Tahoma', sans-serif;
+    }
+
+    /* ═══ خط ضخیم بین بدهکار و بستانکار ═══ */
+    .daybook-table th.num-col:first-of-type,
+    .daybook-table td.num-col:first-of-type {
+        border-right: 3px solid #4F46E5 !important;
+    }
+
+    .daybook-table th.num-col,
+    .daybook-table td.num-col {
+        border-left: 1px solid #E5E7EB;
+    }
+
+    /* ═══ هدر ═══ */
+    .daybook-table thead th {
+        background: #EEF2FF;
+        font-weight: 700;
+        color: #3730A3;
+        padding: 10px 12px;
+        border-bottom: 2px solid #4F46E5;
+    }
+
+    /* ═══ ردیف‌ها ═══ */
+    .daybook-table tbody tr:nth-child(even) {
+        background: #FAFBFC;
+    }
+
+/* ═══════════════════════════════════════════════════
+   تگ‌های سورت (Sortable Headers)
+   ═══════════════════════════════════════════════════ */
+th.sortable-th {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+
+    th.sortable-th:hover {
+        background: #E0E7FF !important;
+    }
+
+/* ═══════════════════════════════════════════════════
+   ردیف‌های خاص (ناتراز، خطا، غیرعادی)
+   ═══════════════════════════════════════════════════ */
+
+/* ═══ ردیف ناتراز سند ═══ */
+tr.row-unbalanced {
+    background: #FEF2F2 !important;
+    border-right: 3px solid #DC2626;
+}
+
+    tr.row-unbalanced:hover {
+        background: #FEE2E2 !important;
+    }
+
+/* ═══ ردیف دارای خطای سند ═══ */
+tr.row-has-errors {
+    background: #FEF2F2 !important;
+    border-right: 3px solid #DC2626;
+}
+
+    tr.row-has-errors:hover {
+        background: #FEE2E2 !important;
+    }
+
+    tr.row-has-errors.row-unbalanced {
+        background: #FEF2F2 !important;
+    }
+
+/* ═══ ردیف کلیک‌پذیر ═══ */
+.clickable-row {
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+    .clickable-row:hover {
+        background: #EEF2FF !important;
+    }
+
+        .clickable-row:hover td {
+            color: #4F46E5;
+        }
+
+    .clickable-row:active {
+        background: #E0E7FF !important;
+    }
+
+/* ═══════════════════════════════════════════════════
+   Badge های سند (Sanad)
+   ═══════════════════════════════════════════════════ */
+.sanad-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+    .sanad-badge.sanad-ok {
+        background: #D1FAE5;
+        color: #065F46;
+    }
+
+    .sanad-badge.sanad-none {
+        background: #FEE2E2;
+        color: #991B1B;
+        padding: 3px 6px;
+    }
+
+/* ═══════════════════════════════════════════════════
+   Badge های خطای سند در لیست
+   ═══════════════════════════════════════════════════ */
+.sanad-list-ok {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #D1FAE5;
+    color: #065F46;
+    font-size: 12px;
+}
+
+.sanad-list-err {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    background: #FEE2E2;
+    color: #991B1B;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 11.5px;
+    border: 1px solid #FECACA;
+    cursor: help;
+    font-variant-numeric: tabular-nums;
+}

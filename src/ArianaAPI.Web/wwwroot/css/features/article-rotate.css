@@ -1,0 +1,52 @@
+﻿/* ═══════════════════════════════════════════════════
+   FEATURE / ArticleRotate — گردش کالا
+   ═══════════════════════════════════════════════════ */
+
+.ar-table {
+    width: 100%;
+    font-size: 12px;
+}
+
+    .ar-table th {
+        background: #F8FAFC;
+        padding: 8px 6px;
+        border-bottom: 2px solid #E2E8F0;
+        font-weight: 600;
+        font-size: 11px;
+        white-space: nowrap;
+    }
+
+    .ar-table td {
+        padding: 7px 6px;
+        border-bottom: 1px solid #F1F5F9;
+    }
+
+    .ar-table tbody tr:hover {
+        background: #F8FAFC;
+    }
+
+    .ar-table .ar-in {
+        color: #059669;
+    }
+
+    .ar-table .ar-out {
+        color: #DC2626;
+    }
+
+    .ar-table .ar-total-row {
+        background: #EEF2FF;
+        font-weight: 700;
+    }
+
+        .ar-table .ar-total-row td {
+            border-top: 2px solid #C7D2FE;
+        }
+
+/* ═══ Helpers (سراسری) ═══ */
+.positive {
+    color: #059669;
+}
+
+.negative {
+    color: #DC2626;
+}

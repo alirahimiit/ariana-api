@@ -1,0 +1,54 @@
+﻿/* ═══════════════════════════════════════════════════
+   99-FORCE-FIX — قفل کردن مشکلات CSS
+   ═══════════════════════════════════════════════════ */
+
+/* ═══ ۱. Custom Select — منو فقط با کلیک باز شود ═══ */
+.custom-select .cs-menu {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+.custom-select.open .cs-menu {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+}
+
+/* ═══ ۲. فیلترهای دو ردیفی — گرید ۴ ستونه ═══ */
+.filters.two-rows {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 12px !important;
+    align-items: end !important;
+}
+
+    .filters.two-rows .form-group {
+        margin: 0 !important;
+    }
+
+    .filters.two-rows .pf-customer-group {
+        grid-column: span 2 !important;
+    }
+
+@media (max-width: 900px) {
+    .filters.two-rows {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+        .filters.two-rows .pf-customer-group {
+            grid-column: span 2 !important;
+        }
+}
+
+@media (max-width: 600px) {
+    .filters.two-rows {
+        grid-template-columns: 1fr !important;
+    }
+
+        .filters.two-rows .pf-customer-group {
+            grid-column: span 1 !important;
+        }
+}

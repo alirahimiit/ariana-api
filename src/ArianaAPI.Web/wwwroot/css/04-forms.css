@@ -1,0 +1,292 @@
+﻿/* ═══════════════════════════════════════════════════
+   04-FORMS — فرم‌ها، ورودی‌ها، Select ها
+   ═══════════════════════════════════════════════════ */
+
+/* ═══ Filters Container ═══ */
+.filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+    .filters .form-group {
+        margin-bottom: 0;
+    }
+
+/* ═══ Form Group (فیلد + لیبل) ═══ */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+
+    .form-group label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #4B5563;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .form-group .req {
+        color: #EF4444;
+        margin-right: 2px;
+    }
+
+    /* ═══ Input, Textarea, Select — Universal ═══ */
+    .form-group input,
+    .form-group textarea,
+    .form-group select,
+    .filters input,
+    .filters textarea,
+    .filters select,
+    .filter-panel input,
+    .filter-panel select,
+    .filter-panel textarea {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #E5E7EB;
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 13px;
+        background: #fff;
+        color: #111827;
+        transition: all 0.15s;
+        min-height: 38px;
+        box-sizing: border-box;
+    }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus,
+        .filters input:focus,
+        .filters select:focus {
+            outline: none;
+            border-color: #4F46E5;
+            box-shadow: 0 0 0 3px #EEF2FF;
+        }
+
+/* ═══ Number Input — بدون spinner ═══ */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* ═══ Num Input (فیلدهای عددی LTR) ═══ */
+.num-input {
+    text-align: left;
+    direction: ltr;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ═══ فیلدهای تاریخ (placeholder فارسی) ═══ */
+input[placeholder*="1404"],
+input[placeholder*="1403"],
+input[placeholder*="1405"],
+input[placeholder*="1406"] {
+    direction: ltr;
+    text-align: left;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ═══ Form Hint ═══ */
+.form-hint {
+    font-size: 10.5px;
+    color: #6B7280;
+    margin: 4px 0 0 0;
+    line-height: 1.4;
+}
+
+/* ═══ Date Input (نوعی) ═══ */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.5;
+    filter: invert(0.4);
+}
+
+input[type="date"]::-webkit-inner-spin-button {
+    display: none;
+}
+
+/* ═══════════════════════════════════════════════════
+   Custom Select — Universal
+   ═══════════════════════════════════════════════════ */
+.custom-select {
+    position: relative;
+    width: 100%;
+    font-size: 13px;
+    user-select: none;
+}
+
+.cs-trigger {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+    background: #FFF;
+    color: #1F2937;
+    font-family: inherit;
+    font-size: 13px;
+    text-align: right;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    min-height: 38px;
+    line-height: 1.4;
+    box-sizing: border-box;
+}
+
+    .cs-trigger:hover {
+        border-color: #9CA3AF;
+    }
+
+    .custom-select.open .cs-trigger,
+    .cs-trigger:focus {
+        outline: none;
+        border-color: #6366F1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+
+.cs-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cs-arrow {
+    flex: 0 0 auto;
+    font-size: 10px;
+    color: #6B7280;
+    transition: transform 0.15s;
+}
+
+.custom-select.open .cs-arrow {
+    transform: rotate(180deg);
+}
+
+/* ═══ Menu ═══ */
+.cs-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #FFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+    padding: 4px;
+}
+
+.custom-select.open .cs-menu {
+    display: block;
+    animation: csSlideIn 0.15s ease-out;
+}
+
+@keyframes csSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.cs-item {
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #374151;
+    transition: background 0.1s;
+}
+
+    .cs-item:hover {
+        background: #F3F4F6;
+    }
+
+    .cs-item.selected {
+        background: #4F46E5;
+        color: #FFF;
+        font-weight: 600;
+    }
+
+        .cs-item.selected:hover {
+            background: #4338CA;
+        }
+
+.cs-icon {
+    font-size: 14px;
+}
+
+.cs-item-label {
+    flex: 1;
+}
+
+/* ═══ Scrollbar ═══ */
+.cs-menu::-webkit-scrollbar {
+    width: 6px;
+}
+
+.cs-menu::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.cs-menu::-webkit-scrollbar-thumb {
+    background: #D1D5DB;
+    border-radius: 3px;
+}
+
+    .cs-menu::-webkit-scrollbar-thumb:hover {
+        background: #9CA3AF;
+    }
+
+/* ═══════════════════════════════════════════════════
+   Form Select (اگر جایی از <select> بومی استفاده شد)
+   ═══════════════════════════════════════════════════ */
+.form-select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    background-color: white;
+    color: #111827;
+    cursor: pointer;
+    min-height: 42px;
+    direction: rtl;
+    text-align: right;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+    .form-select:hover {
+        border-color: #4F46E5;
+    }
+
+    .form-select:focus {
+        outline: none;
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px #EEF2FF;
+    }

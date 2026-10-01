@@ -1,0 +1,168 @@
+﻿/* ═══════════════════════════════════════════════════
+   FEATURE / Kardex — کاردکس کالا
+   ═══════════════════════════════════════════════════ */
+
+.kardex-filters {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 14px;
+}
+
+.kardex-article .kx-article-name {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #4F46E5;
+    font-weight: 500;
+    min-height: 16px;
+}
+
+/* ═══ Info Card ═══ */
+.kx-info-card {
+    padding: 14px 18px;
+}
+
+.kx-info-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+}
+
+.kx-info-item {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    font-size: 13px;
+}
+
+.kx-info-label {
+    color: #64748B;
+}
+
+/* ═══ Stats Card ═══ */
+.kx-stats {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.kx-stat {
+    background: #FFF;
+    border-radius: 10px;
+    padding: 14px 16px;
+    border: 1px solid #E5E7EB;
+    border-right: 4px solid #94A3B8;
+}
+
+.kx-stat-first {
+    border-right-color: #6366F1;
+    background: #EEF2FF;
+}
+
+.kx-stat-in {
+    border-right-color: #10B981;
+}
+
+.kx-stat-out {
+    border-right-color: #EF4444;
+}
+
+.kx-stat-final {
+    border-right-color: #8B5CF6;
+    background: #F5F3FF;
+}
+
+.kx-stat-avg {
+    border-right-color: #F59E0B;
+}
+
+.kx-stat-label {
+    font-size: 12px;
+    color: #64748B;
+    margin-bottom: 6px;
+}
+
+.kx-stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1F2937;
+}
+
+    .kx-stat-value .unit {
+        font-size: 11px;
+        color: #94A3B8;
+        font-weight: 400;
+    }
+
+.kx-stat-sub {
+    font-size: 11px;
+    color: #94A3B8;
+    margin-top: 3px;
+}
+
+/* ═══ Table ═══ */
+.kx-table-wrap {
+    overflow-x: auto;
+}
+
+.kx-table {
+    width: 100%;
+    font-size: 13px;
+}
+
+    .kx-table th {
+        background: #F8FAFC;
+        padding: 10px 8px;
+        border-bottom: 2px solid #E2E8F0;
+        font-weight: 600;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .kx-table td {
+        padding: 8px;
+        border-bottom: 1px solid #F1F5F9;
+        vertical-align: middle;
+    }
+
+    .kx-table tbody tr:hover {
+        background: #F8FAFC;
+    }
+
+    .kx-table .kx-descript,
+    .kx-table .kx-hesab {
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+.kx-in {
+    color: #059669;
+    font-weight: 600;
+}
+
+.kx-out {
+    color: #DC2626;
+    font-weight: 600;
+}
+
+.kx-opening-row {
+    background: #EEF2FF !important;
+    font-weight: 600;
+}
+
+    .kx-opening-row:hover {
+        background: #E0E7FF !important;
+    }
+
+/* ═══ Responsive ═══ */
+@media (max-width: 900px) {
+    .kardex-filters {
+        grid-template-columns: 1fr;
+    }
+
+    .kx-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
