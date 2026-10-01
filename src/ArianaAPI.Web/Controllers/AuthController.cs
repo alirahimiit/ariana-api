@@ -2,7 +2,7 @@
 using ArianaAPI.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace ArianaAPI.Web.Controllers;
 
@@ -21,6 +21,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting("login")]
     public async Task<ActionResult<LoginResponseDto>> Login(
         [FromBody] LoginRequestDto request,
         CancellationToken ct)

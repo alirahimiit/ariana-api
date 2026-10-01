@@ -1,11 +1,13 @@
 ﻿using System.Text;
+using System.Threading.RateLimiting;
 using ArianaAPI.Infrastructure;
 using ArianaAPI.Infrastructure.Config;
+using ArianaAPI.Web.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Microsoft.Extensions.Hosting.WindowsServices;
-using ArianaAPI.Web.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService();
@@ -16,6 +18,69 @@ builder.Services.AddInfrastructure(builder.Configuration);
 // ═══ Controllers ═══
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+
+// ═══════════════════════════════════════════════════
+//  ⭐ RATE LIMITING — جلوگیری از brute-force
+// ═══════════════════════════════════════════════════
+builder.Services.AddRateLimiter(options =>
+{
+    // ═══ سیاست «login» ═══
+    options.AddPolicy("login", httpContext =>
+    {
+        // ─── گرفتن IP کاربر ───
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        // اگه پشت Nginx هستی، X-Forwarded-For رو بخون
+        if (httpContext.Request.Headers.TryGetValue("X-Forwarded-For", out var forwarded))
+        {
+            var firstIp = forwarded.ToString().Split(',')[0].Trim();
+            if (!string.IsNullOrEmpty(firstIp)) ip = firstIp;
+        }
+
+        // ─── خواندن تنظیمات از appsettings ───
+        var cfg = httpContext.RequestServices
+            .GetRequiredService<IConfiguration>()
+            .GetSection("RateLimit:Login");
+
+        var permitLimit = cfg.GetValue<int?>("PermitLimit") ?? 5;
+        var windowMin = cfg.GetValue<int?>("WindowMinutes") ?? 5;
+        var queueLimit = cfg.GetValue<int?>("QueueLimit") ?? 0;
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: "login:" + ip,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = TimeSpan.FromMinutes(windowMin),
+                QueueLimit = queueLimit,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            });
+    });
+
+    // ═══ پاسخ وقتی رد شد (429) ═══
+    options.OnRejected = async (context, ct) =>
+    {
+        var http = context.HttpContext;
+        http.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        http.Response.ContentType = "application/json; charset=utf-8";
+
+        // هدر استاندارد Retry-After
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            http.Response.Headers["Retry-After"] =
+                ((int)retryAfter.TotalSeconds).ToString();
+        }
+
+        await http.Response.WriteAsJsonAsync(new
+        {
+            error = "تعداد تلاش‌های شما بیش از حد مجاز است. لطفاً چند دقیقه بعد دوباره امتحان کنید.",
+            code = "RATE_LIMITED",
+            retryAfterSeconds = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var r)
+                ? (int)r.TotalSeconds
+                : 300
+        }, cancellationToken: ct);
+    };
+});
 
 // ═══ Swagger + JWT ═══
 builder.Services.AddSwaggerGen(c =>
@@ -75,14 +140,18 @@ builder.Services
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
 // ═══ Static Files (UI) ═══
 app.UseDefaultFiles();
 app.UseStaticFiles();
-// ═══ Middleware Pipeline ═══
 
+// ═══ Middleware Pipeline ═══
 app.UseMiddleware<ExceptionMiddleware>();
 app.UseMiddleware<ApiKeyMiddleware>();
 app.UseMiddleware<LicenseGuardMiddleware>();
+
+// ⭐ Rate Limiter — بعد از LicenseGuard، قبل از Auth
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
