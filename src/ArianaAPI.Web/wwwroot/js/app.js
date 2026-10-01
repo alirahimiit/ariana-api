@@ -695,7 +695,8 @@ window.App = Object.assign(window.App || {}, {
             'article-rotate': 'گردش کالاها',
             'kardex': 'کاردکس کالا',
             'party-factor': 'فاکتورهای طرف حساب',
-            'factor-profit-loss': 'سود و زیان فاکتوری'
+            'factor-profit-loss': 'سود و زیان فاکتوری',
+            'article-stock': 'گزارش موجودی کالا'
         };
         document.getElementById('pageTitle').textContent = titles[page] || page;
 
@@ -725,6 +726,7 @@ window.App = Object.assign(window.App || {}, {
             case 'article-rotate': window.App.Features.ArticleRotate.render(); break;
             case 'party-factor': window.App.Features.PartyFactor.render(); break;
             case 'factor-profit-loss': window.App.Features.FactorProfitLoss.render(); break;
+            case 'article-stock': window.App.Features.ArticleStock.render(); break;
             // ⭐ صفحات در حال توسعه — placeholder نمایش می‌ده
             default:
                 window.App.renderComingSoon(page, titles[page] || page);

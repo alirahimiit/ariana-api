@@ -1,0 +1,165 @@
+﻿/* ═══════════════════════════════════════════════════
+   FEATURE / ArticleStock — موجودی کالا
+   ═══════════════════════════════════════════════════ */
+
+#asFilterCard.filter-card {
+    padding: 0 !important;
+    overflow: visible !important;
+    border-radius: var(--radius, 12px);
+}
+
+#asFilterCard .card-title {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 14px 18px !important;
+    margin: 0 !important;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13.5px;
+    font-weight: 600;
+    border-bottom: 1px solid #E5E7EB;
+    transition: background 0.12s;
+}
+
+    #asFilterCard .card-title:hover {
+        background: #F9FAFB;
+        color: #4F46E5;
+    }
+
+    #asFilterCard .card-title .ft-icon {
+        font-size: 10px;
+        color: #6B7280;
+        transition: transform 0.2s;
+        margin-inline-start: auto;
+    }
+
+#asFilterCard.collapsed .ft-icon {
+    transform: rotate(-90deg);
+}
+
+#asFilterCard.collapsed .card-title {
+    border-bottom: none;
+}
+
+#asFilterCard .filter-body {
+    padding: 16px 18px;
+    overflow: visible !important;
+}
+
+#asFilterCard.collapsed .filter-body {
+    display: none !important;
+}
+
+/* ═══ Stats ═══ */
+.as-stats {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.as-stat {
+    background: #FFF;
+    border-radius: 10px;
+    padding: 14px 16px;
+    border: 1px solid #E5E7EB;
+    border-right: 4px solid #94A3B8;
+}
+
+.as-stat-total {
+    border-right-color: #6366F1;
+}
+
+.as-stat-qty {
+    border-right-color: #3B82F6;
+    background: #EFF6FF;
+}
+
+.as-stat-value {
+    border-right-color: #10B981;
+    background: #F0FDF4;
+}
+
+.as-stat-zero {
+    border-right-color: #94A3B8;
+}
+
+.as-stat-neg {
+    border-right-color: #EF4444;
+}
+
+.as-stat-label {
+    font-size: 12px;
+    color: #64748B;
+    margin-bottom: 6px;
+}
+
+.as-stat-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1F2937;
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+    text-align: right;
+}
+
+.as-stat-sub {
+    font-size: 11px;
+    color: #94A3B8;
+    margin-top: 3px;
+}
+
+/* ═══ Table ═══ */
+.as-table-wrap {
+    overflow-x: auto;
+}
+
+.as-table {
+    width: 100%;
+    font-size: 13px;
+}
+
+    .as-table th {
+        background: #F8FAFC;
+        padding: 10px 8px;
+        border-bottom: 2px solid #E2E8F0;
+        font-weight: 600;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .as-table td {
+        padding: 8px;
+        border-bottom: 1px solid #F1F5F9;
+    }
+
+    .as-table tbody tr:hover {
+        background: #F8FAFC;
+    }
+
+    .as-table .positive {
+        color: #059669;
+        font-weight: 600;
+    }
+
+    .as-table .negative {
+        color: #DC2626;
+        font-weight: 600;
+    }
+
+.as-total-row {
+    background: #EEF2FF;
+    font-weight: 700;
+}
+
+    .as-total-row td {
+        border-top: 2px solid #C7D2FE;
+        padding: 10px 8px;
+    }
+
+@media (max-width: 900px) {
+    .as-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

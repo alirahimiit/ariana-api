@@ -58,6 +58,7 @@ public static class DependencyInjection
         services.AddScoped<IArticleRotateRepository, ArticleRotateRepository>();
         services.AddScoped<IPartyFactorRepository, PartyFactorRepository>();
         services.AddScoped<IFactorProfitLossRepository, FactorProfitLossRepository>();
+        services.AddScoped<IArticleStockRepository, ArticleStockRepository>();
 
         return services;
     }
