@@ -1,6 +1,5 @@
 ﻿/* ═══════════════════════════════════════════════════
    Feature / Tafzili (تفضیلی‌ها + گروه‌ها)
-   مسئولیت: لیست تفضیلی، فیلتر، جزئیات، CRUD گروه‌ها
    ═══════════════════════════════════════════════════ */
 
 window.App = window.App || {};
@@ -10,21 +9,20 @@ window.App.Features.Tafzili = (function () {
     'use strict';
 
     const H = window.App.Helpers;
+    const CS = window.App.UI.CustomSelect;
 
-    // state محلی
     let _groupId = '';
     let _kind = '';
     let _mandeh = 'all';
     let _groupsCache = [];
 
     // ═══════════════════════════════════════════
-    //  RENDER — صفحه اصلی
+    //  RENDER
     // ═══════════════════════════════════════════
     async function render() {
         const c = document.getElementById('content');
         c.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
 
-        // بارگذاری گروه‌ها
         let groups = [];
         try {
             groups = await window.App.Http.api('/api/tafzili/groups') || [];
@@ -32,6 +30,31 @@ window.App.Features.Tafzili = (function () {
         } catch (err) {
             console.error('Failed to load groups:', err);
         }
+
+        // ⭐ آپشن‌های گروه (داینامیک)
+        const groupOptions = [{ value: '', label: 'همه گروه‌ها' }];
+        (groups || []).forEach(g => {
+            groupOptions.push({ value: String(g.id), label: g.name || '' });
+        });
+
+        // ⭐ آپشن‌های نوع (ثابت)
+        const kindOptions = [
+            { value: '', label: 'همه' },
+            { value: '0', label: 'عادی' },
+            { value: '1', label: 'حقیقی' },
+            { value: '2', label: 'حقوقی شرکت' },
+            { value: '3', label: 'حقوقی سازمان' },
+            { value: '4', label: 'بازاریاب' }
+        ];
+
+        // ⭐ آپشن‌های مانده (ثابت)
+        const mandehOptions = [
+            { value: 'all', label: 'همه' },
+            { value: 'hasMandeh', label: 'فقط دارای مانده' },
+            { value: 'noMandeh', label: 'فقط مانده صفر' },
+            { value: 'hasBed', label: 'فقط دارای گردش بدهکار' },
+            { value: 'hasBes', label: 'فقط دارای گردش بستانکار' }
+        ];
 
         c.innerHTML = `
         <div class="card">
@@ -47,53 +70,15 @@ window.App.Features.Tafzili = (function () {
                 </div>
                 <div class="form-group">
                     <label>گروه تفضیلی</label>
-                    <div class="custom-select" id="tafGroupWrap">
-                        <button type="button" class="custom-select-trigger" id="tafGroupTrigger">
-                            <span class="custom-select-value">همه گروه‌ها</span>
-                            <span class="custom-select-arrow">▼</span>
-                        </button>
-                        <div class="custom-select-menu" id="tafGroupMenu">
-                            <div class="custom-select-option selected" data-value="">همه گروه‌ها</div>
-                            ${groups.map(g => `
-                                <div class="custom-select-option" data-value="${g.id}">
-                                    ${H.esc(g.name || '')}
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
+                    ${CS.html('tafGroup', groupOptions, '')}
                 </div>
                 <div class="form-group">
                     <label>نوع</label>
-                    <div class="custom-select" id="tafKindWrap">
-                        <button type="button" class="custom-select-trigger" id="tafKindTrigger">
-                            <span class="custom-select-value">همه</span>
-                            <span class="custom-select-arrow">▼</span>
-                        </button>
-                        <div class="custom-select-menu" id="tafKindMenu">
-                            <div class="custom-select-option selected" data-value="">همه</div>
-                            <div class="custom-select-option" data-value="0">عادی</div>
-                            <div class="custom-select-option" data-value="1">حقیقی</div>
-                            <div class="custom-select-option" data-value="2">حقوقی شرکت</div>
-                            <div class="custom-select-option" data-value="3">حقوقی سازمان</div>
-                            <div class="custom-select-option" data-value="4">بازاریاب</div>
-                        </div>
-                    </div>
+                    ${CS.html('tafKind', kindOptions, '')}
                 </div>
                 <div class="form-group">
                     <label>وضعیت مانده</label>
-                    <div class="custom-select" id="tafMandehWrap">
-                        <button type="button" class="custom-select-trigger" id="tafMandehTrigger">
-                            <span class="custom-select-value">همه</span>
-                            <span class="custom-select-arrow">▼</span>
-                        </button>
-                        <div class="custom-select-menu" id="tafMandehMenu">
-                            <div class="custom-select-option selected" data-value="all">همه</div>
-                            <div class="custom-select-option" data-value="hasMandeh">فقط دارای مانده</div>
-                            <div class="custom-select-option" data-value="noMandeh">فقط مانده صفر</div>
-                            <div class="custom-select-option" data-value="hasBed">فقط دارای گردش بدهکار</div>
-                            <div class="custom-select-option" data-value="hasBes">فقط دارای گردش بستانکار</div>
-                        </div>
-                    </div>
+                    ${CS.html('tafMandeh', mandehOptions, 'all')}
                 </div>
                 <div class="form-group">
                     <label>موبایل</label>
@@ -127,14 +112,15 @@ window.App.Features.Tafzili = (function () {
         _kind = '';
         _mandeh = 'all';
 
-        setupCustomSelect('tafGroupWrap', 'tafGroupTrigger', 'tafGroupMenu', v => _groupId = v);
-        setupCustomSelect('tafKindWrap', 'tafKindTrigger', 'tafKindMenu', v => _kind = v);
-        setupCustomSelect('tafMandehWrap', 'tafMandehTrigger', 'tafMandehMenu', v => _mandeh = v);
+        CS.bindAll(c, {
+            tafGroup: function (v) { _groupId = v; },
+            tafKind: function (v) { _kind = v; },
+            tafMandeh: function (v) { _mandeh = v; }
+        });
 
         document.getElementById('tafBtnRun').addEventListener('click', () => runList(1));
         document.getElementById('tafBtnManageGroups').addEventListener('click', openGroupManager);
 
-        // Enter key
         ['tafCode', 'tafName', 'tafMobile', 'tafMelliCode', 'tafEconomicCode'].forEach(id => {
             document.getElementById(id)?.addEventListener('keydown', e => {
                 if (e.key === 'Enter') runList(1);
@@ -145,7 +131,7 @@ window.App.Features.Tafzili = (function () {
     }
 
     // ═══════════════════════════════════════════
-    //  RUN — لیست تفضیلی‌ها
+    //  RUN
     // ═══════════════════════════════════════════
     async function runList(page = 1) {
         const container = document.getElementById('tafResult');
@@ -202,11 +188,7 @@ window.App.Features.Tafzili = (function () {
             return;
         }
 
-        const rows = items.map(t => {
-            const mandeh = t.mabMandeh ?? 0;
-
-
-            return `
+        const rows = items.map(t => `
         <tr>
             <td class="num text-center">${t.codeTafzil || ''}</td>
             <td>${H.esc(t.name || '')}</td>
@@ -234,8 +216,7 @@ window.App.Features.Tafzili = (function () {
                         onclick="App.Features.TafziliForm.delete(${t.id})"
                         title="حذف" style="color:var(--danger);">🗑️</button>
             </td>
-        </tr>`;
-        }).join('');
+        </tr>`).join('');
 
         const page = data.page || 1;
         const totalPages = data.totalPages || 1;
@@ -273,7 +254,7 @@ window.App.Features.Tafzili = (function () {
                 </div>
                 ${buildPagination(page, totalPages, totalCount, items.length)}
             </div>`;
-        // ⭐ اعمال permission
+
         if (window.App.UI.PermissionGuard) {
             window.App.UI.PermissionGuard.apply(container);
         }
@@ -583,7 +564,6 @@ window.App.Features.Tafzili = (function () {
     //  GROUP MANAGER (CRUD)
     // ═══════════════════════════════════════════
     function openGroupManager() {
-        // ⭐ گارد دسترسی (حداقل یکی از CRUD)
         if (window.App.Permissions &&
             !window.App.Permissions.canAny([193, 194, 195])) {
             window.App.toast('شما به مدیریت گروه‌های تفضیلی دسترسی ندارید', 'error');
@@ -604,7 +584,6 @@ window.App.Features.Tafzili = (function () {
     }
 
     async function loadGroupList() {
-
         const container = document.getElementById('grpList');
         if (!container) return;
 
@@ -646,7 +625,7 @@ window.App.Features.Tafzili = (function () {
                         </tbody>
                     </table>
                 </div>`;
-            // ⭐ اعمال permission
+
             if (window.App.UI.PermissionGuard) {
                 window.App.UI.PermissionGuard.apply(container);
             }
@@ -727,33 +706,6 @@ window.App.Features.Tafzili = (function () {
     // ═══════════════════════════════════════════
     //  HELPERS
     // ═══════════════════════════════════════════
-    function setupCustomSelect(wrapId, triggerId, menuId, onChange) {
-        const wrap = document.getElementById(wrapId);
-        const trigger = document.getElementById(triggerId);
-        const menu = document.getElementById(menuId);
-        const valueEl = trigger.querySelector('.custom-select-value');
-
-        trigger.addEventListener('click', (e) => {
-            e.stopPropagation();
-            document.querySelectorAll('.custom-select.open').forEach(el => {
-                if (el !== wrap) el.classList.remove('open');
-            });
-            wrap.classList.toggle('open');
-        });
-
-        menu.querySelectorAll('.custom-select-option').forEach(opt => {
-            opt.addEventListener('click', (e) => {
-                e.stopPropagation();
-                valueEl.textContent = opt.textContent.trim();
-                menu.querySelectorAll('.custom-select-option')
-                    .forEach(o => o.classList.remove('selected'));
-                opt.classList.add('selected');
-                wrap.classList.remove('open');
-                onChange(opt.dataset.value);
-            });
-        });
-    }
-
     function kindBadge(kind, kindName) {
         if (kind == null) return '<span class="badge badge-gray">-</span>';
         const map = {
@@ -783,7 +735,6 @@ window.App.Features.Tafzili = (function () {
     };
 })();
 
-// ⭐ alias برای سازگاری
 window.App.renderTafziliList = window.App.Features.Tafzili.render;
 window.App.runTafziliList = window.App.Features.Tafzili.runList;
 window.App.showTafziliDetail = window.App.Features.Tafzili.showDetail;

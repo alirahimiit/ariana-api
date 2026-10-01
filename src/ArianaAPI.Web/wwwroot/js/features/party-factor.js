@@ -18,7 +18,9 @@ window.App.Features.PartyFactor = (function () {
         searchText: '',
         result: null,
         page: 1,
-        viewMode: 'flat'
+        viewMode: 'flat',
+        fullData: null,       
+        lastMode: 'flat'   
     };
 
     let _customersCache = null;
@@ -94,14 +96,12 @@ window.App.Features.PartyFactor = (function () {
         ];
 
         c.innerHTML = `
-        <div class="card filter-card" id="pfFilterCard">
-            <div class="card-title">
-                <span>🔍 فیلتر فاکتورهای طرف حساب</span>
-                <button type="button" class="filter-toggle-btn" id="pfToggleBtn" title="جمع/باز کردن">
-                    <span class="ft-icon">▼</span>
-                </button>
-            </div>
-            <div class="filter-body" id="pfFilterBody">
+       <div class="card filter-card" id="pfFilterCard">
+    <div class="card-title" id="pfToggleBtn">
+        <span>🔍 فیلتر فاکتورهای طرف حساب</span>
+        <span class="ft-icon">▼</span>
+    </div>
+    <div class="filter-body" id="pfFilterBody">
                 <div class="filters two-rows">
                     <div class="form-group">
                         <label>نوع فاکتور</label>
@@ -164,17 +164,14 @@ window.App.Features.PartyFactor = (function () {
         </div>`;
 
         // ⭐ جمع/باز کردن فیلتر
+        // ⭐ جمع/باز کردن فیلتر (کل هدر کلیک‌پذیر)
         const filterCard = document.getElementById('pfFilterCard');
         const toggleBtn = document.getElementById('pfToggleBtn');
-        toggleBtn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            filterCard.classList.toggle('collapsed');
-        });
-        // کلیک روی عنوان هم toggle کنه
-        filterCard.querySelector('.card-title').addEventListener('click', function (e) {
-            if (e.target.closest('.filter-toggle-btn')) return;
-            toggleBtn.click();
-        });
+        if (filterCard && toggleBtn) {
+            toggleBtn.addEventListener('click', function () {
+                filterCard.classList.toggle('collapsed');
+            });
+        }
 
         // فعال‌سازی Custom Select ها
         CS.bindAll(c, {
@@ -484,12 +481,18 @@ window.App.Features.PartyFactor = (function () {
             } catch (e) { console.warn(e); }
         }
 
+        // ⭐ داده رو توی state ذخیره کن
+        _state.fullData = exportData;
+        _state.lastMode = 'flat';
+
+        document.querySelectorAll('#pfResult .export-bar').forEach(el => el.remove());
+
         if (typeof Exporter !== 'undefined' && Exporter.attach && items.length > 0) {
             Exporter.attach(document.getElementById('pfResult'), {
                 title: hasCustomer ? 'فاکتورهای ' + (r.hesabName || '') : 'گزارش فاکتورها',
                 subtitle: subtitle(r),
                 filename: 'PartyFactor_' + (r.codeTafzil || 'All'),
-                customHtml: function () { return buildPrintFlat(exportData); }
+                customHtml: getExportHtml    // ⭐ تابع مشترک
             });
         }
 
@@ -607,12 +610,19 @@ window.App.Features.PartyFactor = (function () {
 
         c.innerHTML = html;
 
+        // ⭐ داده رو توی state ذخیره کن
+        _state.fullData = r;
+        _state.lastMode = 'grouped';
+        _state.lastByParty = byParty;
+
+        document.querySelectorAll('#pfResult .export-bar').forEach(el => el.remove());
+
         if (typeof Exporter !== 'undefined' && Exporter.attach) {
             Exporter.attach(document.getElementById('pfResult'), {
                 title: byParty ? 'گروه‌بندی بر اساس طرف حساب' : 'گروه‌بندی بر اساس کالا',
                 subtitle: subtitle(r),
                 filename: 'PartyFactor_Grouped',
-                customHtml: function () { return buildPrintGrouped(items, byParty); }
+                customHtml: getExportHtml    // ⭐ تابع مشترک
             });
         }
     }
@@ -726,31 +736,171 @@ window.App.Features.PartyFactor = (function () {
     }
 
     function buildPrintGrouped(items, byParty) {
-        const rows = items.map((it, idx) => `<tr>
-            <td class="text-center">${idx + 1}</td>
-            ${byParty
-                ? `<td>${H.esc(it.articleName || '')} (${H.esc(it.articleCode || '')})</td>`
-                : `<td>${H.esc(it.hesabName || '')}</td>`}
-            <td class="text-center">${H.esc(it.articleUnitName || '')}</td>
-            <td class="text-left">${H.fmt(it.buyQty)}</td>
-            <td class="text-left">${H.fmt(it.buyAmount)}</td>
-            <td class="text-left">${H.fmt(it.sellQty)}</td>
-            <td class="text-left">${H.fmt(it.sellAmount)}</td>
-            <td class="text-left">${H.fmt(it.netQty)}</td>
-            <td class="text-left">${H.fmt(it.netAmount)}</td>
-        </tr>`).join('');
+        if (!items || items.length === 0) {
+            return '<div style="text-align:center;padding:30px;color:#94A3B8;">داده‌ای برای چاپ وجود ندارد</div>';
+        }
 
-        return `<table>
-            <thead><tr>
-                <th>#</th>
-                <th>${byParty ? 'کالا' : 'طرف حساب'}</th>
-                <th>واحد</th>
-                <th>خرید مقدار</th><th>خرید ریال</th>
-                <th>فروش مقدار</th><th>فروش ریال</th>
-                <th>مانده مقدار</th><th>مانده ریال</th>
-            </tr></thead>
-            <tbody>${rows}</tbody>
-        </table>`;
+        // ⭐ گروه‌بندی (همون منطق renderGrouped)
+        const groups = {};
+        items.forEach(it => {
+            const key = byParty ? (it.codeTafzil || 0) : (it.articleId || 0);
+            if (!groups[key]) {
+                groups[key] = {
+                    codeTafzil: it.codeTafzil,
+                    hesabName: it.hesabName || '(بدون نام)',
+                    articleId: it.articleId,
+                    articleCode: it.articleCode,
+                    articleName: it.articleName || '(بدون نام)',
+                    articleUnitName: it.articleUnitName,
+                    rows: []
+                };
+            }
+            groups[key].rows.push(it);
+        });
+
+        // ⭐ جمع کل
+        let gTotalBuyQty = 0, gTotalBuyVal = 0;
+        let gTotalSellQty = 0, gTotalSellVal = 0;
+        let gTotalBackBuyQty = 0, gTotalBackSellQty = 0;
+        let gTotalNetQty = 0, gTotalNetVal = 0;
+
+        // ⭐ برای هر گروه یه بلوک
+        let html = '';
+        let groupNum = 1;
+
+        Object.values(groups).forEach(g => {
+            let sumBuyQty = 0, sumBuyVal = 0, sumSellQty = 0, sumSellVal = 0;
+            let sumBackBuyQty = 0, sumBackSellQty = 0;
+
+            const rowsHtml = g.rows.map(it => {
+                sumBuyQty += it.buyQty || 0; sumBuyVal += it.buyAmount || 0;
+                sumSellQty += it.sellQty || 0; sumSellVal += it.sellAmount || 0;
+                sumBackBuyQty += it.backBuyQty || 0;
+                sumBackSellQty += it.backSellQty || 0;
+
+                const buyCell = it.buyQty
+                    ? `${H.fmt(it.buyQty)} <small>(${H.fmt(it.buyAmount)})</small>`
+                    : '—';
+                const sellCell = it.sellQty
+                    ? `${H.fmt(it.sellQty)} <small>(${H.fmt(it.sellAmount)})</small>`
+                    : '—';
+                const bbCell = it.backBuyQty ? H.fmt(it.backBuyQty) : '—';
+                const bsCell = it.backSellQty ? H.fmt(it.backSellQty) : '—';
+
+                const firstCell = byParty
+                    ? `<strong>${H.esc(it.articleName || '')}</strong> <small>(${H.esc(it.articleCode || '')})</small>`
+                    : `${H.esc(it.hesabName || '')} <small>(${it.codeTafzil || ''})</small>`;
+
+                return `<tr>
+                <td>${firstCell}</td>
+                <td class="text-center">${H.esc(it.articleUnitName || '')}</td>
+                <td class="text-left">${buyCell}</td>
+                <td class="text-left">${sellCell}</td>
+                <td class="text-left">${bbCell}</td>
+                <td class="text-left">${bsCell}</td>
+                <td class="text-left"><strong>${H.fmt(it.netQty)}</strong></td>
+                <td class="text-left">${H.fmt(it.netAmount)}</td>
+            </tr>`;
+            }).join('');
+
+            const netQty = sumBuyQty - sumSellQty - sumBackBuyQty + sumBackSellQty;
+            const netVal = sumBuyVal - sumSellVal - (sumBackBuyQty - sumBackSellQty);
+
+            // اضافه به جمع کل
+            gTotalBuyQty += sumBuyQty;
+            gTotalBuyVal += sumBuyVal;
+            gTotalSellQty += sumSellQty;
+            gTotalSellVal += sumSellVal;
+            gTotalBackBuyQty += sumBackBuyQty;
+            gTotalBackSellQty += sumBackSellQty;
+            gTotalNetQty += netQty;
+            gTotalNetVal += netVal;
+
+            const groupTitle = byParty
+                ? `👤 ${H.esc(g.hesabName)} <small>(کد ${g.codeTafzil || '-'})</small>`
+                : `📦 ${H.esc(g.articleName)} <small>(${H.esc(g.articleCode || '')})</small>`;
+
+            html += `
+            <div style="margin-bottom:18px; border:1px solid #C7D2FE; border-radius:10px; overflow:hidden; page-break-inside:avoid;">
+                <div style="padding:10px 14px; background:#EEF2FF; color:#3730A3; font-weight:700; font-size:13px; border-bottom:1px solid #C7D2FE; display:flex; justify-content:space-between; align-items:center;">
+                    <span>${groupNum}. ${groupTitle}</span>
+                    <span style="font-weight:500; color:#64748B; font-size:11px;">${g.rows.length} قلم</span>
+                </div>
+                <table style="margin:0; width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr>
+                            <th style="padding:8px 6px; background:#F8FAFC; border-bottom:1px solid #E2E8F0; font-size:11px; text-align:right;">
+                                ${byParty ? 'کالا' : 'طرف حساب'}
+                            </th>
+                            <th style="width:60px; padding:8px 6px; background:#F8FAFC; border-bottom:1px solid #E2E8F0; font-size:11px; text-align:center;">واحد</th>
+                            <th style="width:130px; padding:8px 6px; background:#F8FAFC; border-bottom:1px solid #E2E8F0; font-size:11px; text-align:left;">خرید (مقدار/ریال)</th>
+                            <th style="width:130px; padding:8px 6px; background:#F8FAFC; border-bottom:1px solid #E2E8F0; font-size:11px; text-align:left;">فروش (مقدار/ریال)</th>
+                            <th style="width:90px; padding:8px 6px; background:#F8FAFC; border-bottom:1px solid #E2E8F0; font-size:11px; text-align:left;">برگشت خرید</th>
+                            <th style="width:90px; padding:8px 6px; background:#F8FAFC; border-bottom:1px solid #E2E8F0; font-size:11px; text-align:left;">برگشت فروش</th>
+                            <th style="width:90px; padding:8px 6px; background:#F8FAFC; border-bottom:1px solid #E2E8F0; font-size:11px; text-align:left;">مانده مقدار</th>
+                            <th style="width:110px; padding:8px 6px; background:#F8FAFC; border-bottom:1px solid #E2E8F0; font-size:11px; text-align:left;">مانده ارزش</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rowsHtml}</tbody>
+                    <tfoot>
+                        <tr style="background:#F1F5F9; font-weight:700; border-top:2px solid #C7D2FE;">
+                            <td colspan="2" style="padding:8px 6px; text-align:center; font-size:12px;">جمع گروه</td>
+                            <td style="padding:8px 6px; text-align:left; font-size:12px;">${H.fmt(sumBuyQty)} <small>(${H.fmt(sumBuyVal)})</small></td>
+                            <td style="padding:8px 6px; text-align:left; font-size:12px;">${H.fmt(sumSellQty)} <small>(${H.fmt(sumSellVal)})</small></td>
+                            <td style="padding:8px 6px; text-align:left; font-size:12px;">${H.fmt(sumBackBuyQty)}</td>
+                            <td style="padding:8px 6px; text-align:left; font-size:12px;">${H.fmt(sumBackSellQty)}</td>
+                            <td style="padding:8px 6px; text-align:left; font-size:12px;"><strong>${H.fmt(netQty)}</strong></td>
+                            <td style="padding:8px 6px; text-align:left; font-size:12px;">${H.fmt(netVal)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>`;
+
+            groupNum++;
+        });
+
+        // ⭐ جمع کل همه‌ی گروه‌ها
+        html += `
+        <div style="margin-top:20px; padding:12px 16px; background:linear-gradient(135deg,#EEF2FF,#F5F3FF); border:2px solid #C7D2FE; border-radius:10px; page-break-inside:avoid;">
+            <div style="font-weight:700; color:#3730A3; font-size:13px; margin-bottom:8px;">
+                📊 جمع کل (${Object.keys(groups).length} گروه)
+            </div>
+            <table style="width:100%; font-size:12px;">
+                <tr>
+                    <td style="padding:4px 8px;"><strong>خرید:</strong></td>
+                    <td style="padding:4px 8px; text-align:left;">${H.fmt(gTotalBuyQty)} <small>(${H.fmt(gTotalBuyVal)})</small></td>
+                    <td style="padding:4px 8px;"><strong>فروش:</strong></td>
+                    <td style="padding:4px 8px; text-align:left;">${H.fmt(gTotalSellQty)} <small>(${H.fmt(gTotalSellVal)})</small></td>
+                </tr>
+                <tr>
+                    <td style="padding:4px 8px;"><strong>برگشت خرید:</strong></td>
+                    <td style="padding:4px 8px; text-align:left;">${H.fmt(gTotalBackBuyQty)}</td>
+                    <td style="padding:4px 8px;"><strong>برگشت فروش:</strong></td>
+                    <td style="padding:4px 8px; text-align:left;">${H.fmt(gTotalBackSellQty)}</td>
+                </tr>
+                <tr style="background:#E0E7FF; font-weight:700;">
+                    <td style="padding:6px 8px;">مانده مقدار:</td>
+                    <td style="padding:6px 8px; text-align:left;">${H.fmt(gTotalNetQty)}</td>
+                    <td style="padding:6px 8px;">مانده ارزش:</td>
+                    <td style="padding:6px 8px; text-align:left;">${H.fmt(gTotalNetVal)}</td>
+                </tr>
+            </table>
+        </div>`;
+
+        return html;
+    }
+    // ⭐ تصمیم‌گیرنده‌ی نوع خروجی — بر اساس mode جاری
+    function getExportHtml() {
+        const mode = CS.getValue('pfViewMode') || 'flat';
+
+        if (mode === 'grouped-by-party' || mode === 'grouped-by-article') {
+            const byParty = mode === 'grouped-by-party';
+            const r = _state.fullData || {};
+            const items = r.articleItems || [];
+            return buildPrintGrouped(items, byParty);
+        }
+
+        return buildPrintFlat(_state.fullData || {});
     }
 
     function subtitle(r) {

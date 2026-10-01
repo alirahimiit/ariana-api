@@ -52,3 +52,37 @@
             grid-column: span 1 !important;
         }
 }
+
+.filter-card.collapsed .filter-body {
+    display: none !important;
+}
+/* ═══════════════════════════════════════════════════
+   ⭐ FORCE FIX — dropdown فیلترها رو کلپ نکن
+   ═══════════════════════════════════════════════════ */
+
+/* هر کارت فیلتری — همه‌ی زیرمجموعه‌هاش باید visible باشن */
+.filter-card,
+.filter-card .card-title,
+.filter-card .filter-body,
+.filter-card .filters,
+.filter-card .form-group,
+.filter-card .pf-customer-group {
+    overflow: visible !important;
+}
+
+/* کارت‌های عمومی وقتی داخلشون filter هست */
+.card:has(.filter-card),
+.card:has(.filters) {
+    overflow: visible !important;
+}
+
+/* ⭐ Custom Select dropdown — بالای همه چیز */
+.custom-select.open .cs-menu,
+.cs-menu {
+    z-index: 9999 !important;
+}
+
+/* ⭐ پیشنهادات طرف حساب — بالای همه چیز */
+.pf-suggestions {
+    z-index: 9999 !important;
+}

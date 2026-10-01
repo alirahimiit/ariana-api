@@ -1,6 +1,5 @@
 ﻿/* ═══════════════════════════════════════════════════
    Feature / Bilan (ترازنامه)
-   مسئولیت: صفحه تنظیمات + اجرای گزارش + نمایش نتیجه + خروجی
    ═══════════════════════════════════════════════════ */
 
 window.App = window.App || {};
@@ -10,6 +9,7 @@ window.App.Features.Bilan = (function () {
     'use strict';
 
     const H = window.App.Helpers;
+    const CS = window.App.UI.CustomSelect;
     let _includeZero = false;
 
     // ═══════════════════════════════════════════
@@ -31,16 +31,10 @@ window.App.Features.Bilan = (function () {
                 </div>
                 <div class="form-group">
                     <label>نمایش</label>
-                    <div class="custom-select" id="blZeroWrap">
-                        <button type="button" class="custom-select-trigger" id="blZeroTrigger">
-                            <span class="custom-select-value">فقط دارای گردش</span>
-                            <span class="custom-select-arrow">▼</span>
-                        </button>
-                        <div class="custom-select-menu" id="blZeroMenu">
-                            <div class="custom-select-option selected" data-value="false">فقط دارای گردش</div>
-                            <div class="custom-select-option" data-value="true">نمایش همه (حتی صفر)</div>
-                        </div>
-                    </div>
+                    ${CS.html('blZero', [
+            { value: 'false', label: 'فقط دارای گردش' },
+            { value: 'true', label: 'نمایش همه (حتی صفر)' }
+        ], 'false')}
                 </div>
                 <div class="form-group">
                     <label>&nbsp;</label>
@@ -56,8 +50,10 @@ window.App.Features.Bilan = (function () {
         </div>`;
 
         _includeZero = false;
-        setupCustomSelect('blZeroWrap', 'blZeroTrigger', 'blZeroMenu', (v) => {
-            _includeZero = v === 'true';
+        CS.bindAll(c, {
+            blZero: function (v) {
+                _includeZero = v === 'true';
+            }
         });
 
         document.getElementById('blBtnRun').addEventListener('click', run);
@@ -278,33 +274,6 @@ window.App.Features.Bilan = (function () {
     // ═══════════════════════════════════════════
     //  HELPERS
     // ═══════════════════════════════════════════
-    function setupCustomSelect(wrapId, triggerId, menuId, onChange) {
-        const wrap = document.getElementById(wrapId);
-        const trigger = document.getElementById(triggerId);
-        const menu = document.getElementById(menuId);
-        const valueEl = trigger.querySelector('.custom-select-value');
-
-        trigger.addEventListener('click', (e) => {
-            e.stopPropagation();
-            document.querySelectorAll('.custom-select.open').forEach(el => {
-                if (el !== wrap) el.classList.remove('open');
-            });
-            wrap.classList.toggle('open');
-        });
-
-        menu.querySelectorAll('.custom-select-option').forEach(opt => {
-            opt.addEventListener('click', (e) => {
-                e.stopPropagation();
-                valueEl.textContent = opt.textContent.trim();
-                menu.querySelectorAll('.custom-select-option')
-                    .forEach(o => o.classList.remove('selected'));
-                opt.classList.add('selected');
-                wrap.classList.remove('open');
-                onChange(opt.dataset.value);
-            });
-        });
-    }
-
     function subtitle() {
         const u = window.App.state.user || {};
         return (u.orgName || '') + ' - ' + (u.fyName || '');
@@ -316,6 +285,5 @@ window.App.Features.Bilan = (function () {
     return { render, run };
 })();
 
-// ⭐ alias برای سازگاری
 window.App.renderBilan = window.App.Features.Bilan.render;
 window.App.runBilan = window.App.Features.Bilan.run;

@@ -1,13 +1,5 @@
 ﻿/* ═══════════════════════════════════════════════════
    Feature / ProfitLoss (گزارش سود و زیان)
-   مسئولیت: صفحه تنظیمات + اجرای گزارش + نمایش نتیجه + خروجی
-   ═══════════════════════════════════════════════════
-   وابستگی‌ها:
-     - window.App.Helpers     (fmt, fmtAcc, esc)
-     - window.App.Http        (api)
-     - window.App.State
-     - window.App.state       (state سراسری — pageSize، user)
-     - Exporter
    ═══════════════════════════════════════════════════ */
 
 window.App = window.App || {};
@@ -17,6 +9,7 @@ window.App.Features.ProfitLoss = (function () {
     'use strict';
 
     const H = window.App.Helpers;
+    const CS = window.App.UI.CustomSelect;
     let _includeZero = false;
 
     // ═══════════════════════════════════════════
@@ -38,16 +31,10 @@ window.App.Features.ProfitLoss = (function () {
                 </div>
                 <div class="form-group">
                     <label>نمایش</label>
-                    <div class="custom-select" id="plZeroWrap">
-                        <button type="button" class="custom-select-trigger" id="plZeroTrigger">
-                            <span class="custom-select-value">فقط دارای گردش</span>
-                            <span class="custom-select-arrow">▼</span>
-                        </button>
-                        <div class="custom-select-menu" id="plZeroMenu">
-                            <div class="custom-select-option selected" data-value="false">فقط دارای گردش</div>
-                            <div class="custom-select-option" data-value="true">نمایش همه (حتی صفر)</div>
-                        </div>
-                    </div>
+                    ${CS.html('plZero', [
+            { value: 'false', label: 'فقط دارای گردش' },
+            { value: 'true', label: 'نمایش همه (حتی صفر)' }
+        ], 'false')}
                 </div>
                 <div class="form-group">
                     <label>&nbsp;</label>
@@ -65,8 +52,10 @@ window.App.Features.ProfitLoss = (function () {
         </div>`;
 
         _includeZero = false;
-        setupCustomSelect('plZeroWrap', 'plZeroTrigger', 'plZeroMenu', (v) => {
-            _includeZero = v === 'true';
+        CS.bindAll(c, {
+            plZero: function (v) {
+                _includeZero = v === 'true';
+            }
         });
 
         document.getElementById('plBtnRun').addEventListener('click', run);
@@ -119,7 +108,6 @@ window.App.Features.ProfitLoss = (function () {
             return;
         }
 
-        // ─── گروه ───
         const renderGroup = (g) => {
             const isRevenue = g.nature === 'revenue';
             const headerBg = isRevenue ? '#DCFCE7' : '#FEE2E2';
@@ -201,7 +189,6 @@ window.App.Features.ProfitLoss = (function () {
             ${expensesHtml ? `<div style="margin-top:16px;"><h3 style="margin-bottom:12px; color:#991B1B;">💸 هزینه‌ها</h3>${expensesHtml}</div>` : ''}
         `;
 
-        const self = this;
         Exporter.attach(container, {
             title: 'گزارش سود و زیان',
             subtitle: subtitle(),
@@ -291,33 +278,6 @@ window.App.Features.ProfitLoss = (function () {
     // ═══════════════════════════════════════════
     //  HELPERS
     // ═══════════════════════════════════════════
-    function setupCustomSelect(wrapId, triggerId, menuId, onChange) {
-        const wrap = document.getElementById(wrapId);
-        const trigger = document.getElementById(triggerId);
-        const menu = document.getElementById(menuId);
-        const valueEl = trigger.querySelector('.custom-select-value');
-
-        trigger.addEventListener('click', (e) => {
-            e.stopPropagation();
-            document.querySelectorAll('.custom-select.open').forEach(el => {
-                if (el !== wrap) el.classList.remove('open');
-            });
-            wrap.classList.toggle('open');
-        });
-
-        menu.querySelectorAll('.custom-select-option').forEach(opt => {
-            opt.addEventListener('click', (e) => {
-                e.stopPropagation();
-                valueEl.textContent = opt.textContent.trim();
-                menu.querySelectorAll('.custom-select-option')
-                    .forEach(o => o.classList.remove('selected'));
-                opt.classList.add('selected');
-                wrap.classList.remove('open');
-                onChange(opt.dataset.value);
-            });
-        });
-    }
-
     function subtitle() {
         const u = window.App.state.user || {};
         return (u.orgName || '') + ' - ' + (u.fyName || '');
@@ -329,6 +289,5 @@ window.App.Features.ProfitLoss = (function () {
     return { render, run };
 })();
 
-// ⭐ alias برای سازگاری
 window.App.renderProfitLoss = window.App.Features.ProfitLoss.render;
 window.App.runProfitLoss = window.App.Features.ProfitLoss.run;

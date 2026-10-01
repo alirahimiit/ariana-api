@@ -1,0 +1,241 @@
+﻿/* ═══════════════════════════════════════════════════
+   FEATURE / FactorProfitLoss — سود و زیان فاکتوری
+   ═══════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════
+   ۱. Filter Card — با فیکسِ dropdown کلپ
+   ═══════════════════════════════════════════════════ */
+
+/* کارت بدون padding تا هدر لبه‌ها رو بگیره */
+#fplFilterCard.filter-card {
+    padding: 0 !important;
+    /* ⚠️ overflow رو visible می‌ذاریم تا dropdown کلپ نشه */
+    overflow: visible !important;
+    /* ⚠️ گوشه‌ها رو دستی نگه می‌داریم */
+    border-radius: var(--radius, 12px);
+}
+
+/* هدر کلیک‌پذیر */
+#fplFilterCard .card-title {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 14px 18px !important;
+    margin: 0 !important;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #111827;
+    border-bottom: 1px solid #E5E7EB;
+    transition: background 0.12s, color 0.12s;
+    border-radius: var(--radius, 12px) var(--radius, 12px) 0 0;
+}
+
+    #fplFilterCard .card-title:hover {
+        background: #F9FAFB;
+        color: #4F46E5;
+    }
+
+    /* فلش انتهای هدر */
+    #fplFilterCard .card-title .ft-icon {
+        font-size: 10px;
+        color: #6B7280;
+        transition: transform 0.2s;
+        margin-inline-start: auto;
+        flex-shrink: 0;
+        line-height: 1;
+    }
+
+#fplFilterCard.collapsed .ft-icon {
+    transform: rotate(-90deg);
+}
+
+/* وقتی بسته‌ست، border حذف شه */
+#fplFilterCard.collapsed .card-title {
+    border-bottom: none;
+    border-radius: var(--radius, 12px);
+}
+
+/* ⭐ بدنه فیلتر — بدون overflow: hidden */
+#fplFilterCard .filter-body {
+    padding: 16px 18px;
+    /* ⚠️ این خط مهمه: بدونش dropdown می‌بره */
+    overflow: visible !important;
+}
+
+/* ⭐ جمع‌شو با display: none — بدون clip */
+#fplFilterCard.collapsed .filter-body {
+    display: none !important;
+}
+
+/* ⭐ فیلد طرف حساب — ۲ ستونه + position relative */
+#fplFilterCard .pf-customer-group {
+    position: relative !important;
+    grid-column: span 2 !important;
+}
+
+#fplFilterCard .pf-customer-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+    #fplFilterCard .pf-customer-row input {
+        flex: 1;
+        min-width: 0;
+    }
+
+/* ⭐ dropdown پیشنهادات */
+#fplFilterCard .pf-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #FFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    max-height: 320px;
+    overflow-y: auto;
+    z-index: 999;
+    display: none;
+    margin-top: 4px;
+}
+
+    #fplFilterCard .pf-suggestions.show {
+        display: block;
+    }
+
+/* ═══ Stats ═══ */
+.fpl-stats {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.fpl-stat {
+    background: #FFF;
+    border-radius: 10px;
+    padding: 14px 16px;
+    border: 1px solid #E5E7EB;
+    border-right: 4px solid #94A3B8;
+}
+
+.fpl-stat-sale {
+    border-right-color: #3B82F6;
+}
+
+.fpl-stat-cost {
+    border-right-color: #F59E0B;
+}
+
+.fpl-stat-profit {
+    border-right-color: #10B981;
+    background: #F0FDF4;
+}
+
+.fpl-stat-pct {
+    border-right-color: #8B5CF6;
+    background: #F5F3FF;
+}
+
+.fpl-stat-count {
+    border-right-color: #6366F1;
+}
+
+.fpl-stat-label {
+    font-size: 12px;
+    color: #64748B;
+    margin-bottom: 6px;
+}
+
+.fpl-stat-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1F2937;
+    font-variant-numeric: tabular-nums;
+    direction: rtl;
+    text-align: right;
+}
+
+    .fpl-stat-value.positive {
+        color: #059669;
+    }
+
+    .fpl-stat-value.negative {
+        color: #DC2626;
+    }
+
+.fpl-stat-sub {
+    font-size: 11px;
+    color: #94A3B8;
+    margin-top: 3px;
+}
+
+/* ═══ Table ═══ */
+.fpl-table-wrap {
+    overflow-x: auto;
+}
+
+.fpl-table {
+    width: 100%;
+    font-size: 13px;
+}
+
+    .fpl-table th {
+        background: #F8FAFC;
+        padding: 10px 8px;
+        border-bottom: 2px solid #E2E8F0;
+        font-weight: 600;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .fpl-table td {
+        padding: 8px;
+        border-bottom: 1px solid #F1F5F9;
+    }
+
+    .fpl-table tbody tr:hover {
+        background: #F8FAFC;
+    }
+
+    .fpl-table .pf-hesab {
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .fpl-table .positive {
+        color: #059669;
+        font-weight: 600;
+    }
+
+    .fpl-table .negative {
+        color: #DC2626;
+        font-weight: 600;
+    }
+
+.fpl-total-row {
+    background: #EEF2FF;
+    font-weight: 700;
+}
+
+    .fpl-total-row td {
+        border-top: 2px solid #C7D2FE;
+        padding: 10px 8px;
+    }
+
+/* ═══ Responsive ═══ */
+@media (max-width: 900px) {
+    .fpl-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    #fplFilterCard .pf-customer-group {
+        grid-column: span 1 !important;
+    }
+}

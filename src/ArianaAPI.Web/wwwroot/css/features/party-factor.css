@@ -268,3 +268,62 @@
         grid-template-columns: repeat(2, 1fr);
     }
 }
+
+/* ═══════════════════════════════════════════════════
+   Filter Card — Collapse (FilterPanel Style)
+   ═══════════════════════════════════════════════════ */
+
+/* کارت بدون padding تا هدر لبه‌ها رو بگیره */
+.filter-card {
+    padding: 0 !important;
+    overflow: hidden;
+}
+
+    /* هدر کلیک‌پذیر */
+    .filter-card .card-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 18px;
+        margin: 0;
+        cursor: pointer;
+        user-select: none;
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #111827;
+        border-bottom: 1px solid #E5E7EB;
+        transition: background 0.12s, color 0.12s;
+    }
+
+        .filter-card .card-title:hover {
+            background: #F9FAFB;
+            color: #4F46E5;
+        }
+
+        /* فلش انتهای هدر */
+        .filter-card .card-title .ft-icon {
+            font-size: 10px;
+            color: #6B7280;
+            transition: transform 0.2s;
+            margin-inline-start: auto;
+            flex-shrink: 0;
+            line-height: 1;
+        }
+
+    .filter-card.collapsed .ft-icon {
+        transform: rotate(-90deg);
+    }
+
+    /* وقتی بسته‌ست، border-bottom حذف شه */
+    .filter-card.collapsed .card-title {
+        border-bottom: none;
+    }
+
+    /* ⭐ بدنه فیلتر — بدون overflow: hidden تا dropdown کلپ نشه */
+    .filter-card .filter-body {
+        padding: 16px 18px;
+    }
+
+    /* ⭐ جمع‌شو با display: none (بدون clip) */
+    .filter-card.collapsed .filter-body {
+        display: none;
