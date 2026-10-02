@@ -6,6 +6,7 @@ using ArianaAPI.Infrastructure.Repositories;
 using ArianaAPI.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ArianaAPI.Infrastructure.Services.Moadian;
 
 
 namespace ArianaAPI.Infrastructure;
@@ -59,6 +60,19 @@ public static class DependencyInjection
         services.AddScoped<IPartyFactorRepository, PartyFactorRepository>();
         services.AddScoped<IFactorProfitLossRepository, FactorProfitLossRepository>();
         services.AddScoped<IArticleStockRepository, ArticleStockRepository>();
+       
+
+        // ⭐ HttpClient برای MoadianService
+        services.AddHttpClient<IMoadianService, MoadianService>((sp, http) =>
+        {
+            http.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        // ⭐ MoadianOptions — از تنظیمات میاد (بعداً از DB پر می‌شه)
+        services.AddScoped<MoadianOptions>();
+
+        services.AddScoped<MoadianServiceFactory>();
+        services.AddScoped<IMoadianRepository, MoadianRepository>();
 
         return services;
     }

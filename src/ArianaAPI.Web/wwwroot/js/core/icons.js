@@ -81,7 +81,8 @@ window.App.Icons = (function () {
         'article': svg('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>'),
         'sharh': svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'),
         'kind': svg('<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>'),
-
+        //مودیان
+        'moadian': svg('<path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><line x1="9" y1="9" x2="9" y2="9"/><line x1="9" y1="12" x2="9" y2="12"/><line x1="9" y1="15" x2="9" y2="15"/><circle cx="15" cy="8" r="2"/><circle cx="15" cy="15" r="2"/>'),
         // ─── عمومی ───
         'default': svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'),
         'search': svg('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),
@@ -145,6 +146,7 @@ window.App.Icons = (function () {
         'article-stock': 'article-stock',
         'party-factor': 'party-factor',
         'factor-profit-loss': 'factor-profit-loss',
+        'moadian': 'moadian',
         'hesab': 'hesab',
         'tafzili': 'tafzili',
         'article': 'article',
@@ -158,6 +160,7 @@ window.App.Icons = (function () {
         'reports': 'group-reports',
         'goods': 'group-goods',
         'payments': 'group-payments',
+        'moadian': 'moadian',
         'report-articl': 'group-article'
     };
 

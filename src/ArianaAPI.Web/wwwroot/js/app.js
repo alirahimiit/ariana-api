@@ -669,6 +669,7 @@ window.App = Object.assign(window.App || {}, {
             article: 'کالاها',
             sharh: 'شرح‌ها',
             kind: 'انواع سند',
+
             // ⭐ منوی ورود/خروج کالا
             'factor-buy': 'فاکتور خرید',
             'factor-sell': 'فاکتور فروش',
@@ -696,7 +697,9 @@ window.App = Object.assign(window.App || {}, {
             'kardex': 'کاردکس کالا',
             'party-factor': 'فاکتورهای طرف حساب',
             'factor-profit-loss': 'سود و زیان فاکتوری',
-            'article-stock': 'گزارش موجودی کالا'
+            'article-stock': 'گزارش موجودی کالا',
+            // * مودیان
+            'moadian': '🏛️ سامانه مودیان'
         };
         document.getElementById('pageTitle').textContent = titles[page] || page;
 
@@ -727,6 +730,7 @@ window.App = Object.assign(window.App || {}, {
             case 'party-factor': window.App.Features.PartyFactor.render(); break;
             case 'factor-profit-loss': window.App.Features.FactorProfitLoss.render(); break;
             case 'article-stock': window.App.Features.ArticleStock.render(); break;
+            case 'moadian': window.App.Features.Moadian.render(); break;
             // ⭐ صفحات در حال توسعه — placeholder نمایش می‌ده
             default:
                 window.App.renderComingSoon(page, titles[page] || page);
