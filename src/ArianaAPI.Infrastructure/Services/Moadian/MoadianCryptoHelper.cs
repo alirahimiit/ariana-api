@@ -12,6 +12,7 @@ using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.OpenSsl;
 using Org.BouncyCastle.Security;
 
+
 namespace ArianaAPI.Infrastructure.Services.Moadian;
 
 /// <summary>
@@ -260,10 +261,14 @@ public static class MoadianCryptoHelper
                     : JsonConvert.DeserializeObject<object>(str)!;
             }
 
-            // حالت ۲: List<T>
-            if (obj is System.Collections.IList)
+            // ⭐ حالت ۲: فقط List<> یا JArray رو wrap کن — نه JObject
+            // ⚠️ JObject هم IList رو پیاده‌سازی می‌کنه ولی نباید wrap بشه!
+            var type = obj.GetType();
+            bool isList = (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>))
+                          || obj is JArray;
+
+            if (isList)
             {
-                // ⭐ wrap در {packets: [...]}
                 var wrapper = new PacketsWrapper(obj);
                 map = ToDictionary(wrapper);
             }
@@ -296,7 +301,22 @@ public static class MoadianCryptoHelper
 
         // ═══ مرتب‌سازی کلیدها و ساخت رشته ═══
         var sb = new StringBuilder();
-        var sortedKeys = flattened.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList();
+        // ⭐ DEBUG
+        Console.WriteLine("═══ FLATTENED KEYS ═══");
+        foreach (var kv in flattened.OrderBy(k => k.Key))
+        {
+            // ⭐ همینجا از InvariantCulture استفاده کن تا لاگ گمراه‌کننده نباشه
+            var display = kv.Value;
+            if (display is IFormattable fmt)
+                display = fmt.ToString(null, CultureInfo.InvariantCulture);
+            Console.WriteLine($"  [{kv.Key}] = [{display ?? "NULL"}]");
+        }
+        Console.WriteLine("═══ END ═══");
+
+        // ⭐ از CurrentCulture استفاده کن — همون که WinForms استفاده می‌کنه
+        var sortedKeys = flattened.Keys
+            .OrderBy(k => k, StringComparer.InvariantCulture)
+            .ToList();
 
         foreach (var key in sortedKeys)
         {
@@ -304,23 +324,42 @@ public static class MoadianCryptoHelper
             sb.Append(textValue).Append('#');
         }
 
-        // حذف # آخر
-        return sb.Remove(sb.Length - 1, 1).ToString();
+
+
+        var result = sb.Remove(sb.Length - 1, 1).ToString();
+
+        Console.WriteLine("═══ NORMALIZED ═══");
+        Console.WriteLine(result);
+        Console.WriteLine("═══ END ═══");
+
+        return result;
     }
 
     private static string NormalizeValue(object? value)
     {
         if (value is null) return "#";
 
-        var str = value.ToString() ?? "";
+        string str;
 
-        // bool → lowercase (true/false)
+        // ⭐ FIX: bool جدا (چون IFormattable هم هست ولی ToString با Invariant Culture درست کار میکنه)
         if (value is bool b)
-            return b ? "true" : "false";
+        {
+            str = b ? "true" : "false";
+        }
+        // ⭐ FIX اصلی: همه‌ی IFormattable ها (double, decimal, DateTime, ...) 
+        //               با InvariantCulture فرمت بشن — نه Culture سرور
+        else if (value is IFormattable formattable)
+        {
+            str = formattable.ToString(null, CultureInfo.InvariantCulture) ?? "";
+        }
+        else
+        {
+            str = value.ToString() ?? "";
+        }
 
-        // رشته‌ی "True"/"False" (از JSON) → lowercase
+        // "True"/"False" از JSON → lowercase
         if (str == "True" || str == "False")
-            return str.ToLowerInvariant();
+            str = str.ToLowerInvariant();
 
         // خالی → #
         if (string.IsNullOrEmpty(str))

@@ -4,6 +4,7 @@ using ArianaAPI.Infrastructure.Services.Moadian;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+
 namespace ArianaAPI.Web.Controllers;
 
 [ApiController]
@@ -137,8 +138,14 @@ public class MoadianController : ControllerBase
         var svc = await BuildServiceAsync(ct);
         if (svc is null) return BadRequest(new { error = "تنظیمات ناقصه" });
 
-        var token = await GetOrRefreshTokenAsync(svc, ct);
-        if (token is null) return BadRequest(new { error = "دریافت توکن ناموفق" });
+        //var token = await GetOrRefreshTokenAsync(svc, ct);
+        //if (token is null) return BadRequest(new { error = "دریافت توکن ناموفق" });
+
+        //var result = await svc.GetFiscalInformationAsync(token, ct);
+        //return Ok(result);
+        var (token, tokenError) = await GetOrRefreshTokenAsync(svc, ct);
+        if (token is null)
+            return BadRequest(new { error = "دریافت توکن ناموفق: " + tokenError });
 
         var result = await svc.GetFiscalInformationAsync(token, ct);
         return Ok(result);
@@ -167,6 +174,14 @@ public class MoadianController : ControllerBase
         return Ok(new { items = list, count = list.Count });
     }
 
+    [HttpPost("factors/pending-list")]
+    public async Task<IActionResult> GetPendingFactorsPaged(
+    [FromBody] MoadianPendingListRequestDto req, CancellationToken ct)
+    {
+        var result = await _repo.GetPendingFactorsPagedAsync(GetOrgId(), GetFyId(), req, ct);
+        return Ok(result);
+    }
+
     // ═══════════════════════════════════════════════════════════
     //  HEADERS (لیست فاکتورهای مالیاتی)
     // ═══════════════════════════════════════════════════════════
@@ -176,6 +191,15 @@ public class MoadianController : ControllerBase
         var list = await _repo.GetAllHeadersAsync(GetOrgId(), GetFyId(), ct);
         return Ok(new { items = list, count = list.Count });
     }
+
+    [HttpPost("headers/list")]
+    public async Task<IActionResult> GetHeadersPaged(
+    [FromBody] MoadianHeaderListRequestDto req, CancellationToken ct)
+    {
+        var result = await _repo.GetHeadersPagedAsync(GetOrgId(), GetFyId(), req, ct);
+        return Ok(result);
+    }
+
 
     [HttpGet("headers/{id:long}")]
     public async Task<IActionResult> GetHeader(long id, CancellationToken ct)
@@ -221,16 +245,32 @@ public class MoadianController : ControllerBase
         var nextInno = lastInno + 1;
 
         // ⭐ جمع‌ها
-        var tprdis = rows.Sum(r => r.FldPrice);                  // جمع قبل تخفیف
-        var tdis = rows.Sum(r => r.Discount);                  // جمع تخفیف
-        var tadis = tprdis - tdis;                              // جمع بعد تخفیف
-        var tvam = rows.Sum(r => r.FldTaxAmount);              // جمع مالیات
-        var tbill = tadis + tvam;                               // مبلغ نهایی
+        // ✅ اصلاح: قیمت × تعداد
+        // ⭐ جمعها — همه به long تبدیل بشن
+        var tprdis = (long)rows.Sum(r => (decimal)r.FldPrice * (decimal)r.FldQty);   // جمع قبل تخفیف
+        var tdis = (long)rows.Sum(r => (decimal)r.Discount);                       // جمع تخفیف
+        var tadis = tprdis - tdis;                                                  // جمع بعد تخفیف
+        var tvam = (long)rows.Sum(r => (decimal)r.FldTaxAmount);                   // جمع مالیات
+        var tbill = tadis + tvam;                                                   // مبلغ نهایی
 
         // ⭐ تاریخ میلادی (تبدیل از تاریخ شمسی FactorParent.Date_In)
-        var persianDate = factor.FldFacDate ?? "";
+        var persianDate = string.IsNullOrWhiteSpace(factor.FldFacDate)
+            ? DateTime.Now.ToString("yyyy/MM/dd")
+            : factor.FldFacDate;
+
         var gregorianDate = PersianToGregorian(persianDate);
-        var unixSeconds = new DateTimeOffset(gregorianDate).ToUnixTimeSeconds();
+        var unixMillis = new DateTimeOffset(gregorianDate).ToUnixTimeMilliseconds();
+
+        Console.WriteLine($"📅 Persian: {persianDate} | Gregorian: {gregorianDate:yyyy-MM-dd} | Millis: {unixMillis}");
+
+        var setting = await _repo.GetSettingAsync(GetOrgId(), GetFyId(), ct);
+        var memoryId = setting?.TaxUserName ?? "";
+
+        var taxId = MoadianCryptoHelper.GenerateTaxId(memoryId, nextInno, gregorianDate);
+
+
+        Console.WriteLine($"🆔 TaxId Generated: {taxId} (length={taxId.Length})");
+        Console.WriteLine($"📅 persianDate = '{persianDate}', gregorianDate = {gregorianDate}, unixMillis = {unixMillis}");
 
         // ⭐ ساخت هدر
         var header = new Domain.Entities.Moadian.TaxHeader
@@ -238,21 +278,23 @@ public class MoadianController : ControllerBase
             Status = 0,
             FactorId = req.FactorId,
             CustomerCode = factor.CustomerCode,
-            Inno = nextInno.ToString(),
-            Inty = 1,            // نوع اول
+            Inno = nextInno.ToString().PadLeft(10, '0') ,
+            TaxId = taxId,
+            Inty = req.Inty < 1 || req.Inty > 3 ? 1 : req.Inty,            // نوع اول
             Inp = 1,             // الگوی فروش
             Ins = 1,             // اصلی
             Setm = factor.IsCash == 1 ? 1 : 2,  // نقد/نسیه
-            Indatim = unixSeconds,
-            IndatimDatetime = gregorianDate,
+            Indatim = unixMillis,
             IndatimPersian = persianDate,
+            Indati2mPersian = persianDate,          // ⭐ این هم اضافه کن
+            Indati2mDatetime = gregorianDate,        // ⭐ این هم
             Tprdis = tprdis,
             Tdis = tdis,
             Tadis = tadis,
             Tvam = tvam,
             Todam = 0,
             Tbill = tbill,
-            Tonw = 0,
+            Tonw = null,
             Torv = 0,
             Tocv = 0,
             Tvop = 0,
@@ -265,6 +307,10 @@ public class MoadianController : ControllerBase
         // ⭐ ساخت ردیف‌ها
         foreach (var r in rows)
         {
+            var qty = (decimal)r.FldQty;
+            var price = (decimal)r.FldPrice;
+            var lineTotal = (long)(price * qty);
+
             var body = new Domain.Entities.Moadian.TaxBody
             {
                 HeaderId = headerId,
@@ -272,12 +318,12 @@ public class MoadianController : ControllerBase
                 UnitId = r.UnitId,
                 Am = r.FldQty,
                 Fee = r.FldPrice,
-                Prdis = r.FldPrice * (decimal)r.FldQty,
+                Prdis = lineTotal,                       // ✅ long
                 Dis = r.Discount,
-                Adis = (long)(r.FldPrice * (decimal)r.FldQty) - r.Discount,
+                Adis = lineTotal - (long)r.Discount,    // ✅ long
                 Vra = r.FldVra,
                 Vam = r.FldTaxAmount,
-                Tsstam = (long)(r.FldPrice * (decimal)r.FldQty),
+                Tsstam = lineTotal,                       // ✅ long
                 Cut = "IRR"
             };
 
@@ -303,8 +349,11 @@ public class MoadianController : ControllerBase
             return BadRequest(new { error = "این سند قبلاً با موفقیت ارسال شده" });
 
         // ⭐ توکن
-        var token = await GetOrRefreshTokenAsync(svc, ct);
-        if (token is null) return BadRequest(new { error = "دریافت توکن ناموفق" });
+        //var token = await GetOrRefreshTokenAsync(svc, ct);
+        //if (token is null) return BadRequest(new { error = "دریافت توکن ناموفق" });
+        var (token, tokenError) = await GetOrRefreshTokenAsync(svc, ct);
+        if (token is null)
+            return BadRequest(new { error = "دریافت توکن ناموفق: " + tokenError });
 
         // ⭐ کلید عمومی سرور
         var serverInfo = _cachedServerInfo ?? await svc.GetServerInformationAsync(ct);
@@ -314,7 +363,13 @@ public class MoadianController : ControllerBase
 
         // ⭐ ساخت فاکتور
         var bodies = await _repo.GetBodyByHeaderIdAsync(GetOrgId(), GetFyId(), req.HeaderId, ct);
-        var invoice = MoadianInvoiceBuilder.Build(header, bodies, svc.Options.EconomicCode);
+        var customerInfo = await _repo.GetCustomerTaxInfoAsync(
+            GetOrgId(), GetFyId(), header.CustomerCode, ct);
+
+        Console.WriteLine($"👤 Customer Kind={customerInfo?.Kind}, Eco={customerInfo?.EconomicCode}, Melli={customerInfo?.MelliCode}, National={customerInfo?.NationalCode}");
+
+        var invoice = MoadianInvoiceBuilder.Build(
+            header, bodies, svc.Options.EconomicCode, customerInfo);
 
         // ⭐ UID یکتا
         var uid = Guid.NewGuid().ToString();
@@ -411,8 +466,11 @@ public class MoadianController : ControllerBase
         if (string.IsNullOrEmpty(header.Uid))
             return BadRequest(new { error = "این سند هنوز UID نداره (ارسال نشده)" });
 
-        var token = await GetOrRefreshTokenAsync(svc, ct);
-        if (token is null) return BadRequest(new { error = "دریافت توکن ناموفق" });
+        //var token = await GetOrRefreshTokenAsync(svc, ct);
+        //if (token is null) return BadRequest(new { error = "دریافت توکن ناموفق" });
+        var (token, tokenError) = await GetOrRefreshTokenAsync(svc, ct);
+        if (token is null)
+            return BadRequest(new { error = "دریافت توکن ناموفق: " + tokenError });
 
         var uids = new List<MoadianUidModel>
         {
@@ -427,9 +485,18 @@ public class MoadianController : ControllerBase
         var item = result.Result[0];
         if (item.Errors.Count == 0 && item.Status == "SUCCESS")
         {
-            header.Status = 3;  // موفق
+            header.Status = 3;
             header.TaxStatus = "SUCCESS";
             header.AcceptRefNumber = item.ConfirmationReferenceId;
+
+            // ⭐ اگه RefNumber خالی بود، از inquiry پر کن
+            if (string.IsNullOrEmpty(header.RefNumber) && !string.IsNullOrEmpty(item.ReferenceNumber))
+                header.RefNumber = item.ReferenceNumber;
+
+            // ⭐ Uid هم اگه خالی بود
+            if (string.IsNullOrEmpty(header.Uid) && !string.IsNullOrEmpty(item.Uid))
+                header.Uid = item.Uid;
+
             await _repo.UpdateHeaderAsync(GetOrgId(), GetFyId(), header, ct);
         }
         else if (item.Errors.Count > 0)
@@ -453,18 +520,23 @@ public class MoadianController : ControllerBase
     // ═══════════════════════════════════════════════════════════
     //  HELPERS
     // ═══════════════════════════════════════════════════════════
-    private async Task<string?> GetOrRefreshTokenAsync(IMoadianService svc, CancellationToken ct)
+ 
+    private async Task<(string? Token, string? Error)> GetOrRefreshTokenAsync(IMoadianService svc, CancellationToken ct)
     {
         if (_cachedToken?.Success == true && DateTime.UtcNow < _tokenExpireAt)
-            return _cachedToken.Token;
+            return (_cachedToken.Token, null);
 
         var r = await svc.GetTokenAsync(ct);
-        if (!r.Success) return null;
+        if (!r.Success)
+            return (null, r.Error ?? "خطای نامشخص در دریافت توکن");
 
         _cachedToken = r;
-        // ⭐ با ۵ دقیقه حاشیه
-        _tokenExpireAt = DateTime.UtcNow.AddSeconds(Math.Max(60, r.ExpiresIn - 300));
-        return r.Token;
+        var expiresInSec = Math.Min(r.ExpiresIn, 86400);
+
+        // ⭐ ۵ دقیقه قبل از انقضا، renew کن
+        _tokenExpireAt = DateTime.UtcNow.AddSeconds(Math.Max(60, expiresInSec - 300));
+
+        return (r.Token, null);
     }
 
     private static DateTime PersianToGregorian(string persianDate)

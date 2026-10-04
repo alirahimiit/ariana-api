@@ -66,4 +66,8 @@ public class TaxHeader
     public string? RefNumber { get; set; }
     public string? AcceptRefNumber { get; set; }
     public string? TaxStatus { get; set; }
+
+    // ⭐ این دو تا از JOIN میان (توی GetAllHeaders و GetHeaderById)
+    public string? FldFacNo { get; set; }       // FactorParent.NoFactor
+    public string? CustomerName { get; set; }   // Hesab.Name
 }

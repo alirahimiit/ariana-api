@@ -1,4 +1,6 @@
 ﻿using ArianaAPI.Domain.Entities.Moadian;
+using ArianaAPI.Application.Dtos.Moadian;
+
 
 namespace ArianaAPI.Application.Interfaces;
 
@@ -31,4 +33,9 @@ public interface IMoadianRepository
     Task<List<TaxFactorSource>> GetPendingFactorsAsync(long orgId, long fyId, CancellationToken ct = default);
     Task<TaxFactorSource?> GetFactorSourceByIdAsync(long orgId, long fyId, long factorId, CancellationToken ct = default);
     Task<List<TaxFactorRowSource>> GetFactorRowsAsync(long orgId, long fyId, long factorId, CancellationToken ct = default);
+    Task<MoadianHeaderListResultDto> GetHeadersPagedAsync(long orgId, long fyId, MoadianHeaderListRequestDto req, CancellationToken ct = default);
+    Task<MoadianPendingListResultDto> GetPendingFactorsPagedAsync(
+    long orgId, long fyId, MoadianPendingListRequestDto req, CancellationToken ct = default);
+    Task<CustomerTaxInfo?> GetCustomerTaxInfoAsync(
+    long orgId, long fyId, long customerCode, CancellationToken ct = default);
 }

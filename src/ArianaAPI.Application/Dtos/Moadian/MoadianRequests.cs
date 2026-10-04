@@ -21,6 +21,7 @@ public class CreateFromFactorRequest
 {
     /// <summary>ID فاکتور در FactorParent</summary>
     public long FactorId { get; set; }
+    public int Inty { get; set; } = 1;
 }
 
 // ═══════════════════════════════════════════════════════════

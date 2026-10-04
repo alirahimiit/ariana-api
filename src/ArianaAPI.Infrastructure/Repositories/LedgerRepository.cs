@@ -149,10 +149,10 @@ public class LedgerRepository : ILedgerRepository
         //  اجرای کوئری‌ها
         // ═══════════════════════════════════════════════
         var totalCount = await conn.ExecuteScalarAsync<int>(
-            new CommandDefinition(countSql, parameters, cancellationToken: ct));
+             new CommandDefinition(countSql, parameters, commandTimeout: 180, cancellationToken: ct));
 
         var items = (await conn.QueryAsync<LedgerItemDto>(
-            new CommandDefinition(sql, parameters, cancellationToken: ct))).ToList();
+             new CommandDefinition(sql, parameters, commandTimeout: 180, cancellationToken: ct))).ToList();
 
         _logger.LogInformation("Ledger Level={Level} Page={Page} Items={Count} Total={Total}",
             level, req.Page, items.Count, totalCount);

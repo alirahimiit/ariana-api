@@ -1,4 +1,5 @@
-﻿using ArianaAPI.Domain.Entities.Moadian;
+﻿using ArianaAPI.Application.Dtos.Moadian;
+using ArianaAPI.Domain.Entities.Moadian;
 
 namespace ArianaAPI.Infrastructure.Services.Moadian;
 
@@ -10,7 +11,8 @@ public static class MoadianInvoiceBuilder
     public static MoadianInvoice Build(
         TaxHeader header,
         List<TaxBody> bodies,
-        string sellerEconomicCode)
+        string sellerEconomicCode,
+        CustomerTaxInfo? customer = null)
     {
         var invoice = new MoadianInvoice
         {
@@ -19,14 +21,17 @@ public static class MoadianInvoiceBuilder
                 TaxId = header.TaxId,
                 Indatim = header.Indatim,
                 Inty = header.Inty ?? 1,
-                Inno = header.Inno ?? "",
+                Inno = PadInno(header.Inno),
                 IrTaxId = NullIfEmpty(header.IrTaxId),
                 Inp = header.Inp ?? 1,
                 Ins = header.Ins ?? 1,
                 Tins = sellerEconomicCode,
-                Tob = DetermineTob(header.CustomerCode),
-                Bid = null,     // بعداً از Hesab پُر می‌شه
-                Tinb = null,     // بعداً
+
+                // ⭐ اینجا اطلاعات خریدار ست میشه
+                Tob = 1,           // پیش‌فرض — پایین‌تر overwrite میشه
+                Bid = null,
+                Tinb = null,
+
                 Sbc = NullIfEmpty(header.Sbc),
                 Bpc = NullIfEmpty(header.Bpc),
                 Bbc = NullIfEmpty(header.Bbc),
@@ -92,8 +97,43 @@ public static class MoadianInvoiceBuilder
             Extension = new List<MoadianInvoiceExtension>()
         };
 
+        // ⭐⭐⭐ تعیین نوع خریدار و شماره اقتصادی/ملی — دقیقاً طبق WinForms
+        if (customer != null)
+        {
+            if (customer.Kind == 1 || customer.Kind == 4)
+            {
+                // حقیقی یا اتباع غیرایرانی
+                invoice.Header.Tob = 1;
+                invoice.Header.Tinb = NullIfEmpty(customer.EconomicCode);
+                invoice.Header.Bid = NullIfEmpty(customer.MelliCode);
+
+                // اگه شماره اقتصادی ۱۱ رقمی بود → مشارکت مدنی
+                if (customer.EconomicCode?.Length == 11)
+                {
+                    invoice.Header.Tob = 3;
+                    invoice.Header.Bid = customer.EconomicCode;
+                }
+            }
+            else
+            {
+                // حقوقی یا مشارکت مدنی
+                invoice.Header.Tob = 2;
+                invoice.Header.Tinb = NullIfEmpty(customer.EconomicCode);
+                invoice.Header.Bid = NullIfEmpty(customer.NationalCode);
+            }
+        }
+
+        // ⭐ صادرات (inp=7): اطلاعات خریدار لازم نیست
+        if (header.Inp == 7)
+        {
+            invoice.Header.Tinb = null;
+            invoice.Header.Bid = null;
+        }
+
         return invoice;
     }
+
+
 
     private static string? NullIfEmpty(string? s)
         => string.IsNullOrWhiteSpace(s) ? null : s;
@@ -106,5 +146,12 @@ public static class MoadianInvoiceBuilder
     {
         // TODO: بعداً از جدول Hesab خوانده می‌شود (kind یا kindName)
         return 1; // پیش‌فرض: حقیقی
+    }
+    private static string PadInno(string? inno)
+    {
+        if (string.IsNullOrWhiteSpace(inno)) return "0000000000";
+        var s = inno.Trim();
+        if (s.Length >= 10) return s.Substring(s.Length - 10);   // اگه بیشتر بود، از راست ۱۰ تا
+        return s.PadLeft(10, '0');
     }
 }

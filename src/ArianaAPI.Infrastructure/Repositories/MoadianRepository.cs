@@ -1,4 +1,6 @@
-﻿using ArianaAPI.Application.Interfaces;
+﻿using ArianaAPI.Application.Dtos.Moadian;
+using System.Text;
+using ArianaAPI.Application.Interfaces;
 using ArianaAPI.Domain.Entities.Moadian;
 using ArianaAPI.Infrastructure.Data;
 using Dapper;
@@ -99,25 +101,167 @@ public class MoadianRepository : IMoadianRepository
         return list.ToList();
     }
 
+    public async Task<MoadianHeaderListResultDto> GetHeadersPagedAsync(
+    long orgId, long fyId, MoadianHeaderListRequestDto req, CancellationToken ct = default)
+    {
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        await conn.OpenAsync(ct);
+
+        // ═══════════════════════════════════════════════════
+        //  WHERE
+        // ═══════════════════════════════════════════════════
+        var where = new StringBuilder(" WHERE 1=1 ");
+        var p = new DynamicParameters();
+
+        if (!string.IsNullOrWhiteSpace(req.Search))
+        {
+            where.Append(@" AND (
+            th.inno LIKE @search OR
+            fp.NoFactor LIKE @search OR
+            h.Name LIKE @search OR
+            th.ref_number LIKE @search OR
+            th.taxid LIKE @search OR
+            th.uid LIKE @search
+        ) ");
+            p.Add("search", "%" + req.Search.Trim() + "%");
+        }
+
+        if (req.Status.HasValue)
+        {
+            where.Append(" AND th.status = @status ");
+            p.Add("status", req.Status.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(req.DateFrom))
+        {
+            where.Append(" AND th.indatim_persian >= @dateFrom ");
+            p.Add("dateFrom", req.DateFrom.Trim());
+        }
+        if (!string.IsNullOrWhiteSpace(req.DateTo))
+        {
+            where.Append(" AND th.indatim_persian <= @dateTo ");
+            p.Add("dateTo", req.DateTo.Trim());
+        }
+
+        // ═══════════════════════════════════════════════════
+        //  ORDER BY — whitelisted (جلوگیری از SQL Injection)
+        // ═══════════════════════════════════════════════════
+        var sortDir = (req.SortDir ?? "desc").ToLowerInvariant() == "asc" ? "ASC" : "DESC";
+        var sortCol = (req.SortBy ?? "date").ToLowerInvariant() switch
+        {
+            "serial" => $"CAST(ISNULL(th.inno, '0') AS BIGINT) {sortDir}",
+            "amount" => $"th.tbill {sortDir}",
+            "customer" => $"h.Name {sortDir}",
+            "customercode" => $"th.CustomerCode {sortDir}",
+            "factor" => $"CAST(ISNULL(fp.NoFactor, 0) AS BIGINT) {sortDir}",
+            "status" => $"th.status {sortDir}",
+            _ => $"th.indatim_persian {sortDir}, th.id {sortDir}"  // date
+        };
+
+        // ═══════════════════════════════════════════════════
+        //  صفحه‌بندی
+        // ═══════════════════════════════════════════════════
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize < 1 ? 50 : (req.PageSize > 10000 ? 10000 : req.PageSize);
+
+        p.Add("startRow", (page - 1) * pageSize + 1);
+        p.Add("endRow", page * pageSize);
+
+        // ═══════════════════════════════════════════════════
+        //  شمارش کل (برای صفحه‌بندی)
+        // ═══════════════════════════════════════════════════
+        var countSql = $@"
+        SELECT COUNT(*)
+        FROM tax_header th
+        LEFT JOIN FactorParent fp ON fp.ID = th.factor_id
+        LEFT JOIN Hesab h ON CAST(h.Code_Tafzil AS BIGINT) = th.CustomerCode
+        {where}";
+
+        var totalCount = await conn.ExecuteScalarAsync<int>(
+            new CommandDefinition(countSql, p, commandTimeout: 120, cancellationToken: ct));
+
+        // ═══════════════════════════════════════════════════
+        //  آمار کلی (مستقل از فیلتر)
+        // ═══════════════════════════════════════════════════
+        const string statsSql = @"
+        SELECT 
+            COUNT(*) AS Total,
+            SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) AS Pending,
+            SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS Sent,
+            SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) AS Error,
+            SUM(CASE WHEN status = 3 THEN 1 ELSE 0 END) AS Success
+        FROM tax_header";
+
+        var stats = await conn.QueryFirstOrDefaultAsync<dynamic>(
+            new CommandDefinition(statsSql, commandTimeout: 120, cancellationToken: ct));
+
+        // ═══════════════════════════════════════════════════
+        //  کوئری اصلی با ROW_NUMBER (SQL Server 2008 R2)
+        // ═══════════════════════════════════════════════════
+        var sql = $@"
+        SELECT * FROM (
+            SELECT 
+                th.id            AS Id,
+                th.status        AS Status,
+                th.inno          AS Inno,
+                th.indatim_persian AS IndatimPersian,
+                th.factor_id     AS FactorId,
+                CAST(fp.NoFactor AS NVARCHAR(50)) AS FactorNo,
+                th.CustomerCode  AS CustomerCode,
+                h.Name           AS CustomerName,
+                th.tbill         AS Tbill,
+                th.ref_number    AS RefNumber,
+                th.taxid         AS TaxId,
+                th.uid           AS Uid,
+                ROW_NUMBER() OVER (ORDER BY {sortCol}) AS RowNum
+            FROM tax_header th
+            LEFT JOIN FactorParent fp ON fp.ID = th.factor_id
+            LEFT JOIN Hesab h ON CAST(h.Code_Tafzil AS BIGINT) = th.CustomerCode
+            {where}
+        ) AS T
+        WHERE T.RowNum BETWEEN @startRow AND @endRow
+        ORDER BY T.RowNum";
+
+        var items = (await conn.QueryAsync<MoadianHeaderListItemDto>(
+            new CommandDefinition(sql, p, commandTimeout: 120, cancellationToken: ct))).ToList();
+
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        return new MoadianHeaderListResultDto
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount,
+            TotalPages = totalPages,
+            CountAll = stats != null ? (int)(stats.Total ?? 0) : 0,
+            CountPending = stats != null ? (int)(stats.Pending ?? 0) : 0,
+            CountSent = stats != null ? (int)(stats.Sent ?? 0) : 0,
+            CountError = stats != null ? (int)(stats.Error ?? 0) : 0,
+            CountSuccess = stats != null ? (int)(stats.Success ?? 0) : 0
+        };
+    }
     public async Task<long> AddHeaderAsync(long orgId, long fyId, TaxHeader h, CancellationToken ct = default)
     {
         const string sql = @"
-            INSERT INTO tax_header (
-                bbc, cdcd, cdcn, scc, crn, factor_id,
-                tvop, cap, insp, inno, CustomerCode,
-                inty, inp, ins, setm, status,
-                tonw, tprdis, tdis, tadis, tvam, todam, tbill,
-                indatim_datetime, Indati2m_datetime, indatim, Indati2m,
-                indatim_persian, Indati2m_persian, irtaxid
-            ) VALUES (
-                @Bbc, @Cdcd, @Cdcn, @Scc, @Crn, @FactorId,
-                @Tvop, @Cap, @Insp, @Inno, @CustomerCode,
-                @Inty, @Inp, @Ins, @Setm, @Status,
-                @Tonw, @Tprdis, @Tdis, @Tadis, @Tvam, @Todam, @Tbill,
-                @IndatimDatetime, @Indati2mDatetime, @Indatim, @Indati2m,
-                @IndatimPersian, @Indati2mPersian, @IrTaxId
-            );
-            SELECT CAST(SCOPE_IDENTITY() AS BIGINT);";
+                 INSERT INTO tax_header (
+                    bbc, cdcd, cdcn, scc, crn, factor_id,
+                    tvop, cap, insp, inno, CustomerCode,
+                    inty, inp, ins, setm, status,
+                    tonw, tprdis, tdis, tadis, tvam, todam, tbill,
+                    indatim_datetime, Indati2m_datetime, indatim, Indati2m,
+                    indatim_persian, Indati2m_persian, irtaxid,
+                    taxid                             
+                ) VALUES (
+                    @Bbc, @Cdcd, @Cdcn, @Scc, @Crn, @FactorId,
+                    @Tvop, @Cap, @Insp, @Inno, @CustomerCode,
+                    @Inty, @Inp, @Ins, @Setm, @Status,
+                    @Tonw, @Tprdis, @Tdis, @Tadis, @Tvam, @Todam, @Tbill,
+                    @IndatimDatetime, @Indati2mDatetime, @Indatim, @Indati2m,
+                    @IndatimPersian, @Indati2mPersian, @IrTaxId,
+                    @TaxId                             
+                );
+                SELECT CAST(SCOPE_IDENTITY() AS BIGINT);";
 
         var p = new
         {
@@ -150,7 +294,8 @@ public class MoadianRepository : IMoadianRepository
             h.Indati2m,
             h.IndatimPersian,
             h.Indati2mPersian,
-            IrTaxId = h.IrTaxId ?? ""
+            IrTaxId = h.IrTaxId ?? "",
+            TaxId = h.TaxId ?? ""
         };
 
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
@@ -173,12 +318,35 @@ public class MoadianRepository : IMoadianRepository
                 setm = @Setm, status = @Status,
                 tonw = @Tonw, tprdis = @Tprdis, tdis = @Tdis, tadis = @Tadis,
                 tvam = @Tvam, todam = @Todam, tbill = @Tbill,
-                indatim_datetime = @IndatimDatetime,
-                Indati2m_datetime = @Indati2mDatetime,
+                indatim_datetime = CASE 
+                    WHEN @IndatimDatetime IS NULL THEN indatim_datetime 
+                    ELSE @IndatimDatetime 
+                END,
+                Indati2m_datetime = CASE 
+                    WHEN @Indati2mDatetime IS NULL THEN Indati2m_datetime 
+                    ELSE @Indati2mDatetime 
+                END,
                 indatim = @Indatim, Indati2m = @Indati2m,
-                indatim_persian = @IndatimPersian,
-                Indati2m_persian = @Indati2mPersian,
-                ref_number = @RefNumber, uid = @Uid, taxid = @TaxId
+                indatim_persian = CASE 
+                    WHEN @IndatimPersian IS NULL OR @IndatimPersian = '' THEN indatim_persian 
+                    ELSE @IndatimPersian 
+                END,
+                Indati2m_persian = CASE 
+                    WHEN @Indati2mPersian IS NULL OR @Indati2mPersian = '' THEN Indati2m_persian 
+                    ELSE @Indati2mPersian 
+                END,
+                ref_number = CASE 
+                   WHEN @RefNumber IS NULL OR @RefNumber = '' THEN ref_number 
+                ELSE @RefNumber 
+                END,
+                uid = CASE 
+                    WHEN @Uid IS NULL OR @Uid = '' THEN uid 
+                    ELSE @Uid 
+                END,
+                taxid = CASE 
+                    WHEN @TaxId IS NULL OR @TaxId = '' THEN taxid 
+                    ELSE @TaxId 
+                END
             WHERE id = @Id";
 
         var p = new
@@ -384,6 +552,111 @@ public class MoadianRepository : IMoadianRepository
             new CommandDefinition(sql, cancellationToken: ct));
         return list.ToList();
     }
+    public async Task<MoadianPendingListResultDto> GetPendingFactorsPagedAsync(
+    long orgId, long fyId, MoadianPendingListRequestDto req, CancellationToken ct = default)
+    {
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        await conn.OpenAsync(ct);
+
+        // ═══════════════════════════════════════════════════
+        //  WHERE
+        // ═══════════════════════════════════════════════════
+        var where = new StringBuilder(@"
+        WHERE fp.FactorKind = 1
+          AND fp.ID NOT IN (SELECT factor_id FROM tax_header WHERE factor_id IS NOT NULL) ");
+
+        var p = new DynamicParameters();
+
+        if (!string.IsNullOrWhiteSpace(req.Search))
+        {
+            where.Append(@" AND (
+            CAST(fp.NoFactor AS NVARCHAR(50)) LIKE @search OR
+            h.Name LIKE @search OR
+            CAST(fp.CodeTafzil AS NVARCHAR(50)) LIKE @search
+        ) ");
+            p.Add("search", "%" + req.Search.Trim() + "%");
+        }
+
+        if (!string.IsNullOrWhiteSpace(req.DateFrom))
+        {
+            where.Append(" AND fp.Date_In >= @dateFrom ");
+            p.Add("dateFrom", req.DateFrom.Trim());
+        }
+        if (!string.IsNullOrWhiteSpace(req.DateTo))
+        {
+            where.Append(" AND fp.Date_In <= @dateTo ");
+            p.Add("dateTo", req.DateTo.Trim());
+        }
+
+        // ═══════════════════════════════════════════════════
+        //  ORDER BY — whitelisted
+        // ═══════════════════════════════════════════════════
+        var sortDir = (req.SortDir ?? "desc").ToLowerInvariant() == "asc" ? "ASC" : "DESC";
+        var sortCol = (req.SortBy ?? "date").ToLowerInvariant() switch
+        {
+            "no" => $"CAST(fp.NoFactor AS BIGINT) {sortDir}",
+            "amount" => $"fp.Cost {sortDir}",
+            "customer" => $"h.Name {sortDir}",
+            "customercode" => $"th.CustomerCode {sortDir}",
+            _ => $"fp.Date_In {sortDir}, fp.NoFactor {sortDir}"  // date
+        };
+
+        // ═══════════════════════════════════════════════════
+        //  صفحه‌بندی
+        // ═══════════════════════════════════════════════════
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize < 1 ? 50 : (req.PageSize > 10000 ? 10000 : req.PageSize);
+
+        p.Add("startRow", (page - 1) * pageSize + 1);
+        p.Add("endRow", page * pageSize);
+
+        // ═══════════════════════════════════════════════════
+        //  شمارش کل
+        // ═══════════════════════════════════════════════════
+        var countSql = $@"
+        SELECT COUNT(*)
+        FROM FactorParent fp
+        LEFT JOIN Hesab h ON CAST(h.Code_Tafzil AS DECIMAL(18,0)) = CAST(fp.CodeTafzil AS DECIMAL(18,0))
+        {where}";
+
+        var totalCount = await conn.ExecuteScalarAsync<int>(
+            new CommandDefinition(countSql, p, commandTimeout: 120, cancellationToken: ct));
+
+        // ═══════════════════════════════════════════════════
+        //  کوئری اصلی
+        // ═══════════════════════════════════════════════════
+        var sql = $@"
+        SELECT * FROM (
+            SELECT 
+                fp.ID AS Id,
+                CAST(fp.NoFactor AS NVARCHAR(50)) AS FldFacNo,
+                fp.Date_In AS FldFacDate,
+                CAST(fp.Cost AS NVARCHAR(50)) AS FldSumKol,
+                fp.CodeTafzil AS CustomerCode,
+                h.Name AS FldCustName,
+                CAST(ISNULL(fp.IsCaSh, 1) AS INT) AS IsCash,
+                ROW_NUMBER() OVER (ORDER BY {sortCol}) AS RowNum
+            FROM FactorParent fp
+            LEFT JOIN Hesab h ON CAST(h.Code_Tafzil AS DECIMAL(18,0)) = CAST(fp.CodeTafzil AS DECIMAL(18,0))
+            {where}
+        ) AS T
+        WHERE T.RowNum BETWEEN @startRow AND @endRow
+        ORDER BY T.RowNum";
+
+        var items = (await conn.QueryAsync<MoadianPendingListItemDto>(
+            new CommandDefinition(sql, p, commandTimeout: 120, cancellationToken: ct))).ToList();
+
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        return new MoadianPendingListResultDto
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount,
+            TotalPages = totalPages
+        };
+    }
 
     public async Task<TaxFactorSource?> GetFactorSourceByIdAsync(long orgId, long fyId, long factorId, CancellationToken ct = default)
     {
@@ -425,5 +698,24 @@ public class MoadianRepository : IMoadianRepository
         var list = await conn.QueryAsync<TaxFactorRowSource>(
             new CommandDefinition(sql, new { factorId }, cancellationToken: ct));
         return list.ToList();
+    }
+
+    public async Task<CustomerTaxInfo?> GetCustomerTaxInfoAsync(
+    long orgId, long fyId, long customerCode, CancellationToken ct = default)
+    {
+        const string sql = @"
+        SELECT TOP 1
+            CAST(h.Code_Tafzil AS BIGINT) AS CodeTafzil,
+            h.Name                         AS Name,
+            ISNULL(h.Kind, 1)              AS Kind,
+            h.EconomicCode                 AS EconomicCode,
+            h.MelliCode                    AS MelliCode,
+            h.NationalCode                 AS NationalCode
+        FROM Hesab h
+        WHERE CAST(h.Code_Tafzil AS BIGINT) = @customerCode";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        return await conn.QueryFirstOrDefaultAsync<CustomerTaxInfo>(
+            new CommandDefinition(sql, new { customerCode }, cancellationToken: ct));
     }
 }

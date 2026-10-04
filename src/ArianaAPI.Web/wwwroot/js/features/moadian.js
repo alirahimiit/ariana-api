@@ -13,7 +13,15 @@ window.App.Features.Moadian = (function () {
     let _state = {
         activeTab: 'pending',
         pendingFactors: [],
+        pendingData: null,      
+        pendingPage: 1,
+        pendingSortBy: 'date',
+        pendingSortDir: 'desc',
         headers: [],
+        headersData: null,
+        headersPage: 1,
+        headersSortBy: 'date',
+        headersSortDir: 'desc',
         settings: null,
         serverInfo: null,
         fiscalInfo: null
@@ -64,12 +72,30 @@ window.App.Features.Moadian = (function () {
     // ═══════════════════════════════════════════════════
     //  TAB ۱: فاکتورهای آماده ارسال
     // ═══════════════════════════════════════════════════
-    async function renderPending() {
+    async function renderPending(page) {
         const body = document.getElementById('moadianBody');
+
+        // ⭐ اول مقدار search رو بخون (قبل از پاک کردن HTML)
+        const search = document.getElementById('moPendingSearch')?.value || '';
+
         body.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
+        _state.pendingPage = page || _state.pendingPage || 1;
+
+        const payload = {
+            search: search || null,
+            sortBy: _state.pendingSortBy,
+            sortDir: _state.pendingSortDir,
+            page: _state.pendingPage,
+            pageSize: 20   // ⭐ ثابت ۲۰ برای مودیان (تا صفحه‌بندی داشته باشیم)
+        };
+
         try {
-            const resp = await window.App.Http.api('/api/moadian/factors/pending');
+            const resp = await window.App.Http.api('/api/moadian/factors/pending-list', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            _state.pendingData = resp;
             _state.pendingFactors = resp.items || [];
             drawPending();
         } catch (err) {
@@ -79,22 +105,20 @@ window.App.Features.Moadian = (function () {
 
     function drawPending() {
         const body = document.getElementById('moadianBody');
-        const items = _state.pendingFactors;
+        const data = _state.pendingData || {};
+        const items = data.items || [];
+        const totalCount = data.totalCount || 0;
 
+        // ═══ ردیف‌ها ═══
+        let rows = '';
         if (items.length === 0) {
-            body.innerHTML = `
-                <div class="card">
-                    <div class="empty" style="padding:60px;text-align:center;color:#94A3B8;">
-                        <div style="font-size:56px;opacity:0.4;">✅</div>
-                        <p style="margin-top:12px;">همه‌ی فاکتورها ارسال شدن</p>
-                    </div>
-                </div>`;
-            return;
-        }
-
-        const rows = items.map(f => `
+            rows = `<tr><td colspan="7" class="text-center" style="padding:30px;color:#94A3B8;">
+                    ${totalCount === 0 ? '✅ همه‌ی فاکتورها ارسال شدن' : 'فاکتوری یافت نشد'}
+                </td></tr>`;
+        } else {
+            rows = items.map(f => `
             <tr>
-                <td class="num text-center">${f.fldFacNo || ''}</td>
+                <td class="num text-center">${H.esc(f.fldFacNo || '')}</td>
                 <td class="num text-center">${H.esc(f.fldFacDate || '')}</td>
                 <td class="num text-center">${f.customerCode || ''}</td>
                 <td>${H.esc(f.fldCustName || '')}</td>
@@ -105,55 +129,179 @@ window.App.Features.Moadian = (function () {
                 <td class="text-center">
                     <button class="btn btn-sm btn-primary"
                             onclick="App.Features.Moadian.createFromFactor(${f.id})"
-                            title="ایجاد سند مالیاتی">
-                        ➕ ایجاد سند
+                            title="ایجاد سند">
+                        ➕ ایجاد
                     </button>
                 </td>
             </tr>`).join('');
+        }
 
-        body.innerHTML = `
-            <div class="card">
-                <div class="card-title">
-                    <span>📋 فاکتورهای آماده ارسال (${H.fmt(items.length)})</span>
-                    <div class="fac-actions">
-                        <button class="btn btn-sm btn-ghost" onclick="App.Features.Moadian.refreshPending()">
-                            🔄 بازخوانی
-                        </button>
-                        <button class="btn btn-sm btn-primary" onclick="App.Features.Moadian.createAll()">
-                            ⚡ ایجاد همه
-                        </button>
-                    </div>
+        // ═══ آیکن سورت ═══
+        const sortIcon = (col) => {
+            if (_state.pendingSortBy !== col) return ' ⇅';
+            return _state.pendingSortDir === 'asc' ? ' ▲' : ' ▼';
+        };
+        const sortClass = (col) => _state.pendingSortBy === col ? 'sort-active' : '';
+
+        // ═══ صفحه‌بندی ═══
+        const page = data.page || 1;
+        const totalPages = data.totalPages || 1;
+
+        let paginationHtml = '';
+        if (totalPages > 1) {
+            const maxBtn = 7;
+            let startPage = Math.max(1, page - Math.floor(maxBtn / 2));
+            let endPage = Math.min(totalPages, startPage + maxBtn - 1);
+            if (endPage - startPage + 1 < maxBtn) startPage = Math.max(1, endPage - maxBtn + 1);
+
+            let pageBtns = '';
+            for (let p = startPage; p <= endPage; p++) {
+                pageBtns += `<button class="page-btn ${p === page ? 'active' : ''}"
+                            onclick="App.Features.Moadian.goToPendingPage(${p})">${p}</button>`;
+            }
+
+            paginationHtml = `
+            <div class="pagination-bar">
+                <div class="pagination-info">
+                    نمایش ${H.fmt(items.length)} از ${H.fmt(totalCount)} فاکتور
                 </div>
-                <div class="table-wrapper">
-                    <table class="moadian-table">
-                        <thead>
-                            <tr>
-                                <th style="width:80px;">شماره</th>
-                                <th style="width:100px;">تاریخ</th>
-                                <th style="width:100px;">کد مشتری</th>
-                                <th>نام مشتری</th>
-                                <th class="text-left" style="width:140px;">مبلغ</th>
-                                <th style="width:100px;">پرداخت</th>
-                                <th style="width:120px;">عملیات</th>
-                            </tr>
-                        </thead>
-                        <tbody>${rows}</tbody>
-                    </table>
+                <div class="pagination-controls">
+                    <button class="page-btn" ${page <= 1 ? 'disabled' : ''}
+                            onclick="App.Features.Moadian.goToPendingPage(1)">«</button>
+                    <button class="page-btn" ${page <= 1 ? 'disabled' : ''}
+                            onclick="App.Features.Moadian.goToPendingPage(${page - 1})">‹ قبلی</button>
+                    ${pageBtns}
+                    <button class="page-btn" ${page >= totalPages ? 'disabled' : ''}
+                            onclick="App.Features.Moadian.goToPendingPage(${page + 1})">بعدی ›</button>
+                    <button class="page-btn" ${page >= totalPages ? 'disabled' : ''}
+                            onclick="App.Features.Moadian.goToPendingPage(${totalPages})">»</button>
                 </div>
             </div>`;
+        }
 
-        if (window.App.enhanceTables) window.App.enhanceTables(body);
-    }
+        // ═══ HTML نهایی ═══
+        body.innerHTML = `
+        <div class="card">
+            <div class="card-title">
+                <span>📋 فاکتورهای آماده ارسال (${H.fmt(totalCount)})</span>
+                <div class="fac-actions">
+                    <button class="btn btn-sm btn-primary"
+                            onclick="App.Features.Moadian.createAll()">
+                        ⚡ ایجاد همه‌ی این صفحه
+                    </button>
+                </div>
+            </div>
+            <!-- ⭐⭐⭐ انتخاب نوع صورتحساب -->
+            <div class="moadian-type-selector" style="
+                padding:12px 16px;
+                margin:0 0 12px 0;
+                background:#F8FAFC;
+                border:1px solid #E2E8F0;
+                border-radius:8px;
+                display:flex;
+                gap:20px;
+                align-items:center;
+                flex-wrap:wrap;
+            ">
+                <strong style="color:#1E293B;">نوع صورتحساب:</strong>
+                <label style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+                    <input type="radio" name="moInty" value="1" checked>
+                    <span>نوع اول (عادی)</span>
+                </label>
+                <label style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+                    <input type="radio" name="moInty" value="2">
+                    <span>نوع دوم (طلا/جواهر)</span>
+                </label>
+                <label style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+                    <input type="radio" name="moInty" value="3">
+                    <span>نوع سوم (نفت/پتروشیمی)</span>
+                </label>
+            </div>
+            <!-- ⭐ فیلتر -->
+            <div class="moadian-filter-bar">
+                <div class="form-group">
+                    <input type="text" id="moPendingSearch"
+                           placeholder="🔍 جستجو: شماره فاکتور، کد یا نام مشتری..."
+                           value="${H.esc(document.getElementById('moPendingSearch')?.value || '')}">
+                </div>
+                <button class="btn btn-primary" onclick="App.Features.Moadian.searchPending()">
+                    🔍 جستجو
+                </button>
+                <button class="btn btn-ghost" onclick="App.Features.Moadian.resetPendingSearch()">
+                    ↺ ریست
+                </button>
+            </div>
 
+            <div class="table-wrapper">
+                <table class="moadian-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable-th ${sortClass('no')}"
+                                onclick="App.Features.Moadian.sortPending('no')">
+                                شماره${sortIcon('no')}
+                            </th>
+                            <th class="sortable-th ${sortClass('date')}"
+                                onclick="App.Features.Moadian.sortPending('date')">
+                                تاریخ${sortIcon('date')}
+                            </th>
+                            <th class="sortable-th ${sortClass('customerCode')}"
+                               onclick="App.Features.Moadian.sortHeaders('customerCode')">
+                                کد مشتری${sortIcon('customerCode')}
+                            </th>
+                            <th class="sortable-th ${sortClass('customer')}"
+                                onclick="App.Features.Moadian.sortPending('customer')">
+                                نام مشتری${sortIcon('customer')}
+                            </th>
+                            <th class="sortable-th text-left ${sortClass('amount')}"
+                                onclick="App.Features.Moadian.sortPending('amount')">
+                                مبلغ${sortIcon('amount')}
+                            </th>
+                            <th style="width:100px;">پرداخت</th>
+                            <th style="width:120px;">عملیات</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            ${paginationHtml}
+        </div>`;
+
+        // ⭐ Enter روی جستجو
+        document.getElementById('moPendingSearch')?.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') searchPending();
+        });
+    } 
+
+  
     // ═══════════════════════════════════════════════════
     //  TAB ۲: اسناد ارسال‌شده
     // ═══════════════════════════════════════════════════
-    async function renderHeaders() {
+    async function renderHeaders(page) {
         const body = document.getElementById('moadianBody');
+
+        // ⭐ اول مقادیر رو بخون
+        const search = document.getElementById('moSearch')?.value || '';
+        const status = document.getElementById('moStatusFilter')?.value || '';
+
         body.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
+        _state.headersPage = page || _state.headersPage || 1;
+
+        const payload = {
+            search: search || null,
+            status: status !== '' ? parseInt(status, 10) : null,
+            sortBy: _state.headersSortBy,
+            sortDir: _state.headersSortDir,
+            page: _state.headersPage,
+            pageSize: 20   // ⭐ ثابت ۲۰
+        };
+
         try {
-            const resp = await window.App.Http.api('/api/moadian/headers');
+            const resp = await window.App.Http.api('/api/moadian/headers/list', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            _state.headersData = resp;
             _state.headers = resp.items || [];
             drawHeaders();
         } catch (err) {
@@ -163,125 +311,206 @@ window.App.Features.Moadian = (function () {
 
     function drawHeaders() {
         const body = document.getElementById('moadianBody');
-        const items = _state.headers;
+        const data = _state.headersData || {};
+        const items = data.items || [];
 
+        const counts = {
+            total: data.countAll || 0,
+            pending: data.countPending || 0,
+            sent: data.countSent || 0,
+            error: data.countError || 0,
+            success: data.countSuccess || 0
+        };
+
+        // ═══ ردیف‌ها ═══
+        let rows = '';
         if (items.length === 0) {
-            body.innerHTML = `
-                <div class="card">
-                    <div class="empty" style="padding:60px;text-align:center;color:#94A3B8;">
-                        <div style="font-size:56px;opacity:0.4;">📭</div>
-                        <p style="margin-top:12px;">هنوز سند مالیاتی ساخته نشده</p>
-                    </div>
-                </div>`;
-            return;
-        }
+            rows = '<tr><td colspan="10" class="text-center" style="padding:30px;color:#94A3B8;">سندی یافت نشد</td></tr>';
+        } else {
+            rows = items.map(h => {
+                const status = getStatusBadge(h.status);
+                const sendable = h.status === 0 || h.status === 2;
+                const inquiriable = h.status === 1;
 
-        const rows = items.map(h => {
-            const status = getStatusBadge(h.status);
-            const sendable = h.status === 0 || h.status === 2;
-            const inquiriable = h.status === 1;
-
-            return `
+                return `
             <tr class="moadian-row status-${h.status}">
                 <td class="num text-center">${h.inno || ''}</td>
                 <td class="num text-center">${H.esc(h.indatimPersian || '')}</td>
-                <td class="num text-center">${h.factorId || ''}</td>
+                <td class="num text-center">${H.esc(h.factorNo || '-')}</td>
                 <td class="num text-center">${h.customerCode || ''}</td>
-                <td>${H.esc(h.customerName || '')}</td>
+                <td>${H.esc(h.customerName || '-')}</td>
                 <td class="num text-left">${H.fmt(h.tbill)}</td>
                 <td class="text-center">${status}</td>
                 <td class="num text-center" style="font-size:11px;direction:ltr;">
                     ${h.refNumber ? H.esc(h.refNumber) : '-'}
                 </td>
                 <td class="text-center">
-                    ${sendable ? `
-                        <button class="btn btn-sm btn-primary"
-                                onclick="App.Features.Moadian.sendOne(${h.id})"
-                                title="ارسال">📤</button>
-                    ` : ''}
-                    ${inquiriable ? `
-                        <button class="btn btn-sm btn-ghost"
-                                onclick="App.Features.Moadian.inquiry(${h.id})"
-                                title="استعلام">🔍</button>
-                    ` : ''}
+                    ${sendable ? `<button class="btn btn-sm btn-primary"
+                            onclick="App.Features.Moadian.sendOne(${h.id})" title="ارسال">📤</button>` : ''}
+                    ${inquiriable ? `<button class="btn btn-sm btn-ghost"
+                            onclick="App.Features.Moadian.inquiry(${h.id})" title="استعلام">🔍</button>` : ''}
                     <button class="btn btn-sm btn-ghost"
-                            onclick="App.Features.Moadian.viewHeader(${h.id})"
-                            title="مشاهده">👁️</button>
-                    ${h.status !== 3 ? `
-                        <button class="btn btn-sm btn-ghost"
-                                onclick="App.Features.Moadian.deleteHeader(${h.id})"
-                                title="حذف" style="color:var(--danger);">🗑️</button>
-                    ` : ''}
+                            onclick="App.Features.Moadian.viewHeader(${h.id})" title="مشاهده">👁️</button>
+                    ${h.status !== 3 ? `<button class="btn btn-sm btn-ghost"
+                            onclick="App.Features.Moadian.deleteHeader(${h.id})" title="حذف"
+                            style="color:var(--danger);">🗑️</button>` : ''}
                 </td>
             </tr>`;
-        }).join('');
+            }).join('');
+        }
 
-        // Count by status
-        const counts = {
-            total: items.length,
-            pending: items.filter(h => h.status === 0).length,
-            sent: items.filter(h => h.status === 1).length,
-            error: items.filter(h => h.status === 2).length,
-            success: items.filter(h => h.status === 3).length
+        // ═══ آیکن سورت ═══
+        const sortIcon = (col) => {
+            if (_state.headersSortBy !== col) return ' ⇅';
+            return _state.headersSortDir === 'asc' ? ' ▲' : ' ▼';
         };
+        const sortClass = (col) => _state.headersSortBy === col ? 'sort-active' : '';
 
+        // ═══ صفحه‌بندی ═══
+        const page = data.page || 1;
+        const totalPages = data.totalPages || 1;
+        const totalCount = data.totalCount || 0;
+
+        let paginationHtml = '';
+        if (totalPages > 1) {
+            const maxBtn = 7;
+            let startPage = Math.max(1, page - Math.floor(maxBtn / 2));
+            let endPage = Math.min(totalPages, startPage + maxBtn - 1);
+            if (endPage - startPage + 1 < maxBtn) startPage = Math.max(1, endPage - maxBtn + 1);
+
+            let pageBtns = '';
+            for (let p = startPage; p <= endPage; p++) {
+                pageBtns += `<button class="page-btn ${p === page ? 'active' : ''}"
+                            onclick="App.Features.Moadian.goToHeadersPage(${p})">${p}</button>`;
+            }
+
+            paginationHtml = `
+            <div class="pagination-bar">
+                <div class="pagination-info">
+                    نمایش ${H.fmt(items.length)} از ${H.fmt(totalCount)} سند
+                </div>
+                <div class="pagination-controls">
+                    <button class="page-btn" ${page <= 1 ? 'disabled' : ''}
+                            onclick="App.Features.Moadian.goToHeadersPage(1)">«</button>
+                    <button class="page-btn" ${page <= 1 ? 'disabled' : ''}
+                            onclick="App.Features.Moadian.goToHeadersPage(${page - 1})">‹ قبلی</button>
+                    ${pageBtns}
+                    <button class="page-btn" ${page >= totalPages ? 'disabled' : ''}
+                            onclick="App.Features.Moadian.goToHeadersPage(${page + 1})">بعدی ›</button>
+                    <button class="page-btn" ${page >= totalPages ? 'disabled' : ''}
+                            onclick="App.Features.Moadian.goToHeadersPage(${totalPages})">»</button>
+                </div>
+            </div>`;
+        }
+
+        // ═══ HTML نهایی ═══
         body.innerHTML = `
-            <div class="moadian-stats">
-                <div class="moadian-stat moadian-stat-total">
-                    <div class="moadian-stat-label">📊 کل</div>
-                    <div class="moadian-stat-value">${H.fmt(counts.total)}</div>
-                </div>
-                <div class="moadian-stat moadian-stat-pending">
-                    <div class="moadian-stat-label">⏳ ارسال نشده</div>
-                    <div class="moadian-stat-value">${H.fmt(counts.pending)}</div>
-                </div>
-                <div class="moadian-stat moadian-stat-sent">
-                    <div class="moadian-stat-label">📤 ارسال شده</div>
-                    <div class="moadian-stat-value">${H.fmt(counts.sent)}</div>
-                </div>
-                <div class="moadian-stat moadian-stat-error">
-                    <div class="moadian-stat-label">❌ خطا</div>
-                    <div class="moadian-stat-value">${H.fmt(counts.error)}</div>
-                </div>
-                <div class="moadian-stat moadian-stat-success">
-                    <div class="moadian-stat-label">✅ موفق</div>
-                    <div class="moadian-stat-value">${H.fmt(counts.success)}</div>
+        <div class="moadian-stats">
+            <div class="moadian-stat moadian-stat-total">
+                <div class="moadian-stat-label">📊 کل</div>
+                <div class="moadian-stat-value">${H.fmt(counts.total)}</div>
+            </div>
+            <div class="moadian-stat moadian-stat-pending">
+                <div class="moadian-stat-label">⏳ ارسال نشده</div>
+                <div class="moadian-stat-value">${H.fmt(counts.pending)}</div>
+            </div>
+            <div class="moadian-stat moadian-stat-sent">
+                <div class="moadian-stat-label">📤 ارسال شده</div>
+                <div class="moadian-stat-value">${H.fmt(counts.sent)}</div>
+            </div>
+            <div class="moadian-stat moadian-stat-error">
+                <div class="moadian-stat-label">❌ خطا</div>
+                <div class="moadian-stat-value">${H.fmt(counts.error)}</div>
+            </div>
+            <div class="moadian-stat moadian-stat-success">
+                <div class="moadian-stat-label">✅ موفق</div>
+                <div class="moadian-stat-value">${H.fmt(counts.success)}</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                <span>📤 اسناد مالیاتی (${H.fmt(totalCount)})</span>
+                <div class="fac-actions">
+                    <button class="btn btn-sm btn-primary" onclick="App.Features.Moadian.sendAll()">
+                        📤 ارسال همه‌ی ارسال‌نشده‌ها
+                    </button>
                 </div>
             </div>
 
-            <div class="card">
-                <div class="card-title">
-                    <span>📤 اسناد مالیاتی (${H.fmt(items.length)})</span>
-                    <div class="fac-actions">
-                        <button class="btn btn-sm btn-ghost" onclick="App.Features.Moadian.refreshHeaders()">
-                            🔄 بازخوانی
-                        </button>
-                        <button class="btn btn-sm btn-primary" onclick="App.Features.Moadian.sendAll()">
-                            📤 ارسال همه‌ی ارسال‌نشده‌ها
-                        </button>
-                    </div>
+            <!-- ⭐ فیلتر -->
+            <div class="moadian-filter-bar">
+                <div class="form-group">
+                    <input type="text" id="moSearch"
+                           placeholder="🔍 جستجو: شماره فاکتور، مشتری، سریال..."
+                           value="${H.esc(document.getElementById('moSearch')?.value || '')}">
                 </div>
-                <div class="table-wrapper">
-                    <table class="moadian-table">
-                        <thead>
-                            <tr>
-                                <th style="width:70px;">سریال</th>
-                                <th style="width:100px;">تاریخ</th>
-                                <th style="width:70px;">فاکتور</th>
-                                <th style="width:80px;">کد مشتری</th>
-                                <th>مشتری</th>
-                                <th class="text-left" style="width:130px;">مبلغ</th>
-                                <th style="width:100px;">وضعیت</th>
-                                <th style="width:130px;">Ref Number</th>
-                                <th style="width:200px;">عملیات</th>
-                            </tr>
-                        </thead>
-                        <tbody>${rows}</tbody>
-                    </table>
+                <div class="form-group">
+                    <select id="moStatusFilter">
+                        <option value="">همه وضعیت‌ها</option>
+                        <option value="0" ${document.getElementById('moStatusFilter')?.value === '0' ? 'selected' : ''}>⏳ ارسال نشده</option>
+                        <option value="1" ${document.getElementById('moStatusFilter')?.value === '1' ? 'selected' : ''}>📤 ارسال شده</option>
+                        <option value="2" ${document.getElementById('moStatusFilter')?.value === '2' ? 'selected' : ''}>❌ خطا</option>
+                        <option value="3" ${document.getElementById('moStatusFilter')?.value === '3' ? 'selected' : ''}>✅ موفق</option>
+                    </select>
                 </div>
-            </div>`;
+                <button class="btn btn-primary" onclick="App.Features.Moadian.searchHeaders()">
+                    🔍 جستجو
+                </button>
+                <button class="btn btn-ghost" onclick="App.Features.Moadian.resetSearch()">
+                    ↺ ریست
+                </button>
+            </div>
 
-        if (window.App.enhanceTables) window.App.enhanceTables(body);
+            <div class="table-wrapper">
+                <table class="moadian-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable-th ${sortClass('serial')}"
+                                onclick="App.Features.Moadian.sortHeaders('serial')">
+                                سریال${sortIcon('serial')}
+                            </th>
+                            <th class="sortable-th ${sortClass('date')}"
+                                onclick="App.Features.Moadian.sortHeaders('date')">
+                                تاریخ${sortIcon('date')}
+                            </th>
+                            <th class="sortable-th ${sortClass('factor')}"
+                                onclick="App.Features.Moadian.sortHeaders('factor')">
+                                شماره فاکتور${sortIcon('factor')}
+                            </th>
+                            <th class="sortable-th ${sortClass('customerCode')}"
+                               onclick="App.Features.Moadian.sortHeaders('customerCode')">
+                                کد مشتری${sortIcon('customerCode')}
+                            </th>
+                            <th class="sortable-th ${sortClass('customer')}"
+                                onclick="App.Features.Moadian.sortHeaders('customer')">
+                                مشتری${sortIcon('customer')}
+                            </th>
+                            <th class="sortable-th text-left ${sortClass('amount')}"
+                                onclick="App.Features.Moadian.sortHeaders('amount')">
+                                مبلغ${sortIcon('amount')}
+                            </th>
+                            <th class="sortable-th ${sortClass('status')}"
+                                onclick="App.Features.Moadian.sortHeaders('status')">
+                                وضعیت${sortIcon('status')}
+                            </th>
+                            <th style="width:130px;">Ref Number</th>
+                            <th style="width:200px;">عملیات</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            ${paginationHtml}
+        </div>`;
+
+        // ⭐ Enter روی جستجو
+        document.getElementById('moSearch')?.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') searchHeaders();
+        });
+        document.getElementById('moStatusFilter')?.addEventListener('change', function () {
+            searchHeaders();
+        });
     }
 
     function getStatusBadge(status) {
@@ -512,29 +741,42 @@ window.App.Features.Moadian = (function () {
     // ═══════════════════════════════════════════════════
 
     async function createFromFactor(factorId) {
+        const inty = getSelectedInty();
+        const intyNames = { 1: 'نوع اول', 2: 'نوع دوم', 3: 'نوع سوم' };
+
+        if (!confirm(`ایجاد سند مالیاتی با ${intyNames[inty]}؟`)) return;
+
         try {
             const resp = await window.App.Http.api('/api/moadian/headers/from-factor', {
                 method: 'POST',
-                body: JSON.stringify({ factorId })
+                body: JSON.stringify({ factorId, inty })   // ⭐ inty اضافه شد
             });
-            window.App.toast('✅ سند مالیاتی با سریال ' + resp.inno + ' ساخته شد', 'success');
-            refreshPending();
+            window.App.toast('✅ سند با ' + intyNames[inty] + ' و سریال ' + resp.inno + ' ساخته شد', 'success');
+            searchPending();
         } catch (err) {
             window.App.toast('خطا: ' + err.message, 'error');
         }
     }
 
     async function createAll() {
-        if (!confirm('همه‌ی فاکتورهای آماده رو تبدیل به سند مالیاتی کنم؟')) return;
-
         const items = _state.pendingFactors;
+        if (items.length === 0) {
+            window.App.toast('فاکتوری در این صفحه نیست', 'error');
+            return;
+        }
+
+        const inty = getSelectedInty();
+        const intyNames = { 1: 'نوع اول', 2: 'نوع دوم', 3: 'نوع سوم' };
+
+        if (!confirm(`${items.length} فاکتور رو با ${intyNames[inty]} به سند مالیاتی تبدیل کنم؟`)) return;
+
         let ok = 0, fail = 0;
 
         for (const f of items) {
             try {
                 await window.App.Http.api('/api/moadian/headers/from-factor', {
                     method: 'POST',
-                    body: JSON.stringify({ factorId: f.id })
+                    body: JSON.stringify({ factorId: f.id, inty })   // ⭐ inty اضافه شد
                 });
                 ok++;
             } catch {
@@ -542,9 +784,9 @@ window.App.Features.Moadian = (function () {
             }
         }
 
-        window.App.toast(`✅ ${ok} سند ساخته شد${fail > 0 ? ' | ❌ ' + fail + ' خطا' : ''}`,
+        window.App.toast(`✅ ${ok} سند (${intyNames[inty]}) ساخته شد${fail > 0 ? ' | ❌ ' + fail + ' خطا' : ''}`,
             fail > 0 ? 'error' : 'success');
-        refreshPending();
+        searchPending();
     }
 
     async function sendOne(headerId) {
@@ -564,7 +806,7 @@ window.App.Features.Moadian = (function () {
             } else {
                 window.App.toast('❌ خطا: ' + (resp.error || 'نامشخص'), 'error');
             }
-            refreshHeaders();
+            renderHeaders();
         } catch (err) {
             window.App.toast('خطا: ' + err.message, 'error');
             if (btn) { btn.disabled = false; btn.textContent = '📤'; }
@@ -587,7 +829,7 @@ window.App.Features.Moadian = (function () {
             });
             window.App.toast(`✅ ${resp.success} موفق | ❌ ${resp.failed} خطا`,
                 resp.failed > 0 ? 'error' : 'success');
-            refreshHeaders();
+            renderHeaders();
         } catch (err) {
             window.App.toast('خطا: ' + err.message, 'error');
         }
@@ -693,18 +935,76 @@ window.App.Features.Moadian = (function () {
         try {
             await window.App.Http.api('/api/moadian/headers/' + id, { method: 'DELETE' });
             window.App.toast('سند حذف شد', 'success');
-            refreshHeaders();
+            renderHeaders();
         } catch (err) {
             window.App.toast('خطا: ' + err.message, 'error');
         }
     }
+    function searchHeaders() {
+        _state.headersPage = 1;
+        renderHeaders(1);
+    }
 
+    function resetSearch() {
+        const s = document.getElementById('moSearch');
+        const st = document.getElementById('moStatusFilter');
+        if (s) s.value = '';
+        if (st) st.value = '';
+        searchHeaders();
+    }
+
+    function sortHeaders(col) {
+        if (_state.headersSortBy === col) {
+            _state.headersSortDir = _state.headersSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            _state.headersSortBy = col;
+            _state.headersSortDir = 'asc';
+        }
+        searchHeaders();
+    }
+
+    function goToHeadersPage(page) {
+        _state.headersPage = page;
+        renderHeaders(page);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    // ⭐ فاکتورهای آماده ارسال
+    function searchPending() {
+        _state.pendingPage = 1;
+        renderPending(1);
+    }
+
+    function resetPendingSearch() {
+        const s = document.getElementById('moPendingSearch');
+        if (s) s.value = '';
+        searchPending();
+    }
+
+    function sortPending(col) {
+        if (_state.pendingSortBy === col) {
+            _state.pendingSortDir = _state.pendingSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            _state.pendingSortBy = col;
+            _state.pendingSortDir = 'asc';
+        }
+        searchPending();
+    }
+
+    function goToPendingPage(page) {
+        _state.pendingPage = page;
+        renderPending(page);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    function getSelectedInty() {
+        const el = document.querySelector('input[name="moInty"]:checked');
+        return el ? parseInt(el.value, 10) : 1;
+    }
     // ═══════════════════════════════════════════════════
     //  PUBLIC
     // ═══════════════════════════════════════════════════
     return {
         render,
-        refreshPending: renderPending,
+        refreshPending: searchPending,
         refreshHeaders: renderHeaders,
         createFromFactor,
         createAll,
@@ -712,7 +1012,17 @@ window.App.Features.Moadian = (function () {
         sendAll,
         inquiry,
         viewHeader,
-        deleteHeader
+        deleteHeader,
+        // ⭐ فاکتورهای آماده
+        searchPending,
+        resetPendingSearch,
+        sortPending,
+        goToPendingPage,
+        // ⭐ اسناد ارسال‌شده
+        searchHeaders,
+        resetSearch,
+        sortHeaders,
+        goToHeadersPage
     };
 })();
 

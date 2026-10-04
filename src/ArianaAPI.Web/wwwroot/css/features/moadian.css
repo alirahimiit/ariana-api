@@ -311,3 +311,56 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ═══ Filter Bar ═══ */
+.moadian-filter-bar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid #E5E7EB;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+    .moadian-filter-bar .form-group {
+        margin: 0;
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .moadian-filter-bar input[type="text"],
+    .moadian-filter-bar select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #E5E7EB;
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 13px;
+        min-height: 38px;
+    }
+
+        .moadian-filter-bar input:focus,
+        .moadian-filter-bar select:focus {
+            outline: none;
+            border-color: #4F46E5;
+            box-shadow: 0 0 0 3px #EEF2FF;
+        }
+
+/* ═══ Sortable Columns ═══ */
+.moadian-table th.sortable-th {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+}
+
+    .moadian-table th.sortable-th:hover {
+        background: #EEF2FF;
+        color: #4F46E5;
+    }
+
+.moadian-table th.sort-active {
+    background: #EEF2FF;
+    color: #4F46E5;
+    font-weight: 700;
+}

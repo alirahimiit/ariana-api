@@ -8,9 +8,7 @@ namespace ArianaAPI.Infrastructure.Services.Moadian;
 
 /// <summary>
 /// سرویس اتصال به سامانه مودیان
-/// 
 /// پورت شده از TaxCollector.cs (WinForms .NET 4.6.2)
-/// → .NET 8 (cross-platform، HttpClient با DI)
 /// </summary>
 public class MoadianService : IMoadianService
 {
@@ -19,25 +17,17 @@ public class MoadianService : IMoadianService
 
     public MoadianOptions Options { get; }
 
-    public MoadianService(
-        HttpClient http,
-        MoadianOptions options,
-        ILogger<MoadianService> logger)
+    public MoadianService(HttpClient http, MoadianOptions options, ILogger<MoadianService> logger)
     {
         _http = http;
         _logger = logger;
         Options = options;
-
-        // ⏱️ Timeout برای مودیان (معمولاً 30 ثانیه کافیه)
         if (_http.Timeout == TimeSpan.FromSeconds(100))
-        {
             _http.Timeout = TimeSpan.FromSeconds(30);
-        }
     }
 
     // ═══════════════════════════════════════════════════════════
-    //  ۱. GET_SERVER_INFORMATION
-    //  (بدون امضا — فقط اطلاعات سرور)
+    //  ۱. GET_SERVER_INFORMATION (بدون امضا)
     // ═══════════════════════════════════════════════════════════
     public async Task<MoadianServerInfoResponse> GetServerInformationAsync(CancellationToken ct = default)
     {
@@ -62,7 +52,10 @@ public class MoadianService : IMoadianService
                 ["time"] = 1
             };
 
-            var response = await SendRequestAsync("sync/GET_SERVER_INFORMATION", body, token: null, ct);
+            var traceId = Guid.NewGuid().ToString();
+            var timestamp = DateTime.Now.ToFileTime().ToString();
+
+            var response = await SendRequestAsync("sync/GET_SERVER_INFORMATION", body, null, traceId, timestamp, ct);
 
             if (!response.Ok)
                 return new MoadianServerInfoResponse { Success = false, Error = response.Error };
@@ -93,7 +86,6 @@ public class MoadianService : IMoadianService
 
     // ═══════════════════════════════════════════════════════════
     //  ۲. GET_TOKEN
-    //  (با امضا)
     // ═══════════════════════════════════════════════════════════
     public async Task<MoadianTokenResponse> GetTokenAsync(CancellationToken ct = default)
     {
@@ -112,8 +104,11 @@ public class MoadianService : IMoadianService
                 ["dataSignature"] = ""
             };
 
-            var body = await BuildSignedBodyAsync(packet, token: null, ct);
-            var response = await SendRequestAsync("sync/GET_TOKEN", body, token: null, ct);
+            var traceId = Guid.NewGuid().ToString();
+            var timestamp = DateTime.Now.ToFileTime().ToString();
+
+            var body = BuildSignedBody(packet, traceId, timestamp);
+            var response = await SendRequestAsync("sync/GET_TOKEN", body, null, traceId, timestamp, ct);
 
             if (!response.Ok)
                 return new MoadianTokenResponse { Success = false, Error = response.Error };
@@ -157,8 +152,12 @@ public class MoadianService : IMoadianService
                 ["dataSignature"] = ""
             };
 
-            var body = await BuildSignedBodyAsync(packet, token, ct);
-            var response = await SendRequestAsync("sync/GET_FISCAL_INFORMATION", body, token, ct);
+            var timeSpan = DateTime.Now.ToFileTime().ToString();
+            var traceId = timeSpan;
+            var timestamp = timeSpan;
+
+            var body = BuildSignedBody(packet, traceId, timestamp, token);   // ← token اضافه شد
+            var response = await SendRequestAsync("sync/GET_FISCAL_INFORMATION", body, token, traceId, timestamp, ct);
 
             if (!response.Ok)
                 return new MoadianFiscalInfoResponse { Success = false, Error = response.Error };
@@ -204,8 +203,12 @@ public class MoadianService : IMoadianService
                 ["dataSignature"] = ""
             };
 
-            var body = await BuildSignedBodyAsync(packet, token: null, ct);
-            var response = await SendRequestAsync("sync/GET_SERVICE_STUFF_LIST", body, token: null, ct);
+            var timeSpan = DateTime.Now.ToFileTime().ToString();
+            var traceId = timeSpan;
+            var timestamp = timeSpan;
+
+            var body = BuildSignedBody(packet, traceId, timestamp);
+            var response = await SendRequestAsync("sync/GET_SERVICE_STUFF_LIST", body, null, traceId, timestamp, ct);
 
             if (!response.Ok)
                 return new MoadianServiceStuffListResponse { Success = false, Error = response.Error };
@@ -253,8 +256,12 @@ public class MoadianService : IMoadianService
                 ["dataSignature"] = ""
             };
 
-            var body = await BuildSignedBodyAsync(packet, token: null, ct);
-            var response = await SendRequestAsync("sync/GET_ECONOMIC_CODE_INFORMATION", body, token: null, ct);
+            var timeSpan = DateTime.Now.ToFileTime().ToString();
+            var traceId = timeSpan;
+            var timestamp = timeSpan;
+
+            var body = BuildSignedBody(packet, traceId, timestamp);
+            var response = await SendRequestAsync("sync/GET_ECONOMIC_CODE_INFORMATION", body, null, traceId, timestamp, ct);
 
             if (!response.Ok)
                 return new MoadianEconomicCodeInfoResponse { Success = false, Error = response.Error };
@@ -285,7 +292,7 @@ public class MoadianService : IMoadianService
     }
 
     // ═══════════════════════════════════════════════════════════
-    //  ۶-۹. INQUIRY ها
+    //  ۶-۹. INQUIRY
     // ═══════════════════════════════════════════════════════════
     public async Task<MoadianInquiryResponse> InquiryByUidAsync(string token, List<MoadianUidModel> uids, CancellationToken ct = default)
     {
@@ -333,8 +340,12 @@ public class MoadianService : IMoadianService
                 ["dataSignature"] = ""
             };
 
-            var body = await BuildSignedBodyAsync(packet, token, ct);
-            var response = await SendRequestAsync($"sync/{packetType}", body, token, ct);
+            var timeSpan = DateTime.Now.ToFileTime().ToString();
+            var traceId = timeSpan;
+            var timestamp = timeSpan;
+
+            var body = BuildSignedBody(packet, traceId, timestamp, token);   // ← token پاس داده شد
+            var response = await SendRequestAsync($"sync/{packetType}", body, token, traceId, timestamp, ct);
 
             if (!response.Ok)
                 return new MoadianInquiryResponse { Success = false, Error = response.Error };
@@ -353,7 +364,7 @@ public class MoadianService : IMoadianService
     }
 
     // ═══════════════════════════════════════════════════════════
-    //  ۱۰. ENQUEUE (ارسال تک فاکتور)
+    //  ۱۰. ENQUEUE
     // ═══════════════════════════════════════════════════════════
     public async Task<MoadianEnqueueResponse> EnqueueAsync(
         string token, string serverPublicKey, string encryptionKeyId,
@@ -361,27 +372,28 @@ public class MoadianService : IMoadianService
     {
         try
         {
-            // ⭐ پاک کردن .0 از JSON (مثل Delphi)
+            // ⭐ ۱. تبدیل فاکتور به JSON
             var invoiceJson = JsonConvert.SerializeObject(invoice).Replace(".0,\"", ",\"");
             var invoiceBytes = Encoding.UTF8.GetBytes(invoiceJson);
 
-            // ⭐ امضای فاکتور
-            var normalizedInvoice = MoadianCryptoHelper.NormalizeJson(invoice);
-            var dataSignature = MoadianCryptoHelper.SignData(normalizedInvoice, Options.PrivateKey);
+            // ⭐ ۲. امضای فاکتور (بدون trace headers)
+            var dataSignature = MoadianCryptoHelper.SignData(
+                MoadianCryptoHelper.NormalizeJson(invoice),
+                Options.PrivateKey);
 
-            // ⭐ تولید کلید AES + IV
+            // ⭐ ۳. تولید کلید AES + IV
             var symmetricKey = MoadianCryptoHelper.GenerateAesSecretKey();
             var iv = MoadianCryptoHelper.GenerateIv();
 
-            // ⭐ رمزنگاری کلید AES با کلید عمومی سرور
+            // ⭐ ۴. رمزنگاری کلید AES با کلید عمومی سرور
             var symKeyHex = BitConverter.ToString(symmetricKey).Replace("-", "");
             var encryptedSymKey = MoadianCryptoHelper.EncryptWithServerPublicKey(symKeyHex, serverPublicKey);
 
-            // ⭐ XOR + AES-GCM روی payload
+            // ⭐ ۵. XOR + AES-GCM روی payload
             var xored = MoadianCryptoHelper.Xor(invoiceBytes, symmetricKey);
             var encryptedData = MoadianCryptoHelper.AesEncrypt(xored, symmetricKey, iv);
 
-            // ⭐ ساخت packet
+            // ⭐ ۶. ساخت packet داخلی
             var packet = new JObject
             {
                 ["uid"] = uid,
@@ -395,28 +407,52 @@ public class MoadianService : IMoadianService
                 ["dataSignature"] = dataSignature
             };
 
-            // ⭐ امضای بیرونی روی { packet: {...} }
-            var outerPacket = new JObject { ["packet"] = packet };
-            var outerSignature = MoadianCryptoHelper.SignData(
-                MoadianCryptoHelper.NormalizeJson(outerPacket, BuildTraceHeaders()),
-                Options.PrivateKey);
+            // ⭐ ۷. traceId و timestamp یکسان (طبق WinForms ENQUEUE)
+            var timeSpan = DateTime.Now.ToFileTime().ToString();
+            var traceId = timeSpan;
+            var timestamp = timeSpan;
 
+            // ⭐ ۸. headers — دقیقاً مثل WinForms (شامل Authorization با توکن خام)
+            var traceHeaders = new Dictionary<string, string>
+            {
+                ["requestTraceId"] = traceId,
+                ["timestamp"] = timestamp,
+                ["Authorization"] = token ?? ""   // ← ⭐ توکن خام، بدون "Bearer "
+            };
+
+            // ⭐ ۹. برای امضا: {packet: obj} — ⭐⭐ مفرد! (نه {packets: [...]})
+            var outerPacket = new JObject
+            {
+                ["packet"] = packet               // ← ⭐ این خط جادوئیه
+            };
+
+            // ⭐ ۱۰. Log برای دیباگ
+            Console.WriteLine("═══ ENQUEUE OUTER NORMALIZED ═══");
+            var outerNormalized = MoadianCryptoHelper.NormalizeJson(outerPacket, traceHeaders);
+            Console.WriteLine(outerNormalized);
+            Console.WriteLine("═══ END ═══");
+
+            // ⭐ ۱۱. امضا
+            var outerSignature = MoadianCryptoHelper.SignData(outerNormalized, Options.PrivateKey);
+
+            // ⭐ ۱۲. body نهایی — اینجا جمع میشه
             var body = new JObject
             {
-                ["packets"] = new JArray(packet),
+                ["packets"] = new JArray(packet),   // ← ⭐ جمع + آرایه
                 ["signatureKeyId"] = null,
                 ["signature"] = outerSignature,
                 ["time"] = 1
             };
 
-            var response = await SendRequestAsync("async/normal-enqueue", body, token, ct);
+            // ⭐ ۱۱. ارسال
+            var response = await SendRequestAsync("async/normal-enqueue", body, token, traceId, timestamp, ct);
 
             if (!response.Ok)
-                return new MoadianEnqueueResponse { Success = false, Error = response.Error };
+                return new MoadianEnqueueResponse { Success = false, Error = response.Error, Uid = uid };
 
             var json = response.Json!;
             if (json["result"] is null)
-                return new MoadianEnqueueResponse { Success = false, Error = ParseErrors(json) };
+                return new MoadianEnqueueResponse { Success = false, Error = ParseErrors(json), Uid = uid };
 
             var first = json["result"]![0]!;
             var errorCode = first["errorCode"]?.Value<int?>();
@@ -430,15 +466,13 @@ public class MoadianService : IMoadianService
                     Uid = uid
                 };
             }
-            else
+
+            return new MoadianEnqueueResponse
             {
-                return new MoadianEnqueueResponse
-                {
-                    Success = false,
-                    Error = first["errorDetail"]?.Value<string>() ?? "خطای ناشناخته",
-                    Uid = uid
-                };
-            }
+                Success = false,
+                Error = first["errorDetail"]?.Value<string>() ?? "خطای ناشناخته",
+                Uid = uid
+            };
         }
         catch (Exception ex)
         {
@@ -446,9 +480,8 @@ public class MoadianService : IMoadianService
             return new MoadianEnqueueResponse { Success = false, Error = ex.Message, Uid = uid };
         }
     }
-
     // ═══════════════════════════════════════════════════════════
-    //  ۱۱. ENQUEUE_Multiple (ارسال گروهی)
+    //  ۱۱. ENQUEUE_Multiple
     // ═══════════════════════════════════════════════════════════
     public async Task<List<MoadianEnqueueResponse>> EnqueueMultipleAsync(
         string token, string serverPublicKey, string encryptionKeyId,
@@ -464,8 +497,9 @@ public class MoadianService : IMoadianService
                 var invoiceJson = JsonConvert.SerializeObject(item.Invoice).Replace(".0,\"", ",\"");
                 var invoiceBytes = Encoding.UTF8.GetBytes(invoiceJson);
 
-                var normalizedInvoice = MoadianCryptoHelper.NormalizeJson(item.Invoice);
-                var dataSignature = MoadianCryptoHelper.SignData(normalizedInvoice, Options.PrivateKey);
+                var dataSignature = MoadianCryptoHelper.SignData(
+                    MoadianCryptoHelper.NormalizeJson(item.Invoice),
+                    Options.PrivateKey);
 
                 var symmetricKey = MoadianCryptoHelper.GenerateAesSecretKey();
                 var iv = MoadianCryptoHelper.GenerateIv();
@@ -476,7 +510,7 @@ public class MoadianService : IMoadianService
                 var xored = MoadianCryptoHelper.Xor(invoiceBytes, symmetricKey);
                 var encryptedData = MoadianCryptoHelper.AesEncrypt(xored, symmetricKey, iv);
 
-                var packet = new JObject
+                packets.Add(new JObject
                 {
                     ["uid"] = item.Uid,
                     ["packetType"] = packetType,
@@ -487,20 +521,31 @@ public class MoadianService : IMoadianService
                     ["iv"] = BitConverter.ToString(iv).Replace("-", ""),
                     ["fiscalId"] = Options.TaxUserName,
                     ["dataSignature"] = dataSignature
-                };
-
-                packets.Add(packet);
+                });
             }
 
-            // ⭐ امضای بیرونی روی همه‌ی packets
-            var packetsForSign = new JArray();
-            foreach (var p in packets)
+            // ⭐ توی ENQUEUE، هر دو باید یکسان باشن (طبق WinForms)
+            var timeSpan = DateTime.Now.ToFileTime().ToString();
+            var traceId = timeSpan;
+            var timestamp = timeSpan;
+
+            var traceHeaders = new Dictionary<string, string>
             {
-                var wrapper = new JObject { ["packet"] = p };
-                packetsForSign.Add(wrapper);
-            }
+                ["requestTraceId"] = traceId,
+                ["timestamp"] = timestamp
+            };
+
+            // ⭐ امضای بیرونی روی همه‌ی packets با trace headers
+            // ⭐ امضای بیرونی روی { packets: [...] } — بدون wrap اضافی
+            var outerBody = new JObject
+            {
+                ["packets"] = packets,
+                ["signatureKeyId"] = null,
+                ["time"] = 1
+            };
+
             var outerSignature = MoadianCryptoHelper.SignData(
-                MoadianCryptoHelper.NormalizeJson(packetsForSign, BuildTraceHeaders()),
+                MoadianCryptoHelper.NormalizeJson(outerBody, traceHeaders),
                 Options.PrivateKey);
 
             var body = new JObject
@@ -511,7 +556,7 @@ public class MoadianService : IMoadianService
                 ["time"] = 1
             };
 
-            var response = await SendRequestAsync("async/normal-enqueue", body, token, ct);
+            var response = await SendRequestAsync("async/normal-enqueue", body, token, traceId, timestamp, ct);
 
             if (!response.Ok)
             {
@@ -565,14 +610,31 @@ public class MoadianService : IMoadianService
     //  HELPERS
     // ═══════════════════════════════════════════════════════════
 
-    /// <summary>ساخت body با امضای درست (packet + signature + time)</summary>
-    private async Task<JObject> BuildSignedBodyAsync(JObject packet, string? token, CancellationToken ct)
+    /// <summary>ساخت body امضاشده (packet + time + signature) با traceId/timestamp یکسان</summary>
+    private JObject BuildSignedBody(JObject packet, string traceId, string timestamp, string? authorization = null)
     {
-        await Task.CompletedTask; // placeholder — هیچ کار async نداریم
+        var traceHeaders = new Dictionary<string, string>
+        {
+            ["requestTraceId"] = traceId,
+            ["timestamp"] = timestamp
+        };
 
-        var signature = MoadianCryptoHelper.SignData(
-            MoadianCryptoHelper.NormalizeJson(packet, BuildTraceHeaders()),
-            Options.PrivateKey);
+        // ⭐ Authorization باید توی امضا باشه (طبق WinForms) — توکن خام، بدون "Bearer "
+        if (!string.IsNullOrEmpty(authorization))
+            traceHeaders["Authorization"] = authorization;
+
+        var normalizeJson = MoadianCryptoHelper.NormalizeJson(packet, traceHeaders);
+
+        Console.WriteLine("═══════════════════════════════════");
+        Console.WriteLine("📝 Normalized String:");
+        Console.WriteLine(normalizeJson);
+        Console.WriteLine("═══════════════════════════════════");
+
+        // ⭐ Log ۲: امضا
+        var signature = MoadianCryptoHelper.SignData(normalizeJson, Options.PrivateKey);
+        Console.WriteLine("🔐 Signature (Base64):");
+        Console.WriteLine(signature);
+        Console.WriteLine("═══════════════════════════════════");
 
         return new JObject
         {
@@ -582,25 +644,15 @@ public class MoadianService : IMoadianService
         };
     }
 
-    /// <summary>هدرهای requestTraceId + timestamp + (اختیاری) Authorization</summary>
-    private Dictionary<string, string> BuildTraceHeaders()
-    {
-        return new Dictionary<string, string>
-        {
-            ["requestTraceId"] = Guid.NewGuid().ToString(),
-            ["timestamp"] = DateTime.Now.ToFileTime().ToString()
-        };
-    }
-
-    /// <summary>ارسال HTTP POST با هدرهای استاندارد مودیان</summary>
+    /// <summary>ارسال HTTP POST با همون traceId/timestamp که امضا شده</summary>
+    /// <summary>ارسال HTTP POST با همون traceId/timestamp که امضا شده</summary>
     private async Task<(bool Ok, JObject? Json, string? Error)> SendRequestAsync(
-        string endpoint, JObject body, string? token, CancellationToken ct)
+        string endpoint, JObject body, string? token,
+        string traceId, string timestamp, CancellationToken ct)
     {
         try
         {
             var url = Options.BaseUrl + endpoint;
-            var traceId = Guid.NewGuid().ToString();
-            var timestamp = DateTime.Now.ToFileTime().ToString();
 
             using var request = new HttpRequestMessage(HttpMethod.Post, url);
             request.Headers.TryAddWithoutValidation("requestTraceId", traceId);
@@ -609,11 +661,25 @@ public class MoadianService : IMoadianService
             if (!string.IsNullOrEmpty(token))
                 request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
 
-            var content = new StringContent(body.ToString(Formatting.None), Encoding.UTF8);
+            // ⭐ اینجا body رو یه بار به رشته تبدیل کن
+            var bodyJson = body.ToString(Formatting.None);
+
+            // ⭐ Log (اختیاری — اگه نمی‌خوای، کامنت کن)
+            Console.WriteLine("═══════════════════════════════════");
+            Console.WriteLine("📤 Request Body:");
+            Console.WriteLine(bodyJson);
+            Console.WriteLine($"🔑 requestTraceId: {traceId}");
+            Console.WriteLine($"🔑 timestamp: {timestamp}");
+            Console.WriteLine($"🔗 URL: {url}");
+            Console.WriteLine("═══════════════════════════════════");
+
+            var content = new StringContent(bodyJson, Encoding.UTF8);
             content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
             request.Content = content;
 
             var response = await _http.SendAsync(request, ct);
+
+            // ⭐ این خط مهمه — responseBody رو اینجا تعریف کن
             var responseBody = await response.Content.ReadAsStringAsync(ct);
 
             if (!response.IsSuccessStatusCode)
@@ -635,7 +701,6 @@ public class MoadianService : IMoadianService
         }
     }
 
-    /// <summary>پارس خطاهای برگشتی از مودیان</summary>
     private static string ParseErrors(JObject json)
     {
         try
@@ -646,12 +711,10 @@ public class MoadianService : IMoadianService
             if (json["errors"] != null && json["errors"]!.Any())
                 return json["errors"]![0]!["detail"]?.Value<string>() ?? "خطای نامشخص";
         }
-        catch { /* ignore */ }
-
+        catch { }
         return "خطای نامشخص";
     }
 
-    /// <summary>پارس نتیجه استعلام‌ها</summary>
     private static List<MoadianInquiryModel> ParseInquiry(JObject json)
     {
         var list = new List<MoadianInquiryModel>();
@@ -667,11 +730,9 @@ public class MoadianService : IMoadianService
                 FiscalId = item["fiscalId"]?.Value<string>()
             };
 
-            // ⭐ data (خطا یا موفقیت)
             var data = item["data"];
             if (data is JArray dataArr && dataArr.Count > 0)
             {
-                // خطای سطح بسته
                 var first = dataArr[0];
                 var msg = first["msg"]?.Value<string>() ?? first["message"]?.Value<string>();
                 if (!string.IsNullOrEmpty(msg))
