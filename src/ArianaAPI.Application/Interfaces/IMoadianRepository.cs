@@ -38,4 +38,12 @@ public interface IMoadianRepository
     long orgId, long fyId, MoadianPendingListRequestDto req, CancellationToken ct = default);
     Task<CustomerTaxInfo?> GetCustomerTaxInfoAsync(
     long orgId, long fyId, long customerCode, CancellationToken ct = default);
+    Task AddErrorAsync(long orgId, long fyId, long headerId, string msg, CancellationToken ct = default);
+    Task ClearErrorsAsync(long orgId, long fyId, long headerId, CancellationToken ct = default);
+    Task<List<string>> GetErrorsAsync(long orgId, long fyId, long headerId, CancellationToken ct = default);
+
+    // ⭐ چک اصلاح/ابطال قبلی
+    Task<TaxHeader?> GetCorrectionByRefTaxIdAsync(long orgId, long fyId, string refTaxId, CancellationToken ct = default);
+    // ⭐ جستجوی کالا
+    Task<List<ArticleSearchItem>> SearchArticlesAsync(long orgId, long fyId, string q, CancellationToken ct = default);
 }

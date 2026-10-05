@@ -466,8 +466,6 @@ public class MoadianController : ControllerBase
         if (string.IsNullOrEmpty(header.Uid))
             return BadRequest(new { error = "این سند هنوز UID نداره (ارسال نشده)" });
 
-        //var token = await GetOrRefreshTokenAsync(svc, ct);
-        //if (token is null) return BadRequest(new { error = "دریافت توکن ناموفق" });
         var (token, tokenError) = await GetOrRefreshTokenAsync(svc, ct);
         if (token is null)
             return BadRequest(new { error = "دریافت توکن ناموفق: " + tokenError });
@@ -485,42 +483,410 @@ public class MoadianController : ControllerBase
         var item = result.Result[0];
         if (item.Errors.Count == 0 && item.Status == "SUCCESS")
         {
+            // ⭐ هشدارها رو ذخیره کن
+            await _repo.ClearErrorsAsync(GetOrgId(), GetFyId(), header.Id, ct);
+
+            if (item.Warnings != null && item.Warnings.Count > 0)
+            {
+                // ⭐ فقط هشدارهای مهم رو ذخیره کن:
+                //   - 1300501 = سریال صورتحساب منطبق نیست (مهم)
+                //   - 14xxx = فیلد اضافی در الگو (بی‌اهمیت)
+                //   - 00000 = پیام سیستمی (بی‌اهمیت)
+                var criticalWarnings = item.Warnings
+                    .Where(w =>
+                    {
+                        var code = w.Code ?? "";
+                        if (string.IsNullOrEmpty(code)) return false;
+                         // ⭐ فیلتر همه‌ی هشدارهای بی‌اهمیت
+                        if (code.StartsWith("14")) return false;      // فیلد اضافی در الگو
+                        if (code == "00000") return false;             // پیام سیستمی
+                        if (code == "1300501") return false;           // سریال صورتحساب (warning فقط)
+
+                        return true;
+                    })
+                    .ToList();
+
+                Console.WriteLine($"⚠️ {item.Warnings.Count} هشدار ({criticalWarnings.Count} مهم):");
+                foreach (var w in criticalWarnings.Take(5))
+                    Console.WriteLine($"   [{w.Code ?? "?"}] {w.Msg ?? ""}");
+
+                foreach (var w in criticalWarnings)
+                {
+                    await _repo.AddErrorAsync(GetOrgId(), GetFyId(), header.Id,
+                        $"[{w.Code ?? "?"}] {w.Msg ?? ""}", ct);
+                }
+            }
+
+            // ⭐ در کارپوشه نشسته
             header.Status = 3;
             header.TaxStatus = "SUCCESS";
-            header.AcceptRefNumber = item.ConfirmationReferenceId;
 
-            // ⭐ اگه RefNumber خالی بود، از inquiry پر کن
+            header.AcceptRefNumber = item.ConfirmationReferenceId;
             if (string.IsNullOrEmpty(header.RefNumber) && !string.IsNullOrEmpty(item.ReferenceNumber))
                 header.RefNumber = item.ReferenceNumber;
-
-            // ⭐ Uid هم اگه خالی بود
             if (string.IsNullOrEmpty(header.Uid) && !string.IsNullOrEmpty(item.Uid))
                 header.Uid = item.Uid;
+
+            Console.WriteLine($"✅ INQUIRY: Uid={item.Uid} | Status={item.Status} | Warnings={item.Warnings?.Count ?? 0} → header.Status=3");
 
             await _repo.UpdateHeaderAsync(GetOrgId(), GetFyId(), header, ct);
         }
         else if (item.Errors.Count > 0)
         {
-            header.Status = 2;  // خطا
+            await _repo.ClearErrorsAsync(GetOrgId(), GetFyId(), header.Id, ct);
+
+            foreach (var err in item.Errors)
+            {
+                await _repo.AddErrorAsync(GetOrgId(), GetFyId(), header.Id,
+                    $"[{err.Code ?? "?"}] {err.Msg ?? ""}", ct);
+            }
+
+            header.Status = 2;
             header.TaxStatus = "ERROR";
             await _repo.UpdateHeaderAsync(GetOrgId(), GetFyId(), header, ct);
+
+            Console.WriteLine($"❌ INQUIRY ERROR: {item.Errors.Count} خطا");
         }
 
         return Ok(new
         {
             success = true,
             status = item.Status,
-            taxResult = item.TaxResult,
             confirmationRefId = item.ConfirmationReferenceId,
             errors = item.Errors,
             warnings = item.Warnings
         });
     }
+    [HttpGet("headers/{id:long}/errors")]
+    public async Task<IActionResult> GetHeaderErrors(long id, CancellationToken ct)
+    {
+        var list = await _repo.GetErrorsAsync(GetOrgId(), GetFyId(), id, ct);
+        return Ok(new { items = list, count = list.Count });
+    }
+    [HttpPost("inquiry-by-ref")]
+    public async Task<IActionResult> InquiryByRef([FromBody] InquiryRequest req, CancellationToken ct)
+    {
+        var svc = await BuildServiceAsync(ct);
+        if (svc is null) return BadRequest(new { error = "تنظیمات ناقصه" });
 
+        var header = await _repo.GetHeaderByIdAsync(GetOrgId(), GetFyId(), req.HeaderId, ct);
+        if (header is null || string.IsNullOrEmpty(header.RefNumber))
+            return BadRequest(new { error = "RefNumber موجود نیست" });
+
+        var (token, tokenError) = await GetOrRefreshTokenAsync(svc, ct);
+        if (token is null) return BadRequest(new { error = "توکن ناموفق: " + tokenError });
+
+        var result = await svc.InquiryByReferenceNumberAsync(token, new[] { header.RefNumber }, ct);
+
+        return Ok(new
+        {
+            success = result.Success,
+            raw = result.Result,
+            error = result.Error
+        });
+    }
+    // ═══════════════════════════════════════════════════════════
+    //  CORRECTION — چک قبلی
+    // ═══════════════════════════════════════════════════════════
+    [HttpGet("headers/{id:long}/has-correction")]
+    public async Task<IActionResult> HasCorrection(long id, CancellationToken ct)
+    {
+        var header = await _repo.GetHeaderByIdAsync(GetOrgId(), GetFyId(), id, ct);
+        if (header is null || string.IsNullOrEmpty(header.TaxId))
+            return Ok(new { has = false });
+
+        var existing = await _repo.GetCorrectionByRefTaxIdAsync(GetOrgId(), GetFyId(), header.TaxId, ct);
+        if (existing is null)
+            return Ok(new { has = false });
+
+        return Ok(new
+        {
+            has = true,
+            correction = new
+            {
+                id = existing.Id,
+                inno = existing.Inno,
+                ins = existing.Ins,
+                status = existing.Status
+            }
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  CORRECTION — ابطالی (فاز ۲)
+    // ═══════════════════════════════════════════════════════════
+    [HttpPost("headers/{id:long}/correct")]
+    public async Task<IActionResult> CorrectHeader(long id, [FromBody] CorrectHeaderRequest req, CancellationToken ct)
+    {
+        var header = await _repo.GetHeaderByIdAsync(GetOrgId(), GetFyId(), id, ct);
+        if (header is null) return NotFound(new { error = "سند یافت نشد" });
+
+        if (header.Status != 3)
+            return BadRequest(new { error = "فقط اسناد در کارپوشه قابل اصلاح/ابطال هستن" });
+
+        if (header.Ins != null && header.Ins != 1)
+            return BadRequest(new { error = "فقط فاکتورهای اصلی قابل اصلاح/ابطال هستن" });
+
+        if (string.IsNullOrEmpty(header.TaxId))
+            return BadRequest(new { error = "شماره مالیاتی اصلی موجود نیست" });
+
+        // چک: قبلاً ساخته شده؟
+        var existing = await _repo.GetCorrectionByRefTaxIdAsync(GetOrgId(), GetFyId(), header.TaxId, ct);
+        if (existing is not null)
+            return BadRequest(new { error = $"قبلاً یه سند اصلاحی/ابطالی برای این فاکتور ساخته شده (سریال {existing.Inno})" });
+
+        // ⭐⭐⭐ ابطالی
+        if (req.Mode == "cancel")
+        {
+            var setting = await _repo.GetSettingAsync(GetOrgId(), GetFyId(), ct);
+            var memoryId = setting?.TaxUserName ?? "";
+
+            var nextInno = await _repo.GetLastInnoAsync(GetOrgId(), GetFyId(), ct) + 1;
+
+            // تاریخ امروز (شمسی + میلادی)
+            var todayPersian = DateTime.Now.ToString("yyyy/MM/dd");
+            var pc = new System.Globalization.PersianCalendar();
+            var now = DateTime.Now;
+            todayPersian = $"{pc.GetYear(now):0000}/{pc.GetMonth(now):00}/{pc.GetDayOfMonth(now):00}";
+            var gregorianDate = PersianToGregorian(todayPersian);
+            var unixMillis = new DateTimeOffset(gregorianDate).ToUnixTimeMilliseconds();
+
+            var taxId = MoadianCryptoHelper.GenerateTaxId(memoryId, nextInno, gregorianDate);
+            Console.WriteLine($"🆔 Cancel TaxId: {taxId} | inno: {nextInno.ToString().PadLeft(10, '0')}");
+
+            var cancelHeader = new Domain.Entities.Moadian.TaxHeader
+            {
+                Status = 0,
+                FactorId = header.FactorId,
+                CustomerCode = header.CustomerCode,
+                Inno = nextInno.ToString().PadLeft(10, '0'),
+                Inty = header.Inty ?? 1,
+                Inp = header.Inp ?? 1,
+                Ins = 3,                        // ⭐ ابطالی
+                Setm = header.Setm,
+                Indatim = unixMillis,
+                IndatimDatetime = gregorianDate,
+                Indati2mDatetime = gregorianDate,
+                IndatimPersian = todayPersian,
+                Indati2mPersian = todayPersian,
+                Tprdis = 0,
+                Tdis = 0,
+                Tadis = 0,
+                Tvam = 0,
+                Todam = 0,
+                Tbill = 0,
+                Tonw = null,
+                Torv = null,
+                Tocv = null,
+                Tvop = 0,
+                Cap = 0,
+                Insp = 0,
+                IrTaxId = header.TaxId,        // ⭐ لینک به فاکتور اصلی
+                TaxId = taxId
+            };
+
+            var newId = await _repo.AddHeaderAsync(GetOrgId(), GetFyId(), cancelHeader, ct);
+
+            Console.WriteLine($"✅ ابطالی ساخته شد: Id={newId}, inno={nextInno}, ref={header.TaxId}");
+
+            return Ok(new
+            {
+                success = true,
+                headerId = newId,
+                inno = nextInno.ToString().PadLeft(10, '0'),
+                ins = 3
+            });
+        }
+
+        // ⭐ برگشت و اصلاحی → فاز ۳
+        if (req.Mode == "return" || req.Mode == "amend")
+            return BadRequest(new { error = "این حالت در فاز بعدی فعال میشه" });
+
+        return BadRequest(new { error = "حالت ناشناخته: " + req.Mode });
+    }
+    // ═══════════════════════════════════════════════════════════
+    //  برگشت از فروش / اصلاحی با اقلام
+    // ═══════════════════════════════════════════════════════════
+    [HttpPost("headers/{id:long}/correct-with-items")]
+    public async Task<IActionResult> CorrectWithItems(long id, [FromBody] CorrectItemsRequest req, CancellationToken ct)
+    {
+        var header = await _repo.GetHeaderByIdAsync(GetOrgId(), GetFyId(), id, ct);
+        if (header is null) return NotFound(new { error = "سند یافت نشد" });
+
+        if (header.Status != 3)
+            return BadRequest(new { error = "فقط اسناد در کارپوشه قابل اصلاح/برگشت هستن" });
+
+        if (header.Ins != null && header.Ins != 1)
+            return BadRequest(new { error = "فقط فاکتورهای اصلی قابل اصلاح/برگشت هستن" });
+
+        if (string.IsNullOrEmpty(header.TaxId))
+            return BadRequest(new { error = "شماره مالیاتی اصلی موجود نیست" });
+
+        // چک: قبلاً ساخته شده؟
+        var existing = await _repo.GetCorrectionByRefTaxIdAsync(GetOrgId(), GetFyId(), header.TaxId, ct);
+        if (existing is not null)
+            return BadRequest(new { error = $"قبلاً یه سند اصلاحی/برگشتی برای این فاکتور ساخته شده (سریال {existing.Inno})" });
+
+        // ⭐ اقلام اصلی
+        var originalBodies = await _repo.GetBodyByHeaderIdAsync(GetOrgId(), GetFyId(), id, ct);
+        if (originalBodies.Count == 0)
+            return BadRequest(new { error = "فاکتور اصلی ردیف نداره" });
+
+        // ⭐ محاسبه‌ی اقلام برای سند جدید
+        // ⭐ اقلام سند جدید — همون چیزی که کاربر وارد کرده
+        // (برای هر دو حالت اصلاحی و برگشتی یکسانه)
+        // ⭐ محاسبه‌ی اقلام سند جدید
+        // ⭐ محاسبه‌ی اقلام سند جدید
+        var finalItems = new List<(long StuffId, long UnitId, double Am, long Fee, long Dis, long Vra)>();
+
+        if (req.Mode == "amend")
+        {
+            // ⭐ اصلاحی: مقدار وارد‌شده = مقدار نهایی سند اصلاحی
+            foreach (var it in req.Items)
+            {
+                if (it.Am <= 0) continue;
+                finalItems.Add((it.StuffId, it.UnitId, it.Am, it.Fee, it.Dis, it.Vra));
+            }
+        }
+        else // return
+        {
+            // ⭐ برگشتی: مقدار وارد‌شده = باقی‌مونده → برگشتی = اصلی - باقی‌مونده
+            foreach (var ob in originalBodies)
+            {
+                var match = req.Items.FirstOrDefault(x => x.StuffId == ob.StuffId && x.UnitId == ob.UnitId);
+
+                double remaining = match?.Am ?? 0;      // اگه کاربر ردیف رو حذف کرده → 0
+                double returned = (ob.Am) - remaining;
+
+                if (returned <= 0.0001) continue;       // چیزی برگشت نخورده
+
+                // ⭐ برگشتی با قیمت و تخفیف و VAT اصلی
+                finalItems.Add((ob.StuffId, ob.UnitId, returned, ob.Fee ?? 0L, ob.Dis ?? 0L, ob.Vra ?? 0L));
+            }
+        }
+
+        if (finalItems.Count == 0)
+            return BadRequest(new { error = "هیچ تغییری وجود نداره (همه‌ی مقادیر یکسانن)" });
+
+        // ⭐ محاسبه‌ی جمع‌ها
+        long tprdis = 0, tdis = 0, tadis = 0, tvam = 0;
+        var newBodyRows = new List<(long StuffId, long UnitId, double Am, long Fee, long Dis, long Vra, long Prdis, long Adis, long Vam, long Tsstam)>();
+
+        foreach (var it in finalItems)
+        {
+            long linePrdis = (long)Math.Round(it.Fee * (decimal)it.Am);
+            long lineDis = it.Dis;
+            long lineAdis = linePrdis - lineDis;
+            long lineVam = (long)Math.Truncate((decimal)lineAdis * it.Vra / 100m);
+            long lineTsstam = lineAdis + lineVam;
+
+            tprdis += linePrdis;
+            tdis += lineDis;
+            tadis += lineAdis;
+            tvam += lineVam;
+
+            newBodyRows.Add((it.StuffId, it.UnitId, it.Am, it.Fee, it.Dis, it.Vra, linePrdis, lineAdis, lineVam, lineTsstam));
+        }
+
+        long tbill = tadis + tvam;
+
+        // ⭐ تاریخ
+        var pc = new System.Globalization.PersianCalendar();
+        var now = DateTime.Now;
+        var todayPersian = $"{pc.GetYear(now):0000}/{pc.GetMonth(now):00}/{pc.GetDayOfMonth(now):00}";
+        var persianDate = string.IsNullOrWhiteSpace(req.IndatimPersian) ? todayPersian : req.IndatimPersian.Trim();
+        var gregorianDate = PersianToGregorian(persianDate);
+        var unixMillis = new DateTimeOffset(gregorianDate).ToUnixTimeMilliseconds();
+
+        // ⭐ TaxId جدید
+        var setting = await _repo.GetSettingAsync(GetOrgId(), GetFyId(), ct);
+        var memoryId = setting?.TaxUserName ?? "";
+        var nextInno = await _repo.GetLastInnoAsync(GetOrgId(), GetFyId(), ct) + 1;
+        var taxId = MoadianCryptoHelper.GenerateTaxId(memoryId, nextInno, gregorianDate);
+
+        int insValue = req.Mode == "amend" ? 2 : 4;   // 2=اصلاحی، 4=برگشت
+
+        Console.WriteLine($"🆔 {req.Mode} TaxId: {taxId} | inno: {nextInno.ToString().PadLeft(10, '0')} | ins: {insValue}");
+
+        // ⭐ ساخت هدر جدید
+        var newHeader = new Domain.Entities.Moadian.TaxHeader
+        {
+            Status = 0,
+            FactorId = header.FactorId,
+            CustomerCode = header.CustomerCode,
+            Inno = nextInno.ToString().PadLeft(10, '0'),
+            Inty = header.Inty ?? 1,
+            Inp = header.Inp ?? 1,
+            Ins = insValue,
+            Setm = req.Setm ?? header.Setm,
+            Indatim = unixMillis,
+            IndatimDatetime = gregorianDate,
+            Indati2mDatetime = gregorianDate,
+            IndatimPersian = persianDate,
+            Indati2mPersian = persianDate,
+            Tprdis = tprdis,
+            Tdis = tdis,
+            Tadis = tadis,
+            Tvam = tvam,
+            Todam = 0,
+            Tbill = tbill,
+            Tonw = null,
+            Torv = null,
+            Tocv = null,
+            Tvop = null,
+            Cap = null,
+            Insp = null,
+            IrTaxId = header.TaxId,
+            TaxId = taxId
+        };
+
+        var newHeaderId = await _repo.AddHeaderAsync(GetOrgId(), GetFyId(), newHeader, ct);
+
+        // ⭐ ساخت ردیف‌ها
+        foreach (var b in newBodyRows)
+        {
+            var body = new Domain.Entities.Moadian.TaxBody
+            {
+                HeaderId = newHeaderId,
+                StuffId = b.StuffId,
+                UnitId = b.UnitId,
+                Am = b.Am,
+                Fee = b.Fee,
+                Prdis = b.Prdis,
+                Dis = b.Dis,
+                Adis = b.Adis,
+                Vra = b.Vra,
+                Vam = b.Vam,
+                Tsstam = b.Tsstam,
+                Cut = "IRR"
+            };
+            await _repo.AddBodyAsync(GetOrgId(), GetFyId(), body, ct);
+        }
+
+        Console.WriteLine($"✅ {req.Mode} ساخته شد: Id={newHeaderId}, inno={nextInno}, tbill={tbill}");
+
+        return Ok(new
+        {
+            success = true,
+            headerId = newHeaderId,
+            inno = nextInno.ToString().PadLeft(10, '0'),
+            ins = insValue,
+            tbill = tbill
+        });
+    }
+    // ═══════════════════════════════════════════════════════════
+    //  جستجوی کالا (برای Picker)
+    // ═══════════════════════════════════════════════════════════
+    [HttpGet("articles/search")]
+    public async Task<IActionResult> SearchArticles([FromQuery] string? q, CancellationToken ct)
+    {
+        var items = await _repo.SearchArticlesAsync(GetOrgId(), GetFyId(), q ?? "", ct);
+        return Ok(new { items });
+    }
     // ═══════════════════════════════════════════════════════════
     //  HELPERS
     // ═══════════════════════════════════════════════════════════
- 
+
     private async Task<(string? Token, string? Error)> GetOrRefreshTokenAsync(IMoadianService svc, CancellationToken ct)
     {
         if (_cachedToken?.Success == true && DateTime.UtcNow < _tokenExpireAt)

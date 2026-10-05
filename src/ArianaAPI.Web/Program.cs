@@ -12,10 +12,12 @@ using System.Globalization;
 
 
 
+
 var persianCulture = new CultureInfo("fa-IR");
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
+Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService();
 

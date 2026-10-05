@@ -65,6 +65,9 @@ public class MoadianRepository : IMoadianRepository
         const string sql = @"
             SELECT 
                 th.*,
+                th.inty     AS Inty,
+                th.ins      AS Ins,
+                th.irtaxid  AS IrTaxId,
                 fp.NoFactor AS FldFacNo
             FROM tax_header th
             LEFT JOIN FactorParent fp ON fp.ID = th.factor_id
@@ -82,7 +85,20 @@ public class MoadianRepository : IMoadianRepository
         return await conn.QueryFirstOrDefaultAsync<TaxHeader>(
             new CommandDefinition(sql, new { taxid }, cancellationToken: ct));
     }
+    // ⭐ پیدا کردن سند اصلاحی/ابطالی/برگشتی بر اساس irtaxid
+    public async Task<TaxHeader?> GetCorrectionByRefTaxIdAsync(long orgId, long fyId, string refTaxId, CancellationToken ct = default)
+    {
+        const string sql = @"
+            SELECT TOP 1 *
+            FROM tax_header
+            WHERE irtaxid = @refTaxId
+              AND ins IN (2, 3, 4)
+            ORDER BY id DESC";
 
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        return await conn.QueryFirstOrDefaultAsync<TaxHeader>(
+            new CommandDefinition(sql, new { refTaxId }, cancellationToken: ct));
+    }
     public async Task<List<TaxHeader>> GetAllHeadersAsync(long orgId, long fyId, CancellationToken ct = default)
     {
         const string sql = @"
@@ -213,6 +229,9 @@ public class MoadianRepository : IMoadianRepository
                 th.ref_number    AS RefNumber,
                 th.taxid         AS TaxId,
                 th.uid           AS Uid,
+                th.inty          AS Inty,
+                th.ins           AS Ins,
+                th.irtaxid       AS IrTaxId,
                 ROW_NUMBER() OVER (ORDER BY {sortCol}) AS RowNum
             FROM tax_header th
             LEFT JOIN FactorParent fp ON fp.ID = th.factor_id
@@ -238,7 +257,7 @@ public class MoadianRepository : IMoadianRepository
             CountPending = stats != null ? (int)(stats.Pending ?? 0) : 0,
             CountSent = stats != null ? (int)(stats.Sent ?? 0) : 0,
             CountError = stats != null ? (int)(stats.Error ?? 0) : 0,
-            CountSuccess = stats != null ? (int)(stats.Success ?? 0) : 0
+            CountSuccess = stats != null ? (int)(stats.Success ?? 0) : 0   // ⭐
         };
     }
     public async Task<long> AddHeaderAsync(long orgId, long fyId, TaxHeader h, CancellationToken ct = default)
@@ -527,6 +546,35 @@ public class MoadianRepository : IMoadianRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, h, cancellationToken: ct));
     }
 
+
+    // ═══════════════════════════════════════════════════════════
+    //  ERROR (ذخیره‌ی خطا/هشدار مودیان)
+    // ═══════════════════════════════════════════════════════════
+    public async Task AddErrorAsync(long orgId, long fyId, long headerId, string msg, CancellationToken ct = default)
+    {
+        const string sql = @"
+            INSERT INTO tax_erorr (header_id, msg)
+            VALUES (@headerId, @msg)";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        await conn.ExecuteAsync(new CommandDefinition(sql,
+            new { headerId, msg }, cancellationToken: ct));
+    }
+
+    public async Task ClearErrorsAsync(long orgId, long fyId, long headerId, CancellationToken ct = default)
+    {
+        const string sql = "DELETE FROM tax_erorr WHERE header_id = @headerId";
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        await conn.ExecuteAsync(new CommandDefinition(sql, new { headerId }, cancellationToken: ct));
+    }
+
+    public async Task<List<string>> GetErrorsAsync(long orgId, long fyId, long headerId, CancellationToken ct = default)
+    {
+        const string sql = @"SELECT msg FROM tax_erorr WHERE header_id = @headerId ORDER BY id";
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        var rows = await conn.QueryAsync<string>(new CommandDefinition(sql, new { headerId }, cancellationToken: ct));
+        return rows.ToList();
+    }
     // ═══════════════════════════════════════════════════════════
     //  SOURCE (Factor — برای انتخاب و ارسال)
     // ═══════════════════════════════════════════════════════════
@@ -717,5 +765,39 @@ public class MoadianRepository : IMoadianRepository
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         return await conn.QueryFirstOrDefaultAsync<CustomerTaxInfo>(
             new CommandDefinition(sql, new { customerCode }, cancellationToken: ct));
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  جستجوی کالا (برای Picker)
+    // ═══════════════════════════════════════════════════════════
+    public async Task<List<ArticleSearchItem>> SearchArticlesAsync(long orgId, long fyId, string q, CancellationToken ct = default)
+    {
+        var where = string.IsNullOrWhiteSpace(q)
+            ? "WHERE an.Status = 1"
+            : @"WHERE an.Status = 1 AND (
+                    an.Name LIKE @q 
+                 OR CAST(an.tax_id AS NVARCHAR(50)) LIKE @q 
+                 OR CAST(an.Code AS NVARCHAR(50)) LIKE @q
+              )";
+
+        var sql = $@"
+            SELECT TOP 50
+                an.ID                              AS Id,
+                an.Name                            AS Name,
+                CAST(an.tax_id AS NVARCHAR(50))    AS TaxId,
+                an.ArticleUnitID                   AS UnitId,
+                CAST(au.tax_id AS NVARCHAR(50))    AS UnitTaxId,
+                au.Name                            AS UnitName,
+                ISNULL(an.AmountSale, 0)           AS Fee,
+                0                                  AS Vra
+            FROM ArticleNew an
+            LEFT JOIN ArticleUnit au ON au.ID = an.ArticleUnitID
+            {where}
+            ORDER BY an.ID DESC";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        var list = await conn.QueryAsync<ArticleSearchItem>(
+            new CommandDefinition(sql, new { q = "%" + q + "%" }, cancellationToken: ct));
+        return list.ToList();
     }
 }

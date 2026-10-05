@@ -35,6 +35,9 @@ public class MoadianHeaderListItemDto
     public string? RefNumber { get; set; }
     public string? TaxId { get; set; }
     public string? Uid { get; set; }
+    public int? Inty { get; set; }               // ⭐ نوع: 1/2/3
+    public int? Ins { get; set; }                // ⭐ موضوع: 1/2/3/4
+    public string? IrTaxId { get; set; }         // ⭐ فاکتور مرجع (برای ابطالی/اصلاحی)
 }
 
 public class MoadianHeaderListResultDto
@@ -51,6 +54,8 @@ public class MoadianHeaderListResultDto
     public int CountSent { get; set; }
     public int CountError { get; set; }
     public int CountSuccess { get; set; }
+    
+
 }
 
 public class CustomerTaxInfo

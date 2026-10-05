@@ -719,6 +719,12 @@ public class MoadianService : IMoadianService
     {
         var list = new List<MoadianInquiryModel>();
 
+        // ⭐⭐ لاگ پاسخ خام سرور — برای دیباگ
+        Console.WriteLine("═══════════════════════════════════");
+        Console.WriteLine("🔍 MOADIAN RAW INQUIRY RESPONSE:");
+        Console.WriteLine(json.ToString(Newtonsoft.Json.Formatting.Indented));
+        Console.WriteLine("═══════════════════════════════════");
+
         foreach (var item in json["result"]!["data"]!)
         {
             var model = new MoadianInquiryModel
