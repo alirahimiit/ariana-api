@@ -86,3 +86,67 @@
 .pf-suggestions {
     z-index: 9999 !important;
 }
+
+/* ═══════════════════════════════════════════════════════
+   🎯 SIDEBAR LAYOUT — v2 (محافظه‌کارانه)
+   ├─ فقط ساختار Flex می‌کنه
+   ├─ به ظاهر آیتم‌ها کاری نداره
+   └─ فقط ناحیه‌ی nav اسکرول می‌خوره
+   ═══════════════════════════════════════════════════════ */
+
+/* 1) خود سایدبار ← Flex Column */
+#appSidebar {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100vh !important; /* fallback مرورگرهای قدیمی */
+    height: 100dvh !important; /* موبایل — نوار آدرس */
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+}
+
+    /* 2) هدر (لوگو) ← ثابت بالا */
+    #appSidebar > .sidebar-header {
+        flex: 0 0 auto !important;
+    }
+
+    /* 3) ناوبری (منوها) ← این فقط اسکرول می‌خوره */
+    #appSidebar > #appNav,
+    #appSidebar > nav.nav {
+        flex: 1 1 auto !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        min-height: 0 !important; /* ⭐ کلید fix در Flex */
+    }
+
+        /* اسکرول‌بار باریک و شفاف (فقط مرورگرهای مدرن) */
+        #appSidebar > #appNav::-webkit-scrollbar,
+        #appSidebar > nav.nav::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #appSidebar > #appNav::-webkit-scrollbar-thumb,
+        #appSidebar > nav.nav::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.18);
+            border-radius: 3px;
+        }
+
+            #appSidebar > #appNav::-webkit-scrollbar-thumb:hover,
+            #appSidebar > nav.nav::-webkit-scrollbar-thumb:hover {
+                background: rgba(255,255,255,0.3);
+            }
+
+    /* 4) هر چیزی بعد از nav (کارت مدیر + دکمه خروج) ← ثابت پایین */
+    #appSidebar > *:not(.sidebar-header):not(#appNav):not(nav.nav) {
+        flex: 0 0 auto !important;
+    }
+
+/* ═══════════════════════════════════════════════════════
+   موبایل: ارتفاع با dvh (نوار آدرس سافاری/کروم)
+   ═══════════════════════════════════════════════════════ */
+@supports (height: 100dvh) {
+    #appSidebar {
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+    }
+}
