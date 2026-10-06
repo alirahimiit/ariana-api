@@ -2,9 +2,8 @@
 
 namespace ArianaAPI.Application.DTOs.Ledger;
 
-public class LedgerRequestDto
+ public class LedgerRequestDto
 {
-    /// <summary>col | moein | tafzil | tafzil2</summary>
     public string Level { get; set; } = "col";
 
     // ─── فیلترهای تاریخ ───
@@ -18,7 +17,7 @@ public class LedgerRequestDto
     // ─── فیلتر وضعیت ───
     public int? Vazeit { get; set; }
 
-    // ─── فیلترهای حساب (بسته به سطح) ───
+    // ─── فیلترهای حساب ───
     public int? FromCodeCol { get; set; }
     public int? ToCodeCol { get; set; }
     public int? FromCodeMoein { get; set; }
@@ -28,12 +27,24 @@ public class LedgerRequestDto
     public int? CodeTafzili2 { get; set; }
     public int? TafziliGroupId { get; set; }
 
+    // ⭐ فیلترهای SpecialHesab (کد واحد / مرکز هزینه / کد پروژه)
+    public int? CodeVahedId { get; set; }
+    public int? CodeHazineId { get; set; }
+    public int? CodeProjectId { get; set; }
+
     // ─── اختیارات ───
     public bool IncludeMandehBefore { get; set; } = true;
-    public int? TikRow { get; set; } // null=همه، 0=بدون تیک، 1=تیک‌دار
-                                     // ─── صفحه‌بندی ───
+    public int? TikRow { get; set; }
+
+    // ⭐ مرتب‌سازی (whitelist در Repository)
+    public string? SortColumn { get; set; }      // "DateIn", "NoSanad", "CodeCol", "MabBed", "MabBes", "OtherSharh"
+    public string? SortDirection { get; set; }   // "asc" | "desc"
+
+    // ─── صفحه‌بندی ───
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 100;   // برای export، مقدار بزرگ می‌فرستیم
+    public int PageSize { get; set; } = 100;
+
+    public bool MonthlyMode { get; set; } = false;
 }
 
 public class LedgerItemDto
@@ -91,5 +102,7 @@ public class LedgerResultDto
     public int PageSize { get; set; }
     public int TotalCount { get; set; }
     public int TotalPages { get; set; }
+
+    public bool IsMonthly { get; set; } = false;
 
 }

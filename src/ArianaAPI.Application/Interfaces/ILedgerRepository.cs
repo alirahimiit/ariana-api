@@ -9,4 +9,10 @@ public interface ILedgerRepository
         long fyId,
         LedgerRequestDto request,
         CancellationToken ct = default);
+
+    Task<LedgerResultDto> GetLedgerFullAsync(
+    long orgId,
+    long fyId,
+    LedgerRequestDto request,
+    CancellationToken ct = default);
 }

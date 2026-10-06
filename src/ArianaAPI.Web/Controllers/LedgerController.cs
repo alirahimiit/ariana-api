@@ -30,4 +30,17 @@ public class LedgerController : ControllerBase
         var result = await _repo.GetLedgerAsync(orgId, fyId, request, ct);
         return Ok(result);
     }
+
+    /// <summary>⭐ دفتر حساب — کامل (برای Excel و چاپ)</summary>
+    [HttpPost("export")]
+    public async Task<ActionResult<LedgerResultDto>> ExportLedger(
+        [FromBody] LedgerRequestDto request,
+        CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        var result = await _repo.GetLedgerFullAsync(orgId, fyId, request, ct);
+        return Ok(result);
+    }
 }

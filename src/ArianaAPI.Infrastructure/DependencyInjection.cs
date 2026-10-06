@@ -60,7 +60,7 @@ public static class DependencyInjection
         services.AddScoped<IPartyFactorRepository, PartyFactorRepository>();
         services.AddScoped<IFactorProfitLossRepository, FactorProfitLossRepository>();
         services.AddScoped<IArticleStockRepository, ArticleStockRepository>();
-       
+        services.AddScoped<ISpecialHesabRepository, SpecialHesabRepository>();
 
         // ⭐ HttpClient برای MoadianService
         services.AddHttpClient<IMoadianService, MoadianService>((sp, http) =>

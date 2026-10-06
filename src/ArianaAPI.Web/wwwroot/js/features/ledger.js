@@ -12,6 +12,10 @@ window.App.Features.Ledger = (function () {
 
     const H = window.App.Helpers;
 
+    const _state = {
+        sortColumn: null,
+        sortDirection: null
+    };
     // ═══════════════════════════════════════════
     //  RENDER
     // ═══════════════════════════════════════════
@@ -113,6 +117,36 @@ window.App.Features.Ledger = (function () {
                     </select>
                 </div>
             </div>
+            <div class="form-group" id="ledMonthlyGroup">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="ledMonthly" style="width:18px; height:18px;">
+                    <span>تهیه بصورت ماهانه</span>
+                </label>
+                <small class="form-hint" id="ledMonthlyHint">
+                    فقط در سطح «کل» فعال است. هر ماه دو ردیف نمایش داده می‌شود: جمع بدهکار و جمع بستانکار.
+                </small>
+            </div>
+
+            <div class="filters" id="ledSpecialFilters">
+                <div class="form-group">
+                    <label>کد واحد</label>
+                    <select id="ledCodeVahed" class="form-control">
+                        <option value="">همه</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>مرکز هزینه</label>
+                    <select id="ledCodeHazine" class="form-control">
+                        <option value="">همه</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>کد پروژه</label>
+                    <select id="ledCodeProject" class="form-control">
+                        <option value="">همه</option>
+                    </select>
+                </div>
+            </div>
 
             <div class="filters" id="ledAccountFilters"></div>
 
@@ -128,11 +162,13 @@ window.App.Features.Ledger = (function () {
             </div>
         </div>`;
 
-        // ⭐ default level
         buildAccountFilters(defaultLevel);
+        //updateMonthlyVisibility();   // ⭐ جدید
 
         document.querySelectorAll('input[name="ledLevel"]').forEach(r => {
-            r.addEventListener('change', (e) => buildAccountFilters(e.target.value));
+            r.addEventListener('change', (e) => {
+                 updateMonthlyVisibility();   // ⭐ جدید
+            });
         });
 
         document.getElementById('ledBtnRun').addEventListener('click', () => run(1));
@@ -140,51 +176,59 @@ window.App.Features.Ledger = (function () {
 
     function buildAccountFilters(level) {
         const box = document.getElementById('ledAccountFilters');
-        let html = `
-            <div class="form-group">
-                <label>از کد کل</label>
-                <input type="number" id="ledFromCodeCol">
-            </div>
-            <div class="form-group">
-                <label>تا کد کل</label>
-                <input type="number" id="ledToCodeCol">
-            </div>`;
+        if (!box) return;
 
-        if (level === 'moein' || level === 'tafzil' || level === 'tafzil2') {
-            html += `
-                <div class="form-group">
-                    <label>از کد معین</label>
-                    <input type="number" id="ledFromCodeMoein">
-                </div>
-                <div class="form-group">
-                    <label>تا کد معین</label>
-                    <input type="number" id="ledToCodeMoein">
-                </div>`;
-        }
-
-        if (level === 'tafzil' || level === 'tafzil2') {
-            html += `
-                <div class="form-group">
-                    <label>از کد تفصیلی 1</label>
-                    <input type="number" id="ledFromCodeTafzil">
-                </div>
-                <div class="form-group">
-                    <label>تا کد تفصیلی 1</label>
-                    <input type="number" id="ledToCodeTafzil">
-                </div>`;
-        }
-
-        if (level === 'tafzil2') {
-            html += `
-                <div class="form-group">
-                    <label>کد تفصیلی 2</label>
-                    <input type="number" id="ledCodeTafzili2">
-                </div>`;
-        }
-
-        box.innerHTML = html;
+        // ⭐ همه‌ی سطوح همیشه نمایش داده بشن (مثل Delphi)
+        box.innerHTML = `
+        <div class="form-group">
+            <label>از کد کل</label>
+            <input type="number" id="ledFromCodeCol">
+        </div>
+        <div class="form-group">
+            <label>تا کد کل</label>
+            <input type="number" id="ledToCodeCol">
+        </div>
+        <div class="form-group">
+            <label>از کد معین</label>
+            <input type="number" id="ledFromCodeMoein">
+        </div>
+        <div class="form-group">
+            <label>تا کد معین</label>
+            <input type="number" id="ledToCodeMoein">
+        </div>
+        <div class="form-group">
+            <label>از کد تفضیلی 1</label>
+            <input type="number" id="ledFromCodeTafzil">
+        </div>
+        <div class="form-group">
+            <label>تا کد تفضیلی 1</label>
+            <input type="number" id="ledToCodeTafzil">
+        </div>
+        <div class="form-group">
+            <label>کد تفضیلی 2</label>
+            <input type="number" id="ledCodeTafzili2">
+        </div>
+    `;
     }
+    function updateMonthlyVisibility() {
+        const level = document.querySelector('input[name="ledLevel"]:checked')?.value;
+        const cb = document.getElementById('ledMonthly');
+        const grp = document.getElementById('ledMonthlyGroup');
+        const hint = document.getElementById('ledMonthlyHint');
 
+        if (!cb || !grp) return;
+
+        if (level !== 'col') {
+            cb.disabled = true;
+            cb.checked = false;
+            grp.style.opacity = '0.5';
+            if (hint) hint.textContent = '⚠️ حالت ماهانه فقط در سطح «کل» قابل استفاده است.';
+        } else {
+            cb.disabled = false;
+            grp.style.opacity = '1';
+            if (hint) hint.textContent = 'فقط در سطح «کل» فعال است. هر ماه دو ردیف نمایش داده می‌شود: جمع بدهکار و جمع بستانکار.';
+        }
+    }
     // ═══════════════════════════════════════════
     //  RUN
     // ═══════════════════════════════════════════
@@ -219,33 +263,7 @@ window.App.Features.Ledger = (function () {
         }
     }
 
-    function buildPayload(level, page, pageSizeOverride = null) {
-        const parseI = (id) => {
-            const el = document.getElementById(id);
-            if (!el) return null;
-            return el.value === '' ? null : parseInt(el.value);
-        };
-
-        return {
-            level,
-            page,
-            pageSize: pageSizeOverride || window.App.state.settings.pageSize,
-            fromDate: document.getElementById('ledFromDate').value || null,
-            toDate: document.getElementById('ledToDate').value || null,
-            noFrom: parseI('ledNoFrom'),
-            noTo: parseI('ledNoTo'),
-            vazeit: parseI('ledVazeit'),
-            tikRow: parseI('ledTikRow'),
-            fromCodeCol: parseI('ledFromCodeCol'),
-            toCodeCol: parseI('ledToCodeCol'),
-            fromCodeMoein: parseI('ledFromCodeMoein'),
-            toCodeMoein: parseI('ledToCodeMoein'),
-            fromCodeTafzil: parseI('ledFromCodeTafzil'),
-            toCodeTafzil: parseI('ledToCodeTafzil'),
-            codeTafzili2: parseI('ledCodeTafzili2'),
-            includeMandehBefore: false
-        };
-    }
+ 
 
     // ═══════════════════════════════════════════
     //  RENDER RESULT
@@ -263,10 +281,22 @@ window.App.Features.Ledger = (function () {
                 </div>`;
             return;
         }
-
+        const makeTh = (label, sortKey, extraStyle = '') => {
+            const isActive = _state.sortColumn === sortKey;
+            const arrow = isActive
+                ? (_state.sortDirection === 'desc' ? ' ▼' : ' ▲')
+                : '';
+            return `<th data-sort="${sortKey || ''}" 
+                class="sortable-th ${isActive ? 'sorted' : ''}" 
+                style="cursor:pointer; user-select:none; ${extraStyle}">
+                ${label}${arrow}
+            </th>`;
+        };
         // ─── ستون‌های کد بر اساس سطح ───
         const { headers: codeHeaders, colSpan: codeColSpan } = buildCodeHeaders(level);
-
+        // ⭐ تبدیل "1405/01" به "فروردین 1405"
+        // ⭐ تبدیل "1405/01" به "فروردین" (فقط اسم ماه)
+       
         // ─── ردیف‌ها ───
         const rows = items.map(it => {
             const codeCells = buildCodeCells(it, level);
@@ -279,7 +309,9 @@ window.App.Features.Ledger = (function () {
                     onclick="App.Features.Sanad.showDetail(${it.parentSanadID})"
                     title="کلیک برای مشاهده سند">
                     <td class="num text-center">${H.fmt(it.noSanad)}</td>
-                    <td class="num">${H.esc(it.dateIn || '')}</td>
+                    <td class="num">${data.isMonthly
+                    ? H.esc(formatPersianMonth(it.dateIn))
+                    : H.esc(it.dateIn || '')}</td>
                     ${codeCells}
                     <td>${H.esc(it.otherSharh || it.otherParentSharh || '')}</td>
                     <td class="num text-left">${it.mabBed > 0 ? H.fmt(it.mabBed) : '-'}</td>
@@ -305,18 +337,23 @@ window.App.Features.Ledger = (function () {
                 </div>
                 <div class="table-wrapper">
                     <table>
-                        <thead>
-                            <tr>
-                                <th style="width:60px;">سند</th>
-                                <th style="width:90px;">تاریخ</th>
-                                ${codeHeaders}
-                                <th>شرح</th>
-                                <th class="text-left" style="width:110px;">بدهکار</th>
-                                <th class="text-left" style="width:110px;">بستانکار</th>
-                                <th class="text-left" style="width:80px;">مقدار</th>
-                                <th class="text-left" style="width:130px;">مانده</th>
-                            </tr>
-                        </thead>
+                            <thead>
+                                <tr>
+                                    ${makeTh('سند', 'NoSanad', 'width:60px;')}
+                                    ${makeTh('تاریخ', 'DateIn', 'width:90px;')}
+                                    ${makeTh('کد کل', 'CodeCol')}
+                                    ${makeTh('نام کل', 'ColName')}
+                                    ${level === 'moein' || level === 'tafzil' || level === 'tafzil2'
+                                            ? makeTh('کد معین', 'CodeMoein') + makeTh('نام معین', 'MoeinName') : ''}
+                                    ${level === 'tafzil' || level === 'tafzil2'
+                                            ? makeTh('کد تفضیلی', 'CodeTafzil') + makeTh('نام تفضیلی', 'TafzilName') : ''}
+                                    ${makeTh('شرح', 'OtherSharh')}
+                                    ${makeTh('بدهکار', 'MabBed', 'text-align:left; width:110px;')}
+                                    ${makeTh('بستانکار', 'MabBes', 'text-align:left; width:110px;')}
+                                    ${makeTh('مقدار', 'Meghdar', 'text-align:left; width:80px;')}
+                                    <th class="text-left" style="width:130px;">مانده</th>
+                                </tr>
+                            </thead>
                         <tbody>${rows}</tbody>
                         <tfoot>
                             <tr style="background:#EEF2FF; font-weight:700;">
@@ -340,14 +377,48 @@ window.App.Features.Ledger = (function () {
             tafzil2: 'دفتر تفصیلی 2'
         };
 
-        Exporter.attach(document.querySelector('#ledResult .card'), {
-            title: levelTitles[level] || 'دفتر حساب',
-            subtitle: subtitle(),
-            filename: 'Ledger_' + level,
-            getFullTable: fetchFullTable
-        });
+        container.querySelectorAll('.sortable-th').forEach(th => {
+            th.addEventListener('click', () => {
+                const col = th.dataset.sort;
+                if (!col) return;
 
-        window.App.enhanceTables(container);
+                if (_state.sortColumn === col) {
+                    _state.sortDirection = _state.sortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    _state.sortColumn = col;
+                    _state.sortDirection = 'asc';
+                }
+
+                run(1);   // ⭐ برگرد به صفحه ۱ و دوباره بگیر
+            });
+        });
+        // آخر renderResult
+        if (typeof Exporter !== 'undefined' && Exporter.attach) {
+            document.querySelectorAll('#ledResult .export-bar').forEach(el => el.remove());
+            Exporter.attach(document.querySelector('#ledResult .card'), {
+                title: levelTitles[level] || 'دفتر حساب',
+                subtitle: subtitle(),
+                filename: 'Ledger_' + level + (data.isMonthly ? '_monthly' : ''),
+                getFullTable: fetchFullTable   // ⭐ تابع تازه
+            });
+        }
+
+        requestAnimationFrame(() => {
+            // ⭐ اول data-nosort بذار روی هدرها (تا sort سمت سرور با client-side تضاد نداشته باشه)
+            container.querySelectorAll('#ledResult thead th').forEach(th => {
+                th.setAttribute('data-nosort', '');
+            });
+
+            // ⭐ resize + toolbar
+            if (window.TableEnhancer) {
+                TableEnhancer.enhance(container);
+            }
+
+            // ⭐ تبدیل به کارت در موبایل
+            if (window.App && window.App.UI && window.App.UI.TableCardView) {
+                window.App.UI.TableCardView.apply(container);
+            }
+        });
     }
 
     function buildCodeHeaders(level) {
@@ -419,18 +490,129 @@ window.App.Features.Ledger = (function () {
                 </div>
             </div>`;
     }
+    // ⭐ لود گزینه‌های SpecialHesab (کد واحد/مرکز هزینه/کد پروژه)
+    async function loadSpecialHesabOptions() {
+        const map = {
+            ledCodeVahed: 0,     // CodeVahed
+            ledCodeHazine: 1,    // MarkazHazine
+            ledCodeProject: 2    // CodeProject
+        };
+
+        for (const [elId, kind] of Object.entries(map)) {
+            const el = document.getElementById(elId);
+            if (!el) continue;
+
+            try {
+                const list = await window.App.Http.api(`/api/special-hesab/list/${kind}`);
+                list.forEach(item => {
+                    const opt = document.createElement('option');
+                    opt.value = item.subGroupCode;         // ⭐ کد اصلی، نه ID
+                    opt.textContent = `${item.subGroupCode} - ${item.name}`;
+                    el.appendChild(opt);
+                });
+            } catch (err) {
+                console.warn(`loadSpecialHesabOptions(${elId}) failed:`, err);
+            }
+        }
+    }
+
+    function buildPayload(level, page, pageSizeOverride = null) {
+        const parseI = (id) => {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            return el.value === '' ? null : parseInt(el.value);
+        };
+
+        const toLatin = (s) => {
+            if (!s) return null;
+            if (H.toLatinDigits) return H.toLatinDigits(s.trim()) || null;
+            return s.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+                .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+                .trim() || null;
+        };
+
+        const monthlyCb = document.getElementById('ledMonthly');
+        const monthly = !!(monthlyCb && monthlyCb.checked && level === 'col');
+
+        return {
+            level,
+            page,
+            pageSize: pageSizeOverride || window.App.state.settings.pageSize,
+            fromDate: toLatin(document.getElementById('ledFromDate').value),
+            toDate: toLatin(document.getElementById('ledToDate').value),
+            noFrom: parseI('ledNoFrom'),
+            noTo: parseI('ledNoTo'),
+            vazeit: parseI('ledVazeit'),
+            tikRow: parseI('ledTikRow'),
+            fromCodeCol: parseI('ledFromCodeCol'),
+            toCodeCol: parseI('ledToCodeCol'),
+            fromCodeMoein: parseI('ledFromCodeMoein'),
+            toCodeMoein: parseI('ledToCodeMoein'),
+            fromCodeTafzil: parseI('ledFromCodeTafzil'),
+            toCodeTafzil: parseI('ledToCodeTafzil'),
+            codeTafzili2: parseI('ledCodeTafzili2'),
+            includeMandehBefore: false,
+
+            // ⭐ SpecialHesab
+            codeVahedId: parseI('ledCodeVahed'),
+            codeHazineId: parseI('ledCodeHazine'),
+            codeProjectId: parseI('ledCodeProject'),
+
+            // ⭐ Sort
+            sortColumn: _state.sortColumn || null,
+            sortDirection: _state.sortDirection || null,
+
+            // ⭐ حالت ماهانه
+            monthlyMode: monthly
+        };
+    }
 
     // ═══════════════════════════════════════════
     //  EXPORT — fetch کل داده
     // ═══════════════════════════════════════════
+    //async function fetchFullTable() {
+    //    const level = document.querySelector('input[name="ledLevel"]:checked').value;
+    //    const payload = buildPayload(level, 1, 100000);
+    //    const result = await window.App.Http.api('/api/ledger', {
+    //        method: 'POST',
+    //        body: JSON.stringify(payload)
+    //    });
+    //    return buildTableHtml(result);
+    //}
+
+    // ═══════════════════════════════════════════
+    //  EXPORT — endpoint جدا (بدون صفحه‌بندی)
+    // ═══════════════════════════════════════════
+    // ═══════════════════════════════════════════
+    //  EXPORT — کامل، با همه‌ی فیلترهای فعلی
+    // ═══════════════════════════════════════════
     async function fetchFullTable() {
-        const level = document.querySelector('input[name="ledLevel"]:checked').value;
-        const payload = buildPayload(level, 1, 100000);
-        const result = await window.App.Http.api('/api/ledger', {
+        const level = document.querySelector('input[name="ledLevel"]:checked')?.value || 'col';
+
+        // ⭐ دقیقاً همون buildPayload که برای نمایش استفاده می‌کنی
+        const payload = buildPayload(level, 1, 1000000);
+
+        const result = await window.App.Http.api('/api/ledger/export', {
             method: 'POST',
             body: JSON.stringify(payload)
         });
+
         return buildTableHtml(result);
+    }
+    // ⭐ helper — تبدیل ارقام
+    function toLatin(s) {
+        if (!s) return null;
+        if (H.toLatinDigits) return H.toLatinDigits(s.trim()) || null;
+        return s.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+            .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+            .trim() || null;
+    }
+
+    // ⭐ helper — parseInt امن
+    function parseI(id) {
+        const el = document.getElementById(id);
+        if (!el) return null;
+        return el.value === '' ? null : parseInt(el.value);
     }
 
     function buildTableHtml(data) {
@@ -443,11 +625,14 @@ window.App.Features.Ledger = (function () {
             const manValue = it.mabMan;
             const manBadge = manValue > 0 ? 'بس' : (manValue < 0 ? 'بد' : '');
             const manAbs = Math.abs(manValue);
+            const dateCell = data.isMonthly
+                ? H.esc(formatPersianMonth(it.dateIn))
+                : H.esc(it.dateIn || '');
 
             return `
                 <tr>
                     <td class="num text-center">${H.fmt(it.noSanad)}</td>
-                    <td class="num">${H.esc(it.dateIn || '')}</td>
+                     <td class="num">${dateCell}</td>
                     ${codeCells}
                     <td>${H.esc(it.otherSharh || it.otherParentSharh || '')}</td>
                     <td class="num text-left">${it.mabBed > 0 ? H.fmt(it.mabBed) : '-'}</td>
@@ -469,7 +654,7 @@ window.App.Features.Ledger = (function () {
             <thead>
                 <tr>
                     <th style="width:60px;">سند</th>
-                    <th style="width:90px;">تاریخ</th>
+                    <th style="width:60px;">${data.isMonthly ? 'ماه' : 'سند'}</th>
                     ${codeHeaders}
                     <th>شرح</th>
                     <th class="text-left" style="width:110px;">بدهکار</th>
@@ -496,6 +681,17 @@ window.App.Features.Ledger = (function () {
         return table;
     }
 
+
+    function formatPersianMonth(yyyymm) {
+        if (!yyyymm) return '';
+        const parts = String(yyyymm).split('/');
+        if (parts.length < 2) return yyyymm;
+
+        const month = parseInt(parts[1], 10);
+        const names = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
+            'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+        return names[month - 1] || yyyymm;
+    }
     function subtitle() {
         const u = window.App.state.user || {};
         return (u.orgName || '') + ' - ' + (u.fyName || '');
