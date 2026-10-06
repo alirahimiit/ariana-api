@@ -150,3 +150,106 @@
         max-height: 100dvh !important;
     }
 }
+
+/* ═══════════════════════════════════════════════════════
+   ⭐ Collapsible Card — کارت جمع‌شو
+   ═══════════════════════════════════════════════════════ */
+
+.collapsible-card .card-title {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    padding-left: 32px; /* جای فلش */
+    transition: background 0.15s;
+    border-radius: 6px;
+}
+
+    .collapsible-card .card-title:hover {
+        background: #F9FAFB;
+    }
+
+/* فلش گوشه‌ی چپ */
+.collapsible-card .collapse-arrow {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%) rotate(0deg);
+    font-size: 11px;
+    color: #6B7280;
+    transition: transform 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: #F3F4F6;
+}
+
+.collapsible-card .card-title:hover .collapse-arrow {
+    background: #EEF2FF;
+    color: #4F46E5;
+}
+
+/* وقتی جمع شده — فلش چرخیده */
+.collapsible-card.collapsed .collapse-arrow {
+    transform: translateY(-50%) rotate(-90deg);
+}
+
+/* بدنه‌ی کارت */
+.collapsible-card .card-body {
+    transition: max-height 0.28s ease, opacity 0.2s ease, margin 0.2s ease;
+    overflow: hidden;
+    max-height: 5000px; /* یه مقدار بزرگ */
+    opacity: 1;
+}
+
+/* وقتی جمع شده */
+.collapsible-card.collapsed .card-body {
+    max-height: 0 !important;
+    opacity: 0;
+    margin: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   ⭐ Ledger Actions Bar — دکمه تهیه گزارش جدا از کارت
+   ═══════════════════════════════════════════════════════ */
+
+.ledger-actions-bar {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    margin: 12px 0 16px;
+    padding: 12px 16px;
+    background: #fff;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+    .ledger-actions-bar .btn {
+        min-width: 180px;
+        font-weight: 600;
+    }
+
+/* ═══ موبایل ═══ */
+@media (max-width: 768px) {
+    .ledger-actions-bar {
+        position: sticky;
+        bottom: 12px;
+        z-index: 50;
+        margin: 8px 0 12px;
+        padding: 10px 12px;
+        border-color: #C7D2FE;
+        box-shadow: 0 6px 20px rgba(79, 70, 229, 0.18);
+    }
+
+        .ledger-actions-bar .btn {
+            width: 100%;
+            min-width: 0;
+            padding: 12px;
+            font-size: 14px;
+        }
+}

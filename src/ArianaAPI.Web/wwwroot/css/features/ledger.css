@@ -1,0 +1,85 @@
+﻿/* ═══════════════════════════════════════════════════════
+   ⭐ Radio Group — حالت موبایل (فشرده)
+   ═══════════════════════════════════════════════════════ */
+
+/* دسکتاپ — دست‌نخورده */
+.radio-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.radio-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1.5px solid #E5E7EB;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    background: #fff;
+    transition: all 0.15s;
+}
+
+    .radio-item:hover {
+        border-color: #6366F1;
+        background: #EEF2FF;
+    }
+
+    .radio-item input[type="radio"] {
+        margin: 0;
+        accent-color: #4F46E5;
+        cursor: pointer;
+    }
+
+    .radio-item:has(input:checked) {
+        border-color: #4F46E5;
+        background: #EEF2FF;
+        color: #4F46E5;
+        font-weight: 600;
+    }
+
+/* ═══ موبایل ═══ */
+@media (max-width: 768px) {
+
+    .radio-group {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr); /* ⭐ دو ستونه */
+        gap: 6px;
+    }
+
+    .radio-item {
+        padding: 8px 10px;
+        font-size: 12px;
+        border-radius: 6px;
+        min-height: 38px; /* ⭐ کوچیک‌تر */
+        justify-content: flex-start;
+    }
+
+        .radio-item input[type="radio"] {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+
+        .radio-item span {
+            font-size: 12px;
+            line-height: 1.2;
+        }
+}
+
+/* ═══ موبایل کوچک (≤ 480px) ═══ */
+@media (max-width: 480px) {
+    .radio-group {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 4px;
+    }
+
+    .radio-item {
+        padding: 6px 8px;
+        font-size: 11.5px;
+        min-height: 34px;
+    }
+}

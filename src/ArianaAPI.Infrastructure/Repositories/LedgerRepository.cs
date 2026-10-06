@@ -35,19 +35,18 @@ public class LedgerRepository : ILedgerRepository
         parameters.Add("endRow", req.Page * req.PageSize);
 
         var isMonthly = req.MonthlyMode && level == "col";
-
         var innerSql = BuildInnerSelect(level, whereSql, isMonthly);
         var orderByExpr = BuildOrderBy(req.SortColumn, req.SortDirection, level, isMonthly);
 
         var sql = $@"
-                    SELECT * FROM (
-                        SELECT *, 
-                            ROW_NUMBER() OVER (ORDER BY {orderByExpr}) AS RowNum,
-                            COUNT(*) OVER () AS TotalCount
-                        FROM ({innerSql}) AS Inner1
-                    ) AS T
-                    WHERE T.RowNum BETWEEN @startRow AND @endRow
-                    ORDER BY T.RowNum";
+    SELECT * FROM (
+        SELECT *, 
+            ROW_NUMBER() OVER (ORDER BY {orderByExpr}) AS RowNum,
+            COUNT(*) OVER () AS TotalCount
+        FROM ({innerSql}) AS Inner1
+    ) AS T
+    WHERE T.RowNum BETWEEN @startRow AND @endRow
+    ORDER BY T.RowNum";
 
         _logger.LogDebug("Ledger SQL:\n{Sql}", sql);
 
@@ -60,7 +59,39 @@ public class LedgerRepository : ILedgerRepository
         var items = rows.Select(r => r.ToItem()).ToList();
         var totalCount = rows.Count > 0 ? rows[0].TotalCount : 0;
 
-        ApplyRunningBalance(items, level);
+        // ⭐ محاسبه‌ی مانده‌ی قبل از این صفحه (per group)
+        var openingBalances = new Dictionary<string, decimal>(StringComparer.Ordinal);
+        if (req.Page > 1 && items.Count > 0)
+        {
+            var openSql = $@"
+            SELECT 
+                CAST(ISNULL(CodeCol, 0) AS VARCHAR(50)) + '|' + 
+                CAST(ISNULL(CodeMoein, 0) AS VARCHAR(50)) + '|' + 
+                CAST(ISNULL(CodeTafzil, 0) AS VARCHAR(50)) + '|' + 
+                CAST(ISNULL(CodeTafzili2, 0) AS VARCHAR(50)) AS GrpKey,
+                SUM(MabBes - MabBed) AS OpeningBal
+            FROM (
+                SELECT *, ROW_NUMBER() OVER (ORDER BY {orderByExpr}) AS RowNum
+                FROM ({innerSql}) AS Inner1
+            ) AS O
+            WHERE O.RowNum < @startRow
+            GROUP BY CodeCol, CodeMoein, CodeTafzil, CodeTafzili2";
+
+            var openRows = await conn.QueryAsync<OpeningBalanceRow>(
+                new CommandDefinition(openSql, parameters, commandTimeout: 180, cancellationToken: ct));
+
+            foreach (var o in openRows)
+                openingBalances[o.GrpKey] = o.OpeningBal;
+
+            _logger.LogInformation("Ledger opening balances: Page={Page} Groups={Count}",
+                req.Page, openingBalances.Count);
+        }
+
+        _logger.LogInformation("Ledger Level={Level} Page={Page} Items={Count} Total={Total}",
+            level, req.Page, items.Count, totalCount);
+
+        // ⭐ پاس دادن opening
+        ApplyRunningBalance(items, level, openingBalances);
 
         var totalPages = (int)Math.Ceiling(totalCount / (double)req.PageSize);
 
@@ -70,13 +101,13 @@ public class LedgerRepository : ILedgerRepository
             Items = items,
             TotalBed = items.Sum(x => x.MabBed),
             TotalBes = items.Sum(x => x.MabBes),
-            TotalMan = items.Sum(x => x.MabBed - x.MabBes),
-            MandehBefore = null,
+            TotalMan = items.Sum(x => x.MabBes - x.MabBed),
+            MandehBefore = openingBalances.Values.Sum(),
             Page = req.Page,
             PageSize = req.PageSize,
             TotalCount = totalCount,
-            IsMonthly = isMonthly,
-            TotalPages = totalPages
+            TotalPages = totalPages,
+            IsMonthly = isMonthly
         };
     }
 
@@ -270,24 +301,29 @@ public class LedgerRepository : ILedgerRepository
     //  و باید هر کد running خودش رو داشته باشه (مثل Delphi که
     //  برای هر Code_Col جدا Man حساب می‌کرد)
     // ═══════════════════════════════════════════════════════════
-    private static void ApplyRunningBalance(List<LedgerItemDto> items, string level)
+    // ═══════════════════════════════════════════════════════════
+    //  ⭐ محاسبه مانده تجمعی — با پشتیبانی از opening page
+    // ═══════════════════════════════════════════════════════════
+    private static void ApplyRunningBalance(
+        List<LedgerItemDto> items,
+        string level,
+        Dictionary<string, decimal>? initialBalances = null)
     {
-        var runningByGroup = new Dictionary<string, decimal>();
+        // ⭐ شروع از مقادیر صفحه‌ی قبل (اگه داشتیم)
+        var runningByGroup = initialBalances != null
+            ? new Dictionary<string, decimal>(initialBalances, StringComparer.Ordinal)
+            : new Dictionary<string, decimal>(StringComparer.Ordinal);
 
         foreach (var it in items)
         {
-            var key = level switch
-            {
-                "col" => $"{it.CodeCol}",
-                "moein" => $"{it.CodeCol}|{it.CodeMoein}",
-                "tafzil" => $"{it.CodeCol}|{it.CodeMoein}|{it.CodeTafzil}",
-                _ => $"{it.CodeCol}|{it.CodeMoein}|{it.CodeTafzil}|{it.CodeTafzili2}"
-            };
+            // ⭐ کلید یکسان با SQL: `{col}|{moein}|{tafzil}|{tafzili2}`
+            var key = $"{it.CodeCol ?? 0}|{it.CodeMoein ?? 0}|{it.CodeTafzil ?? 0}|{it.CodeTafzili2 ?? 0}";
 
             if (!runningByGroup.TryGetValue(key, out var running))
                 running = 0m;
 
-            running += (it.MabBed - it.MabBes);   // Bed مثبت، Bes منفی
+            // ⭐ بستانکار - بدهکار (مثبت = بس، منفی = بد)
+            running += (it.MabBes - it.MabBed);
             runningByGroup[key] = running;
             it.MabMan = running;
         }
@@ -422,5 +458,11 @@ public class LedgerRepository : ILedgerRepository
         }
 
         return (sb.ToString(), p);
+    }
+    // ⭐ کلاس کمکی برای نتیجه‌ی opening balance query
+    private class OpeningBalanceRow
+    {
+        public string GrpKey { get; set; } = "";
+        public decimal OpeningBal { get; set; }
     }
 }

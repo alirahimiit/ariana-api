@@ -1,7 +1,7 @@
 ﻿/* ═══════════════════════════════════════════════════
-   Feature / Sanad (اسناد حسابداری)
-   مسئولیت: لیست، جستجو، جزئیات سند + فیلتر خطاها
-   ═══════════════════════════════════════════════════ */
+  Feature / Sanad (اسناد حسابداری)
+  مسئولیت: لیست، جستجو، جزئیات سند + فیلتر خطاها
+  ═══════════════════════════════════════════════════ */
 
 window.App = window.App || {};
 window.App.Features = window.App.Features || {};
@@ -171,7 +171,7 @@ window.App.Features.Sanad = (function () {
         if (f.onlyWithErrors === 'true') {
             url += `&onlyWithErrors=true`;
         }
-            
+
         return url;
     }
 
@@ -267,7 +267,6 @@ window.App.Features.Sanad = (function () {
         window.App.openModal('جزئیات سند',
             `<div class="loading"><div class="spinner"></div></div>`);
 
-        // ⭐ ریست فیلتر
         _detailFilter.errorType = 'all';
 
         try {
@@ -276,12 +275,10 @@ window.App.Features.Sanad = (function () {
                 window.App.Http.api(`/api/sanad/${sanadId}/items`)
             ]);
 
-            // ⭐ ذخیره برای re-render
             _detailData = { detail, items: items || [] };
 
             document.getElementById('modalBody').innerHTML = buildDetailHtml(detail, items);
 
-            // ⭐ bind رویداد فیلتر
             bindDetailFilter();
 
             Exporter.attach(document.getElementById('modalBody'), {
@@ -297,7 +294,7 @@ window.App.Features.Sanad = (function () {
     }
 
     // ═══════════════════════════════════════════
-    //  BUILD DETAIL HTML — با badge خطا + فیلتر
+    //  ⭐ BUILD DETAIL HTML — ساختار جدید + جمع چسبان
     // ═══════════════════════════════════════════
     function buildDetailHtml(detail, items) {
         items = items || [];
@@ -305,11 +302,11 @@ window.App.Features.Sanad = (function () {
         // ─── شمارش خطاها ───
         const errorCounts = {
             all: 0,
-            missingCoding: 0,   // کدینگ ناقص
-            missingMoein: 0,    // معین ندارد
-            noMeghdar: 0,       // مقدار خالی (انباری)
-            noAmount: 0,        // مبلغ صفر
-            noDescr: 0          // بدون شرح
+            missingCoding: 0,
+            missingMoein: 0,
+            noMeghdar: 0,
+            noAmount: 0,
+            noDescr: 0
         };
 
         const itemsWithErrors = items.map(it => {
@@ -327,142 +324,146 @@ window.App.Features.Sanad = (function () {
             ? itemsWithErrors
             : itemsWithErrors.filter(x => x._errors.some(e => e.code === f));
 
-        // ─── فیلتر bar ───
-        // ─── فیلتر bar با ایکن + متن واضح ───
-        const filterBar = `
-            <div class="sanad-error-filter">
-                <div class="sanad-filter-info">
-                    ${errorCounts.all > 0
-                ? `<span class="sanad-err-badge">⚠️ ${H.fmt(errorCounts.all)} ردیف دارای ایراد</span>`
-                : `<span class="sanad-ok-badge">✅ همه ردیف‌ها سالم</span>`
-            }
+        // ─── کارت‌های اطلاعات بالای مدال ───
+        const infoGrid = `
+            <div class="sd-info-grid">
+                <div class="sd-info-card">
+                    <div class="sd-info-label">شماره سند</div>
+                    <div class="sd-info-value">${H.fmt(detail?.noSanad) || '-'}</div>
                 </div>
-                <div class="sanad-filter-select">
-                    <label>فیلتر:</label>
-                    <select id="sanadErrFilter">
-                        <option value="all" ${f === 'all' ? 'selected' : ''}>
-                            📋 همه ردیف‌ها (${H.fmt(itemsWithErrors.length)})
-                        </option>
-                        <option value="missingCoding" ${f === 'missingCoding' ? 'selected' : ''}>
-                            ⛔ کدینگ ناقص — بدون کد کل (${H.fmt(errorCounts.missingCoding)})
-                        </option>
-                        <option value="missingMoein" ${f === 'missingMoein' ? 'selected' : ''}>
-                            ⚠️ بدون معین (${H.fmt(errorCounts.missingMoein)})
-                        </option>
-                        <option value="noMeghdar" ${f === 'noMeghdar' ? 'selected' : ''}>
-                            ⛔ مقدار خالی انباری (${H.fmt(errorCounts.noMeghdar)})
-                        </option>
-                        <option value="noAmount" ${f === 'noAmount' ? 'selected' : ''}>
-                            ⚠️ مبلغ صفر (${H.fmt(errorCounts.noAmount)})
-                        </option>
-                        <option value="noDescr" ${f === 'noDescr' ? 'selected' : ''}>
-                            ℹ️ بدون شرح (${H.fmt(errorCounts.noDescr)})
-                        </option>
-                    </select>
+                <div class="sd-info-card">
+                    <div class="sd-info-label">تاریخ</div>
+                    <div class="sd-info-value">${H.esc(detail?.dateIn || '-')}</div>
                 </div>
-            </div>
-
-            <!-- ⭐ راهنمای ایکن‌ها (همیشه دیده می‌شه) -->
-            <div class="sanad-legend">
-                <span class="sanad-legend-title">راهنمای ایکن‌ها:</span>
-                <span class="sanad-legend-item">
-                    <span class="sanad-row-err sanad-err-error">⛔</span>
-                    خطای جدی
-                </span>
-                <span class="sanad-legend-item">
-                    <span class="sanad-row-err sanad-err-warn">⚠️</span>
-                    هشدار
-                </span>
-                <span class="sanad-legend-item">
-                    <span class="sanad-row-err sanad-err-info">ℹ️</span>
-                    اطلاعاتی
-                </span>
+                <div class="sd-info-card">
+                    <div class="sd-info-label">وضعیت</div>
+                    <div class="sd-info-value">${window.App.statusBadge(detail?.vazeit)}</div>
+                </div>
+                <div class="sd-info-card">
+                    <div class="sd-info-label">نوع سند</div>
+                    <div class="sd-info-value" style="font-size:15px;">
+                        ${kindSanadText(detail?.kindSanad ?? 0)}
+                    </div>
+                </div>
+                <div class="sd-info-card sd-info-wide">
+                    <div class="sd-info-label">شرح سند</div>
+                    <div class="sd-info-value" style="font-size:13px; font-weight:500;">
+                        ${H.esc(detail?.otherParentSharh || '-')}
+                    </div>
+                </div>
             </div>`;
 
-        // ─── ردیف‌ها ───
+        // ─── نوار ابزار (فیلتر خطا + badge + راهنما) ───
+        const toolbar = `
+            <div class="sd-toolbar">
+                <select class="sd-error-filter" id="sanadErrFilter">
+                    <option value="all" ${f === 'all' ? 'selected' : ''}>
+                        📋 همه ردیف‌ها (${H.fmt(itemsWithErrors.length)})
+                    </option>
+                    <option value="missingCoding" ${f === 'missingCoding' ? 'selected' : ''}>
+                        ⛔ کدینگ ناقص (${H.fmt(errorCounts.missingCoding)})
+                    </option>
+                    <option value="missingMoein" ${f === 'missingMoein' ? 'selected' : ''}>
+                        ⚠️ بدون معین (${H.fmt(errorCounts.missingMoein)})
+                    </option>
+                    <option value="noMeghdar" ${f === 'noMeghdar' ? 'selected' : ''}>
+                        ⛔ مقدار خالی (${H.fmt(errorCounts.noMeghdar)})
+                    </option>
+                    <option value="noAmount" ${f === 'noAmount' ? 'selected' : ''}>
+                        ⚠️ مبلغ صفر (${H.fmt(errorCounts.noAmount)})
+                    </option>
+                    <option value="noDescr" ${f === 'noDescr' ? 'selected' : ''}>
+                        ℹ️ بدون شرح (${H.fmt(errorCounts.noDescr)})
+                    </option>
+                </select>
+
+                ${errorCounts.all > 0
+                ? `<span class="sd-badge sd-badge-err">⚠️ ${H.fmt(errorCounts.all)} ردیف دارای ایراد</span>`
+                : `<span class="sd-badge sd-badge-ok">✅ همه ردیف‌ها سالم</span>`}
+
+                <div class="sd-legend">
+                    <span><span class="sd-err-icon sd-err-error">⛔</span> جدی</span>
+                    <span><span class="sd-err-icon sd-err-warn">⚠️</span> هشدار</span>
+                    <span><span class="sd-err-icon sd-err-info">ℹ️</span> اطلاع</span>
+                </div>
+            </div>`;
+
+        // ─── ردیف‌های جدول ───
         const rows = visibleItems.map(it => {
             const errBadges = (it._errors || []).map(e =>
-                `<span class="sanad-row-err sanad-err-${e.severity}" title="${H.esc(e.label)}">
+                `<span class="sd-err-icon sd-err-${e.severity}" title="${H.esc(e.label)}">
                     ${e.severity === 'error' ? '⛔' : (e.severity === 'warn' ? '⚠️' : 'ℹ️')}
                 </span>`
             ).join('');
 
             const hasError = (it._errors || []).some(e => e.severity === 'error');
             const hasWarn = (it._errors || []).some(e => e.severity === 'warn');
-            const rowClass = hasError ? 'sanad-row-has-error'
-                : (hasWarn ? 'sanad-row-has-warn' : '');
+            const rowClass = hasError ? 'sd-row-err' : (hasWarn ? 'sd-row-warn' : '');
 
             return `
                 <tr class="${rowClass}">
-                    <td class="num text-center">
+                    <td class="sd-col-idx">
                         ${H.fmt(it.rowNum)}
-                        ${errBadges}
+                        ${errBadges ? `<div style="margin-top:3px;">${errBadges}</div>` : ''}
                     </td>
-                    <td class="num text-center">${it.code_Col ?? '-'}</td>
-                    <td>${H.esc(it.colName || '-')}</td>
-                    <td class="num text-center">${it.code_Moein || '-'}</td>
-                    <td>${H.esc(it.moeinName || '-')}</td>
-                    <td class="num text-center">${it.code_Tafzil || '-'}</td>
-                    <td>${H.esc(it.tafzilName || '-')}</td>
-                    <td>${H.esc(it.otherSharh || '-')}</td>
-                    <td class="num text-left">${H.fmt(it.mabBed)}</td>
-                    <td class="num text-left">${H.fmt(it.mabBes)}</td>
-                    <td class="num text-left">${H.fmtSigned(it.meghdar)}</td>
+                    <td class="num">${it.code_Col ?? '-'}</td>
+                    <td class="sd-col-name">${H.esc(it.colName || '-')}</td>
+                    <td class="num">${it.code_Moein || '-'}</td>
+                    <td class="sd-col-name">${H.esc(it.moeinName || '-')}</td>
+                    <td class="num">${it.code_Tafzil || '-'}</td>
+                    <td class="sd-col-name">${H.esc(it.tafzilName || '-')}</td>
+                    <td class="sd-col-sharh">${H.esc(it.otherSharh || '-')}</td>
+                    <td class="num">${it.mabBed > 0 ? H.fmt(it.mabBed) : '-'}</td>
+                    <td class="num">${it.mabBes > 0 ? H.fmt(it.mabBes) : '-'}</td>
+                    <td class="num">${it.meghdar ? H.fmtSigned(it.meghdar) : '-'}</td>
                 </tr>`;
         }).join('');
 
-        return `
-            <div class="stats-grid" style="margin-bottom:16px;">
-                <div class="stat-card">
-                    <div>
-                        <div class="stat-label">شماره سند</div>
-                        <div class="stat-value">${H.fmt(detail?.noSanad)}</div>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div>
-                        <div class="stat-label">تاریخ</div>
-                        <div class="stat-value">${detail?.dateIn || '-'}</div>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div>
-                        <div class="stat-label">وضعیت</div>
-                        <div class="stat-value">${window.App.statusBadge(detail?.vazeit)}</div>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div>
-                        <div class="stat-label">نوع سند</div>
-                        <div class="stat-value" style="font-size:16px;">
-                            ${kindSanadText(detail?.kindSanad ?? 0)}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            ${filterBar}
-            <div class="table-wrapper">
+        // ⭐ جمع‌ها (روی ردیف‌های visible)
+        const totalBed = visibleItems.reduce((s, x) => s + (Number(x.mabBed) || 0), 0);
+        const totalBes = visibleItems.reduce((s, x) => s + (Number(x.mabBes) || 0), 0);
+        const totalMegh = visibleItems.reduce((s, x) => s + (Number(x.meghdar) || 0), 0);
+
+        // ─── جدول با tfoot چسبان ───
+        const tableBlock = `
+            <div class="sd-table-wrap">
                 <table>
                     <thead>
                         <tr>
-                            <th style="width:80px;">ردیف</th>
-                            <th style="width:50px;">کد کل</th>
-                            <th>نام کل</th>
-                            <th style="width:50px;">معین</th>
-                            <th>نام معین</th>
-                            <th style="width:60px;">تفصیلی</th>
-                            <th>نام تفصیلی</th>
-                            <th>شرح</th>
-                            <th class="text-left" style="width:100px;">بدهکار</th>
-                            <th class="text-left" style="width:100px;">بستانکار</th>
-                            <th class="text-left" style="width:80px;">مقدار</th>
+                            <th class="sd-col-idx">#</th>
+                            <th class="num">کد کل</th>
+                            <th class="sd-col-name">نام کل</th>
+                            <th class="num">کد معین</th>
+                            <th class="sd-col-name">نام معین</th>
+                            <th class="num">کد تفصیلی</th>
+                            <th class="sd-col-name">نام تفصیلی</th>
+                            <th class="sd-col-sharh">شرح</th>
+                            <th class="num">بدهکار</th>
+                            <th class="num">بستانکار</th>
+                            <th class="num">مقدار</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${rows || '<tr><td colspan="11" class="text-center">ردیفی برای نمایش نیست</td></tr>'}
+                        ${rows || '<tr><td colspan="11" style="text-align:center; padding:40px; color:#9CA3AF;">ردیفی برای نمایش نیست</td></tr>'}
                     </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="8" style="text-align:right; padding-right:16px;">
+                                جمع کل (${H.fmt(visibleItems.length)} ردیف)
+                            </td>
+                            <td class="num">${H.fmt(totalBed)}</td>
+                            <td class="num">${H.fmt(totalBes)}</td>
+                            <td class="num">${H.fmtSigned(totalMegh)}</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>`;
+
+        return `<div class="sanad-detail-modal">
+            ${infoGrid}
+            ${toolbar}
+            ${tableBlock}
+        </div>`;
     }
 
     // ═══════════════════════════════════════════
@@ -474,27 +475,22 @@ window.App.Features.Sanad = (function () {
         const hasBes = (it.mabBes || 0) > 0;
         const hasAmount = hasBed || hasBes;
 
-        // ─── ۱. کدینگ ناقص (کد کل نداره) ───
         if (!it.code_Col || it.code_Col === 0) {
             errors.push({ code: 'missingCoding', label: 'کد کل ندارد — نیاز به کدینگ', severity: 'error' });
         }
 
-        // ─── ۲. معین ندارد (وقتی مبلغ داره ولی معین صفر) ───
         if (it.code_Col > 0 && (!it.code_Moein || it.code_Moein === 0) && hasAmount) {
             errors.push({ code: 'missingMoein', label: 'کد معین ندارد', severity: 'warn' });
         }
 
-        // ─── ۳. مقدار خالی (فقط برای حساب‌های انباری) ───
         if (it.isStock && hasAmount && (!it.meghdar || Math.abs(it.meghdar) === 0)) {
             errors.push({ code: 'noMeghdar', label: 'مقدار انباری ندارد', severity: 'error' });
         }
 
-        // ─── ۴. مبلغ صفر ───
         if (!hasAmount) {
             errors.push({ code: 'noAmount', label: 'مبلغ بدهکار و بستانکار صفر است', severity: 'warn' });
         }
 
-        // ─── ۵. بدون شرح ───
         if (!it.otherSharh || !String(it.otherSharh).trim()) {
             errors.push({ code: 'noDescr', label: 'شرح ردیف خالی است', severity: 'info' });
         }
@@ -514,7 +510,7 @@ window.App.Features.Sanad = (function () {
     }
 
     // ═══════════════════════════════════════════
-    //  PRINT
+    //  PRINT (خروجی چاپ و Excel)
     // ═══════════════════════════════════════════
     function buildDetailPrintHtml(detail, items) {
         const headerBlock = `
@@ -613,7 +609,7 @@ window.App.Features.Sanad = (function () {
         };
         return map[v] ?? '-';
     }
-    // ⭐ badge خطا در لیست
+
     function renderErrorBadge(s) {
         const total = s.totalErrorCount || 0;
         if (total === 0) {
@@ -633,6 +629,7 @@ window.App.Features.Sanad = (function () {
                     ⚠️ ${H.fmt(total)}
                 </span>`;
     }
+
     function subtitle() {
         const u = window.App.state.user || {};
         return (u.orgName || '') + ' - ' + (u.fyName || '');

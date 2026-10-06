@@ -149,8 +149,10 @@ window.App.Features.Ledger = (function () {
             </div>
 
             <div class="filters" id="ledAccountFilters"></div>
+        </div>
 
-            <button class="btn btn-primary" id="ledBtnRun" style="margin-top:12px;">
+        <div class="ledger-actions-bar">
+            <button class="btn btn-primary" id="ledBtnRun">
                 📊 تهیه گزارش
             </button>
         </div>
@@ -163,8 +165,10 @@ window.App.Features.Ledger = (function () {
         </div>`;
 
         buildAccountFilters(defaultLevel);
-        //updateMonthlyVisibility();   // ⭐ جدید
 
+        if (window.App.makeCollapsible) {
+            window.App.makeCollapsible('#content > .card', 'ledger_filters');
+        }
         document.querySelectorAll('input[name="ledLevel"]').forEach(r => {
             r.addEventListener('change', (e) => {
                  updateMonthlyVisibility();   // ⭐ جدید
