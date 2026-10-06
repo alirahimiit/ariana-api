@@ -46,4 +46,7 @@ public interface IMoadianRepository
     Task<TaxHeader?> GetCorrectionByRefTaxIdAsync(long orgId, long fyId, string refTaxId, CancellationToken ct = default);
     // ⭐ جستجوی کالا
     Task<List<ArticleSearchItem>> SearchArticlesAsync(long orgId, long fyId, string q, CancellationToken ct = default);
+
+    // ⭐ ویرایش کامل هدر (پیش‌ارسال)
+    Task UpdateFullAsync(long orgId, long fyId, long id, UpdateHeaderFullRequest req, CancellationToken ct = default);
 }

@@ -800,4 +800,206 @@ public class MoadianRepository : IMoadianRepository
             new CommandDefinition(sql, new { q = "%" + q + "%" }, cancellationToken: ct));
         return list.ToList();
     }
+    // ═══════════════════════════════════════════════════════════
+    //  ویرایش کامل هدر (پیش‌ارسال)
+    // ═══════════════════════════════════════════════════════════
+    public async Task UpdateFullAsync(long orgId, long fyId, long id, UpdateHeaderFullRequest req, CancellationToken ct = default)
+    {
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        await conn.OpenAsync(ct);
+
+        using var tx = conn.BeginTransaction();
+
+        try
+        {
+            // ═══ تاریخ میلادی ═══
+            var persianDate = string.IsNullOrWhiteSpace(req.IndatimPersian)
+                ? DateTime.Now.ToString("yyyy/MM/dd")
+                : req.IndatimPersian.Trim();
+            var gregorianDate = PersianToGregorianStatic(persianDate);
+            var unixMillis = new DateTimeOffset(gregorianDate).ToUnixTimeMilliseconds();
+
+            // ═══ جمع‌ها ═══
+            long tprdis = 0, tdis = 0, tadis = 0, tvam = 0, todam = 0;
+            var bodyRows = new List<(long StuffId, long UnitId, double Am, long Fee, long Cfee, string Cut,
+                long Exr, long Ssrv, long Sscv, long Prdis, long Dis, long Adis, long Vra, long Vam,
+                long Bros, long Consfee, long Spro, long Tcpbs, long Cop, long Vop, string? Bsrn, long Tsstam)>();
+
+            foreach (var it in req.Items)
+            {
+                if (it.Am <= 0) continue;
+                var fee = it.Fee ?? 0;
+                var linePrdis = (long)Math.Round(fee * (decimal)it.Am);
+                var lineDis = it.Dis ?? 0;
+                var lineAdis = linePrdis - lineDis;
+                var lineVra = it.Vra ?? 0;
+
+                // ⭐ اگه کاربر vam رو داده، از اون استفاده کن. وگرنه از vra محاسبه کن
+                var lineVam = it.Vam.HasValue && it.Vam.Value > 0
+                    ? it.Vam.Value
+                    : (long)Math.Truncate((decimal)lineAdis * lineVra / 100m);
+
+                var lineTsstam = lineAdis + lineVam;
+
+                tprdis += linePrdis;
+                tdis += lineDis;
+                tadis += lineAdis;
+                tvam += lineVam;
+
+                bodyRows.Add((
+                    it.StuffId, it.UnitId, it.Am, fee, it.Cfee ?? 0, it.Cut ?? "IRR",
+                    it.Exr ?? 0, it.Ssrv ?? 0, it.Sscv ?? 0, linePrdis, lineDis, lineAdis,
+                    lineVra, lineVam, it.Bros ?? 0, it.Consfee ?? 0, it.Spro ?? 0,
+                    it.Tcpbs ?? 0, it.Cop ?? 0, it.Vop ?? 0, it.Bsrn, lineTsstam
+                ));
+            }
+
+            var tbill = tadis + tvam;
+
+            // ═══ UPDATE هدر ═══
+            const string updateHeaderSql = @"
+                UPDATE tax_header SET
+                    inno = @Inno,
+                    inty = @Inty,
+                    inp = @Inp,
+                    setm = @Setm,
+                    indatim = @Indatim,
+                    indatim_datetime = @IndatimDatetime,
+                    indatim_persian = @IndatimPersian,
+                    Indati2m_datetime = @Indati2mDatetime,
+                    Indati2m_persian = @Indati2mPersian,
+                    cdcn = @Cdcn,
+                    cdcd = @Cdcd,
+                    scc = @Scc,
+                    scln = @Scln,
+                    crn = @Crn,
+                    bbc = @Bbc,
+                    billid = @BillId,
+                    sbc = @Sbc,
+                    ft = @Ft,
+                    tprdis = @Tprdis,
+                    tdis = @Tdis,
+                    tadis = @Tadis,
+                    tvam = @Tvam,
+                    todam = @Todam,
+                    tbill = @Tbill,
+                    tonw = @Tonw,
+                    torv = @Torv,
+                    tocv = @Tocv,
+                    cap = @Cap,
+                    insp = @Insp,
+                    tvop = @Tvop
+                WHERE id = @Id";
+
+            await conn.ExecuteAsync(new CommandDefinition(updateHeaderSql, new
+            {
+                Id = id,
+                Inno = req.Inno ?? "",
+                req.Inty,
+                req.Inp,
+                req.Setm,
+                Indatim = unixMillis,
+                IndatimDatetime = gregorianDate,
+                IndatimPersian = persianDate,
+                Indati2mDatetime = gregorianDate,
+                Indati2mPersian = req.Indati2mPersian ?? persianDate,
+                req.Cdcn,
+                req.Cdcd,
+                req.Scc,
+                req.Scln,
+                req.Crn,
+                req.Bbc,
+                req.BillId,
+                req.Sbc,
+                req.Ft,
+                Tprdis = tprdis,
+                Tdis = tdis,
+                Tadis = tadis,
+                Tvam = tvam,
+                Todam = todam,
+                Tbill = tbill,
+                Tonw = req.Tonw,
+                Torv = req.Torv,
+                Tocv = req.Tocv,
+                req.Cap,
+                req.Insp,
+                req.Tvop
+            }, transaction: tx, cancellationToken: ct));
+
+            // ═══ DELETE ردیف‌های قبلی ═══
+            await conn.ExecuteAsync(new CommandDefinition(
+                "DELETE FROM tax_body WHERE header_id = @id",
+                new { id }, transaction: tx, cancellationToken: ct));
+
+            // ═══ INSERT ردیف‌های جدید ═══
+            const string insertBodySql = @"
+                INSERT INTO tax_body (
+                    cut, exr, ssrv, sscv, header_id, stuff_id, unit_id,
+                    am, fee, cfee, dis, vam, vra, prdis, adis, odam, tsstam,
+                    nw, odr, vop, cop, bsrn, spro, consfee, bros, tcpbs
+                ) VALUES (
+                    @Cut, @Exr, @Ssrv, @Sscv, @HeaderId, @StuffId, @UnitId,
+                    @Am, @Fee, @Cfee, @Dis, @Vam, @Vra, @Prdis, @Adis, 0, @Tsstam,
+                    NULL, 0, @Vop, @Cop, @Bsrn, @Spro, @Consfee, @Bros, @Tcpbs
+                )";
+
+            foreach (var b in bodyRows)
+            {
+                await conn.ExecuteAsync(new CommandDefinition(insertBodySql, new
+                {
+                    b.Cut,
+                    b.Exr,
+                    b.Ssrv,
+                    b.Sscv,
+                    HeaderId = id,
+                    b.StuffId,
+                    b.UnitId,
+                    b.Am,
+                    b.Fee,
+                    b.Cfee,
+                    b.Dis,
+                    b.Vam,
+                    b.Vra,
+                    b.Prdis,
+                    b.Adis,
+                    b.Tsstam,
+                    b.Vop,
+                    b.Cop,
+                    b.Bsrn,
+                    b.Spro,
+                    b.Consfee,
+                    b.Bros,
+                    b.Tcpbs
+                }, transaction: tx, cancellationToken: ct));
+            }
+
+            tx.Commit();
+
+            _logger.LogInformation("tax_header ویرایش شد: Id={Id}, tbill={Tbill}", id, tbill);
+        }
+        catch
+        {
+            tx.Rollback();
+            throw;
+        }
+    }
+
+    // ═══ Persian → Gregorian (static helper) ═══
+    private static DateTime PersianToGregorianStatic(string persianDate)
+    {
+        try
+        {
+            var parts = persianDate.Split('/');
+            if (parts.Length != 3) return DateTime.Now;
+            var y = int.Parse(parts[0]);
+            var m = int.Parse(parts[1]);
+            var d = int.Parse(parts[2]);
+            var pc = new System.Globalization.PersianCalendar();
+            return pc.ToDateTime(y, m, d, 0, 0, 0, 0);
+        }
+        catch
+        {
+            return DateTime.Now;
+        }
+    }
 }

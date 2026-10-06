@@ -737,7 +737,7 @@ public class MoadianController : ControllerBase
         // (برای هر دو حالت اصلاحی و برگشتی یکسانه)
         // ⭐ محاسبه‌ی اقلام سند جدید
         // ⭐ محاسبه‌ی اقلام سند جدید
-        var finalItems = new List<(long StuffId, long UnitId, double Am, long Fee, long Dis, long Vra)>();
+        var finalItems = new List<(long StuffId, long UnitId, double Am, long Fee, long Dis, long Vra, long Vam)>();
 
         if (req.Mode == "amend")
         {
@@ -745,7 +745,17 @@ public class MoadianController : ControllerBase
             foreach (var it in req.Items)
             {
                 if (it.Am <= 0) continue;
-                finalItems.Add((it.StuffId, it.UnitId, it.Am, it.Fee, it.Dis, it.Vra));
+
+                // ⭐ محاسبه‌ی vam اگه کاربر نداده باشه
+                long v = it.Vam ?? 0;
+                if (v == 0 && it.Vra > 0)
+                {
+                    var prdis = (long)Math.Round((decimal)it.Fee * (decimal)it.Am);
+                    var adis = prdis - it.Dis;
+                    v = (long)Math.Truncate((decimal)adis * it.Vra / 100m);
+                }
+
+                finalItems.Add((it.StuffId, it.UnitId, it.Am, it.Fee, it.Dis, it.Vra, v));
             }
         }
         else // return
@@ -755,19 +765,33 @@ public class MoadianController : ControllerBase
             {
                 var match = req.Items.FirstOrDefault(x => x.StuffId == ob.StuffId && x.UnitId == ob.UnitId);
 
-                double remaining = match?.Am ?? 0;      // اگه کاربر ردیف رو حذف کرده → 0
+                double remaining = match?.Am ?? 0;
                 double returned = (ob.Am) - remaining;
 
-                if (returned <= 0.0001) continue;       // چیزی برگشت نخورده
+                if (returned <= 0.0001) continue;
 
-                // ⭐ برگشتی با قیمت و تخفیف و VAT اصلی
-                finalItems.Add((ob.StuffId, ob.UnitId, returned, ob.Fee ?? 0L, ob.Dis ?? 0L, ob.Vra ?? 0L));
+                // ⭐ از مقادیر اصلی
+                long fee = ob.Fee ?? 0;
+                long dis = ob.Dis ?? 0;
+                long vra = ob.Vra ?? 0;
+                long vam = ob.Vam ?? 0;
+
+                // ⭐ اگه vam اصلی نداشت، از vra محاسبه کن
+                if (vam == 0 && vra > 0)
+                {
+                    var prdis = (long)Math.Round((decimal)fee * (decimal)returned);
+                    var adis = prdis - dis;
+                    vam = (long)Math.Truncate((decimal)adis * vra / 100m);
+                }
+
+                finalItems.Add((ob.StuffId, ob.UnitId, returned, fee, dis, vra, vam));
             }
         }
 
         if (finalItems.Count == 0)
             return BadRequest(new { error = "هیچ تغییری وجود نداره (همه‌ی مقادیر یکسانن)" });
 
+        // ⭐ محاسبه‌ی جمع‌ها
         // ⭐ محاسبه‌ی جمع‌ها
         long tprdis = 0, tdis = 0, tadis = 0, tvam = 0;
         var newBodyRows = new List<(long StuffId, long UnitId, double Am, long Fee, long Dis, long Vra, long Prdis, long Adis, long Vam, long Tsstam)>();
@@ -777,7 +801,7 @@ public class MoadianController : ControllerBase
             long linePrdis = (long)Math.Round(it.Fee * (decimal)it.Am);
             long lineDis = it.Dis;
             long lineAdis = linePrdis - lineDis;
-            long lineVam = (long)Math.Truncate((decimal)lineAdis * it.Vra / 100m);
+            long lineVam = it.Vam;
             long lineTsstam = lineAdis + lineVam;
 
             tprdis += linePrdis;
@@ -882,6 +906,36 @@ public class MoadianController : ControllerBase
     {
         var items = await _repo.SearchArticlesAsync(GetOrgId(), GetFyId(), q ?? "", ct);
         return Ok(new { items });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  ویرایش کامل هدر (پیش‌ارسال)
+    // ═══════════════════════════════════════════════════════════
+    [HttpPut("headers/{id:long}")]
+    public async Task<IActionResult> UpdateHeaderFull(long id, [FromBody] UpdateHeaderFullRequest req, CancellationToken ct)
+    {
+        var header = await _repo.GetHeaderByIdAsync(GetOrgId(), GetFyId(), id, ct);
+        if (header is null) return NotFound(new { error = "سند یافت نشد" });
+
+        if (header.Status != 0 && header.Status != 2)
+            return BadRequest(new { error = "فقط اسناد ارسال‌نشده یا خطادار قابل ویرایش مستقیم هستن" });
+
+        if (req.Items.Count == 0)
+            return BadRequest(new { error = "حداقل یک ردیف لازمه" });
+
+        try
+        {
+            await _repo.UpdateFullAsync(GetOrgId(), GetFyId(), id, req, ct);
+
+            Console.WriteLine($"✅ tax_header ویرایش شد: Id={id}");
+
+            return Ok(new { success = true, headerId = id });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ خطا در ویرایش: {ex.Message}");
+            return BadRequest(new { error = ex.Message });
+        }
     }
     // ═══════════════════════════════════════════════════════════
     //  HELPERS

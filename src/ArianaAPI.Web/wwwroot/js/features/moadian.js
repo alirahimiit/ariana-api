@@ -30,7 +30,8 @@ window.App.Features.Moadian = (function () {
         } catch (e) {
             console.warn('Modal API reset failed:', e);
         }
-
+        // ⭐ لیست ارزها — طبق استاندارد سامانه مودیان (پورت از Functions.cs)
+        
         // ۲️⃣ فقط overlay های موقتی خودمون (Picker کالا) رو پاک کن
         document.querySelectorAll('.ap-overlay').forEach(function (el) {
             if (el && el.parentNode) el.parentNode.removeChild(el);
@@ -45,6 +46,34 @@ window.App.Features.Moadian = (function () {
         document.body.style.paddingRight = '';
     }
 
+    const CURRENCIES = [
+        'IRR', 'USD', 'AFN', 'EUR', 'ALL', 'DZD', 'AOA', 'XCD', 'ARS', 'AMD',
+        'AWG', 'AUD', 'AZN', 'BSD', 'BHD', 'BDT', 'BBD', 'BYN', 'BZD', 'XOF',
+        'BMD', 'INR', 'BTN', 'BOB', 'BOV', 'BAM', 'BWP', 'NOK', 'BRL', 'BND',
+        'BGN', 'BIF', 'CVE', 'KHR', 'XAF', 'CAD', 'KYD', 'CLP', 'CLF', 'CNY',
+        'COP', 'COU', 'KMF', 'CDF', 'NZD', 'CRC', 'CUP', 'CUC', 'ANG', 'CZK',
+        'DKK', 'DJF', 'DOP', 'EGP', 'SVC', 'ERN', 'SZL', 'ETB', 'FKP', 'FJD',
+        'XPF', 'GMD', 'GEL', 'GHS', 'GIP', 'GTQ', 'GBP', 'GNF', 'GYD', 'HTG',
+        'HNL', 'HKD', 'HUF', 'ISK', 'IDR', 'XDR', 'IQD', 'ILS', 'JMD', 'JPY',
+        'JOD', 'KZT', 'KES', 'KPW', 'KRW', 'KWD', 'KGS', 'LAK', 'LBP', 'LSL',
+        'ZAR', 'LRD', 'LYD', 'CHF', 'MOP', 'MKD', 'MGA', 'MWK', 'MYR', 'MVR',
+        'MRU', 'MUR', 'XUA', 'MXN', 'MXV', 'MDL', 'MNT', 'MAD', 'MZN', 'MMK',
+        'NAD', 'NPR', 'NIO', 'NGN', 'OMR', 'PKR', 'PAB', 'PGK', 'PYG', 'PEN',
+        'PHP', 'PLN', 'QAR', 'RON', 'RUB', 'RWF', 'WST', 'STN', 'SAR', 'RSD',
+        'SCR', 'SLL', 'SLE', 'SGD', 'XSU', 'SBD', 'SOS', 'SSP', 'LKR', 'SDG',
+        'SRD', 'SEK', 'CHE', 'CHW', 'SYP', 'TWD', 'TJS', 'THB', 'TOP', 'TTD',
+        'TND', 'TRY', 'TMT', 'UGX', 'UAH', 'AED', 'USN', 'UYU', 'UYI', 'UYW',
+        'UZS', 'VUV', 'VES', 'VED', 'VND', 'YER', 'ZMW', 'ZWL', 'XBA', 'XBB',
+        'XBC', 'XBD', 'XTS', 'XXX', 'XAU', 'XPD', 'XPT', 'XAG'
+    ];
+
+    // ⭐ ساخت HTML داینامیک برای Select ارز
+    function _currencyOptions(selected) {
+        const sel = (selected || 'IRR').toUpperCase();
+        return CURRENCIES.map(c =>
+            `<option value="${c}" ${c === sel ? 'selected' : ''}>${c}</option>`
+        ).join('');
+    }
     let _state = {
         activeTab: 'pending',
         pendingFactors: [],
@@ -365,7 +394,8 @@ window.App.Features.Moadian = (function () {
                 const insBadge = getInsBadge(h.ins);
                 const sendable = h.status === 0 || h.status === 2;
                 const inquiriable = h.status !== 0 && h.status !== 2;
-                const canCorrect = h.status === 3 && (h.ins === 1 || h.ins == null);  // فقط اصلی‌ها
+                const canCorrect = h.status === 3 && (h.ins === 1 || h.ins == null);  
+                const canEdit = h.status === 0 || h.status === 2;
 
                 return `
             <tr class="moadian-row status-${h.status}">
@@ -381,14 +411,18 @@ window.App.Features.Moadian = (function () {
                 <td class="num text-center" style="font-size:11px;direction:ltr;">
                     ${h.refNumber ? H.esc(h.refNumber) : '-'}
                 </td>
-                <td class="text-center">
+                  <td class="text-center">
                     ${sendable ? `<button class="btn btn-sm btn-primary"
                             onclick="App.Features.Moadian.sendOne(${h.id})" title="ارسال">📤</button>` : ''}
+                    ${canEdit ? `<button class="btn btn-sm btn-ghost"
+                            onclick="App.Features.Moadian.openEditForm(${h.id}, 'presend')" 
+                            title="ویرایش سند" 
+                            style="color:#059669;">✏️</button>` : ''}
                     ${inquiriable ? `<button class="btn btn-sm btn-ghost"
                             onclick="App.Features.Moadian.inquiry(${h.id})" title="استعلام عادی">🔍</button>` : ''}
                     ${inquiriable ? `<button class="btn btn-sm btn-ghost"
                             onclick="App.Features.Moadian.testRefInquiry(${h.id})" 
-                            title="🔬 تست استعلام با RefNumber (برای دیباگ)" 
+                            title="🔬 تست استعلام" 
                             style="color:#7C3AED;">🔬</button>` : ''}
                     ${canCorrect ? `<button class="btn btn-sm btn-ghost"
                             onclick="App.Features.Moadian.openCorrectDialog(${h.id})" 
@@ -1059,7 +1093,7 @@ window.App.Features.Moadian = (function () {
                         </tr>
                         <tr>
                             <td class="label">جمع کل:</td><td class="num"><strong>${H.fmt(h.tbill)}</strong></td>
-                            <td class="label">جمع VAT:</td><td class="num">${H.fmt(h.tvam)}</td>
+                            <td class="label">جمع ارزش افزوده:</td><td class="num">${H.fmt(h.tvam)}</td>
                             <td class="label">جمع تخفیف:</td><td class="num">${H.fmt(h.tdis)}</td>
                         </tr>
                     </table>
@@ -1077,7 +1111,7 @@ window.App.Features.Moadian = (function () {
                                 <th>واحد</th>
                                 <th>قیمت</th>
                                 <th>تخفیف</th>
-                                <th>VAT</th>
+                                <th>ارزش افزوده</th>
                                 <th>جمع</th>
                             </tr>
                         </thead>
@@ -1331,136 +1365,261 @@ window.App.Features.Moadian = (function () {
         // ⭐ برگشت یا اصلاحی → فرم ویرایش
         await openEditForm(headerId, mode);
     }
-
+    // ⭐ HTML یه ردیف اقلام
+    function _editBodyRowHtml(b, idx, mode) {
+        return `
+            <tr data-idx="${idx}" style="border-bottom:1px solid #E2E8F0;">
+                <td style="padding:4px;text-align:center;font-size:11px;">${idx + 1}</td>
+                <td style="padding:4px;">
+                    <button type="button" class="ed-pick-article"
+                            style="width:100%;text-align:right;background:#F8FAFC;border:1px solid #CBD5E1;
+                                   border-radius:5px;padding:4px 6px;cursor:pointer;font-size:11px;
+                                   display:flex;justify-content:space-between;align-items:center;gap:4px;">
+                        <span class="ed-art-label">${H.esc(b.sstt || '')}</span>
+                        <span style="font-size:9px;color:#94A3B8;direction:ltr;" class="ed-art-code">${H.esc(b.sstid || '')}</span>
+                        <span style="color:#6366F1;font-size:10px;">🔍</span>
+                    </button>
+                </td>
+                <td style="padding:4px;"><input type="number" class="ed-am ed-mini" step="0.01" min="0"
+                        data-stuff="${b.stuffId || 0}" data-unit="${b.unitId || 0}"
+                        data-sstt="${H.esc(b.sstt || '')}" data-sstid="${H.esc(b.sstid || '')}"
+                        value="${b.am}"></td>
+                <td style="padding:4px;"><input type="number" class="ed-fee ed-mini" value="${b.fee || 0}"></td>
+                <td style="padding:4px;"><input type="number" class="ed-dis ed-mini" value="${b.dis || 0}"></td>
+                <td style="padding:4px;"><input type="number" class="ed-vra ed-mini" value="${b.vra || 0}" style="width:50px;"></td>
+                <td style="padding:4px;"><input type="number" class="ed-vam ed-mini" value="${b.vam || 0}" style="width:75px;background:#FEF9C3;" title="مبلغ مالیات (خودکار محاسبه می‌شه)"></td>
+                <td style="padding:4px;">
+                    <select class="ed-cut ed-mini" dir="ltr" style="width:80px;padding:3px;font-size:11px;">
+                        ${_currencyOptions(b.cut)}
+                    </select>
+                </td>
+                <td style="padding:4px;"><input type="number" class="ed-exr ed-mini" value="${b.exr || 1}" style="width:60px;"></td>
+                <td style="padding:4px;"><input type="number" class="ed-ssrv ed-mini" value="${b.ssrv || 0}" style="width:75px;"></td>
+                <td style="padding:4px;"><input type="number" class="ed-sscv ed-mini" value="${b.sscv || 0}" style="width:75px;"></td>
+                <td style="padding:4px;"><input type="number" class="ed-bros ed-mini" value="${b.bros || 0}" style="width:70px;"></td>
+                <td style="padding:4px;text-align:left;font-weight:600;font-size:11px;" class="ed-line-total">0</td>
+                <td style="padding:4px;text-align:center;">
+                    <button type="button" class="btn-rm-row"
+                            style="background:#FEE2E2;color:#DC2626;border:none;border-radius:4px;padding:3px 6px;cursor:pointer;font-size:11px;">🗑️</button>
+                </td>
+            </tr>
+            <style>.ed-mini{padding:4px;border:1px solid #CBD5E1;border-radius:4px;text-align:center;font-size:11px;width:60px;}</style>
+        `;
+    }
     // ⭐⭐ فرم ویرایش برگشت/اصلاحی
+    // ⭐⭐ فرم ویرایش کامل (Tab بندی) — برای presend/amend/return
     async function openEditForm(headerId, mode) {
         try {
+            _closeAllModals();
 
             const resp = await window.App.Http.api('/api/moadian/headers/' + headerId);
             const h = resp.header || {};
             const body = resp.body || [];
 
-            if (body.length === 0) {
+            if (body.length === 0 && mode !== 'presend') {
                 window.App.toast('فاکتور اصلی ردیف نداره', 'error');
                 return;
             }
 
             const isReturn = mode === 'return';
-            const formTitle = isReturn ? '🟠 برگشت از فروش' : '🟡 اصلاحی';
-            const modeLabel = isReturn ? 'برگشتی' : 'اصلاح‌شده';
+            const isAmend = mode === 'amend';
+            const isPresend = mode === 'presend';
+
+            const formTitle = isPresend
+                ? '✏️ ویرایش سند مالیاتی'
+                : (isReturn ? '🟠 برگشت از فروش' : '🟡 اصلاحی');
+
+            const insValue = isPresend ? (h.ins || 1) : (isReturn ? 4 : 2);
+            const modeLabel = isPresend ? '' : (isReturn ? 'برگشتی' : 'اصلاح‌شده');
 
             // ═══ ردیف‌ها ═══
-            const rowsHtml = body.map((b, idx) => `
-                <tr data-idx="${idx}" style="border-bottom:1px solid #E2E8F0;">
-                    <td style="padding:6px;text-align:center;">${idx + 1}</td>
-                    <td colspan="2" style="padding:6px;text-align:right;">
-                        <button type="button" class="ed-pick-article"
-                                data-idx="${idx}"
-                                style="width:100%;text-align:right;background:#F8FAFC;border:1px solid #CBD5E1;
-                                       border-radius:6px;padding:5px 8px;cursor:pointer;font-size:11px;
-                                       display:flex;justify-content:space-between;align-items:center;gap:6px;">
-                            <span class="ed-art-label">${H.esc(b.sstt || '')}</span>
-                            <span style="font-size:10px;color:#94A3B8;direction:ltr;" class="ed-art-code">${H.esc(b.sstid || '')}</span>
-                            <span style="color:#6366F1;font-size:12px;">🔍</span>
-                        </button>
-                    </td>
-                    <td style="padding:6px;text-align:center;">
-                     <input type="number" class="ed-am" step="0.01" min="0"
-                               data-stuff="${b.stuffId || 0}"
-                               data-unit="${b.unitId || 0}"
-                               data-orig-am="${b.am}"
-                               data-fee="${b.fee || 0}"
-                               data-dis="${b.dis || 0}"
-                               data-vra="${b.vra || 0}"
-                               data-sstt="${H.esc(b.sstt || '')}"
-                               data-sstid="${H.esc(b.sstid || '')}"
-                               value="${b.am}"
-                               style="width:70px;padding:4px;border:1px solid #CBD5E1;border-radius:4px;text-align:center;">
-                    </td>
-                    <td style="padding:6px;text-align:center;">
-                        <input type="number" class="ed-fee" value="${b.fee || 0}"
-                               style="width:90px;padding:4px;border:1px solid #CBD5E1;border-radius:4px;text-align:center;">
-                    </td>
-                    <td style="padding:6px;text-align:center;">
-                        <input type="number" class="ed-dis" value="${b.dis || 0}"
-                               style="width:80px;padding:4px;border:1px solid #CBD5E1;border-radius:4px;text-align:center;">
-                    </td>
-                    <td style="padding:6px;text-align:center;">
-                        <input type="number" class="ed-vra" value="${b.vra || 0}"
-                               style="width:60px;padding:4px;border:1px solid #CBD5E1;border-radius:4px;text-align:center;">
-                    </td>
-                    <td style="padding:6px;text-align:left;font-weight:600;" class="ed-line-total">0</td>
-                    <td style="padding:6px;text-align:center;">
-                        <button type="button" class="btn-rm-row" style="background:#FEE2E2;color:#DC2626;border:none;border-radius:4px;padding:4px 8px;cursor:pointer;">🗑️</button>
-                    </td>
-                </tr>
-            `).join('');
+            const rowsHtml = body.map((b, idx) => _editBodyRowHtml(b, idx, mode)).join('');
 
+            // ═══ HTML ═══
             const html = `
-                <div style="padding:16px;text-align:right;max-height:90vh;overflow-y:auto;">
-                    <!-- هدر فاکتور اصلی -->
-                    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:12px;margin-bottom:16px;">
-                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;font-size:12px;">
-                            <div><strong>مشتری:</strong> ${H.esc(h.customerName || '-')}</div>
-                            <div><strong>سریال اصلی:</strong> ${H.esc(h.inno || '-')}</div>
-                            <div><strong>TaxId اصلی:</strong> <span style="direction:ltr;font-size:10px;">${H.esc(h.taxId || '-')}</span></div>
-                        </div>
-                    </div>
-
-                    <!-- هدر ویرایش‌شدنی -->
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-                        <div>
-                            <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;">تاریخ ${modeLabel} (شمسی):</label>
-                            <input type="text" id="ed-persian-date" value="${H.esc(h.indatimPersian || '').split(' ')[0]}"
-                                   style="width:100%;padding:6px;border:1px solid #CBD5E1;border-radius:6px;text-align:center;direction:ltr;">
-                        </div>
-                        <div>
-                            <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;">روش تسویه:</label>
-                            <select id="ed-setm" style="width:100%;padding:6px;border:1px solid #CBD5E1;border-radius:6px;">
-                                <option value="1" ${h.setm === 1 ? 'selected' : ''}>نقدی</option>
-                                <option value="2" ${h.setm === 2 ? 'selected' : ''}>نسیه</option>
-                                <option value="3" ${h.setm === 3 ? 'selected' : ''}>نقدی + نسیه</option>
-                            </select>
-                        </div>
-                    </div>
-                    <!-- توضیح منطق -->
-                    <div style="background:#FEF3C7;border-right:4px solid #F59E0B;padding:10px;border-radius:6px;margin-bottom:12px;font-size:12px;color:#78350F;">
-                        ${isReturn
-                    ? '📌 <b>برگشت از فروش:</b> مقدار <b>باقی‌مونده</b> رو وارد کن. مثلاً اگه از ۱۰ عدد، ۲ عدد برگشت خورده، عدد <b>۸</b> رو وارد کن. اگه کل ردیف برگشت خورده، ردیف رو حذف کن (🗑️).'
-                    : '📌 <b>اصلاحی:</b> مقادیر <b>اصلاح‌شده</b> رو وارد کن. مقادیر نهایی سند اصلاحی همین‌ها خواهند بود.'}
-                    </div>
-                    <!-- جدول اقلام -->
-                    <div style="overflow-x:auto;border:1px solid #E2E8F0;border-radius:8px;margin-bottom:12px;">
-                        <table style="width:100%;border-collapse:collapse;font-size:12px;">
-                            <thead style="background:#F1F5F9;">
-                                <tr>
-                                    <th style="padding:8px;">#</th>
-                                    <th style="padding:8px;text-align:right;">کالا / شرح (کلیک = تغییر)</th>
-                                    <th style="padding:8px;">مقدار ${modeLabel}</th>
-                                    <th style="padding:8px;">قیمت</th>
-                                    <th style="padding:8px;">تخفیف</th>
-                                    <th style="padding:8px;">VAT %</th>
-                                    <th style="padding:8px;">جمع خط</th>
-                                    <th style="padding:8px;"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="ed-items-tbody">${rowsHtml}</tbody>
-                        </table>
-                    </div>
-
-                    <!-- جمع‌ها -->
-                    <!-- افزودن ردیف -->
-                    <div style="margin-bottom:12px;text-align:left;">
-                        <button type="button" id="ed-add-row"
-                                style="padding:8px 16px;background:#DBEAFE;color:#1E40AF;
-                                       border:1px solid #93C5FD;border-radius:6px;cursor:pointer;
-                                       font-size:12px;font-weight:600;">
-                            ➕ افزودن ردیف جدید
+                <div class="ed-form" style="direction:rtl;">
+                    <!-- ═══ Tabs ═══ -->
+                    <div class="ed-tabs" style="display:flex;gap:4px;padding:8px 12px 0;border-bottom:2px solid #E2E8F0;background:#F8FAFC;">
+                        <button type="button" class="ed-tab active" data-tab="main"
+                                style="padding:10px 16px;border:none;background:#fff;border-radius:8px 8px 0 0;cursor:pointer;font-weight:600;color:#4338CA;border-bottom:2px solid #6366F1;margin-bottom:-2px;">
+                            📋 هدر اصلی
+                        </button>
+                        <button type="button" class="ed-tab" data-tab="customs"
+                                style="padding:10px 16px;border:none;background:transparent;border-radius:8px 8px 0 0;cursor:pointer;font-weight:600;color:#64748B;">
+                            🛃 گمرکی و قرارداد
+                        </button>
+                        <button type="button" class="ed-tab" data-tab="buyer"
+                                style="padding:10px 16px;border:none;background:transparent;border-radius:8px 8px 0 0;cursor:pointer;font-weight:600;color:#64748B;">
+                            👤 خریدار
+                        </button>
+                        <button type="button" class="ed-tab" data-tab="items"
+                                style="padding:10px 16px;border:none;background:transparent;border-radius:8px 8px 0 0;cursor:pointer;font-weight:600;color:#64748B;">
+                            📦 اقلام (${body.length})
                         </button>
                     </div>
 
-                    <!-- جمع‌ها -->
-                    <div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:8px;padding:12px;margin-bottom:16px;">
+                    <div class="ed-body" style="padding:16px;max-height:60vh;overflow-y:auto;">
+
+                        <!-- ═══ TAB 1: هدر اصلی ═══ -->
+                        <div class="ed-pane" data-pane="main">
+                            <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px;">
+                                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                                    <div><strong>مشتری:</strong> ${H.esc(h.customerName || '-')}</div>
+                                    <div><strong>سریال اصلی:</strong> ${H.esc(h.inno || '-')}</div>
+                                    <div><strong>TaxId اصلی:</strong> <span style="direction:ltr;font-size:10px;">${H.esc(h.taxId || '-')}</span></div>
+                                </div>
+                            </div>
+
+                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+                                <div>
+                                    <label class="ed-lb">سریال صورتحساب:</label>
+                                    <input type="text" id="ed-inno" class="ed-inp" dir="ltr"
+                                           value="${H.esc(h.inno || '')}">
+                                </div>
+                                <div>
+                                    <label class="ed-lb">نوع صورتحساب:</label>
+                                    <select id="ed-inty" class="ed-inp">
+                                        <option value="1" ${h.inty === 1 ? 'selected' : ''}>نوع اول</option>
+                                        <option value="2" ${h.inty === 2 ? 'selected' : ''}>نوع دوم</option>
+                                        <option value="3" ${h.inty === 3 ? 'selected' : ''}>نوع سوم</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="ed-lb">الگوی صورتحساب:</label>
+                                    <select id="ed-inp" class="ed-inp">
+                                        <option value="1" ${h.inp === 1 ? 'selected' : ''}>فروش</option>
+                                        <option value="2" ${h.inp === 2 ? 'selected' : ''}>فروش ارزی</option>
+                                        <option value="3" ${h.inp === 3 ? 'selected' : ''}>طلا و جواهر</option>
+                                        <option value="4" ${h.inp === 4 ? 'selected' : ''}>قرارداد پیمانکاری</option>
+                                        <option value="5" ${h.inp === 5 ? 'selected' : ''}>قبوض خدماتی</option>
+                                        <option value="6" ${h.inp === 6 ? 'selected' : ''}>بلیت هواپیما</option>
+                                        <option value="7" ${h.inp === 7 ? 'selected' : ''}>صادرات</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="ed-lb">روش تسویه:</label>
+                                    <select id="ed-setm" class="ed-inp">
+                                        <option value="1" ${h.setm === 1 ? 'selected' : ''}>نقدی</option>
+                                        <option value="2" ${h.setm === 2 ? 'selected' : ''}>نسیه</option>
+                                        <option value="3" ${h.setm === 3 ? 'selected' : ''}>نقدی + نسیه</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="ed-lb">تاریخ صدور (شمسی):</label>
+                                    <input type="text" id="ed-persian-date" class="ed-inp"
+                                           value="${H.esc((h.indatimPersian || '').split(' ')[0])}" dir="ltr">
+                                </div>
+                                <div>
+                                    <label class="ed-lb">تاریخ ایجاد (شمسی):</label>
+                                    <input type="text" id="ed-create-date" class="ed-inp"
+                                           value="${H.esc((h.Indati2mPersian || h.indatimPersian || '').split(' ')[0])}" dir="ltr">
+                                </div>
+                            </div>
+
+                            <div style="margin-top:16px;padding:10px;background:#EEF2FF;border-right:4px solid #6366F1;border-radius:6px;font-size:11px;color:#3730A3;">
+                                📌 مبالغ هدر به‌صورت خودکار از روی اقلام محاسبه می‌شن
+                            </div>
+                        </div>
+
+                        <!-- ═══ TAB 2: گمرکی و قرارداد ═══ -->
+                        <div class="ed-pane" data-pane="customs" style="display:none;">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                                <div>
+                                    <label class="ed-lb">شماره کوتاژ اظهارنامه گمرکی:</label>
+                                    <input type="text" id="ed-cdcn" class="ed-inp" dir="ltr"
+                                           value="${H.esc(h.cdcn || '')}" placeholder="مثلاً: 123456">
+                                </div>
+                                <div>
+                                    <label class="ed-lb">تاریخ کوتاژ (Unix timestamp):</label>
+                                    <input type="number" id="ed-cdcd" class="ed-inp" dir="ltr"
+                                           value="${h.cdcd || ''}" placeholder="۰ (خالی)">
+                                </div>
+                                <div>
+                                    <label class="ed-lb">کد گمرک محل اظهار:</label>
+                                    <input type="text" id="ed-scc" class="ed-inp" dir="ltr"
+                                           value="${H.esc(h.scc || '')}">
+                                </div>
+                                <div>
+                                    <label class="ed-lb">شماره پروانه گمرکی:</label>
+                                    <input type="text" id="ed-scln" class="ed-inp" dir="ltr"
+                                           value="${H.esc(h.scln || '')}">
+                                </div>
+                                <div>
+                                    <label class="ed-lb">شناسه یکتای ثبت قرارداد:</label>
+                                    <input type="text" id="ed-crn" class="ed-inp" dir="ltr"
+                                           value="${H.esc(h.crn || '')}">
+                                </div>
+                                <div>
+                                    <label class="ed-lb">شناسه قبض:</label>
+                                    <input type="text" id="ed-billid" class="ed-inp" dir="ltr"
+                                           value="${H.esc(h.billid || '')}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ═══ TAB 3: خریدار ═══ -->
+                        <div class="ed-pane" data-pane="buyer" style="display:none;">
+                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+                                <div>
+                                    <label class="ed-lb">کد شعبه خریدار:</label>
+                                    <input type="text" id="ed-bbc" class="ed-inp" dir="ltr"
+                                           value="${H.esc(h.bbc || '')}">
+                                </div>
+                                <div>
+                                    <label class="ed-lb">کد شعبه فروشنده:</label>
+                                    <input type="text" id="ed-sbc" class="ed-inp" dir="ltr"
+                                           value="${H.esc(h.sbc || '')}">
+                                </div>
+                                <div>
+                                    <label class="ed-lb">نوع پرواز:</label>
+                                    <select id="ed-ft" class="ed-inp">
+                                        <option value="">—</option>
+                                        <option value="1" ${h.ft === 1 ? 'selected' : ''}>داخلی</option>
+                                        <option value="2" ${h.ft === 2 ? 'selected' : ''}>خارجی</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ═══ TAB 4: اقلام ═══ -->
+                        <div class="ed-pane" data-pane="items" style="display:none;">
+                            <div style="overflow-x:auto;border:1px solid #E2E8F0;border-radius:8px;">
+                                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                                    <thead style="background:#F1F5F9;position:sticky;top:0;">
+                                        <tr>
+                                            <th style="padding:6px;">#</th>
+                                            <th style="padding:6px;text-align:right;min-width:220px;">کالا (کلیک = تغییر)</th>
+                                            <th style="padding:6px;">تعداد</th>
+                                            <th style="padding:6px;">قیمت</th>
+                                            <th style="padding:6px;">تخفیف</th>
+                                            <th style="padding:6px;">درصد ارزش افزوده</th>
+                                            <th style="padding:6px;">مبلغ ارز افزوده</th>
+                                            <th style="padding:6px;">ارز</th>
+                                            <th style="padding:6px;">نرخ ارز</th>
+                                            <th style="padding:6px;">ارزش ریالی</th>
+                                            <th style="padding:6px;">ارزش ارزی</th>
+                                            <th style="padding:6px;">حق‌العمل</th>
+                                            <th style="padding:6px;">جمع خط</th>
+                                            <th style="padding:6px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ed-items-tbody">${rowsHtml}</tbody>
+                                </table>
+                            </div>
+
+                            <div style="margin-top:12px;text-align:left;">
+                                <button type="button" id="ed-add-row"
+                                        style="padding:8px 16px;background:#DBEAFE;color:#1E40AF;
+                                               border:1px solid #93C5FD;border-radius:6px;cursor:pointer;
+                                               font-size:12px;font-weight:600;">
+                                    ➕ افزودن ردیف جدید
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ═══ جمع‌ها ═══ -->
+                    <div style="background:#EEF2FF;border-top:1px solid #C7D2FE;padding:12px 16px;">
                         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;font-size:12px;">
                             <div><strong>جمع قبل از تخفیف:</strong> <span id="ed-tprdis">0</span></div>
                             <div><strong>تخفیفات:</strong> <span id="ed-tdis">0</span></div>
@@ -1469,59 +1628,107 @@ window.App.Features.Moadian = (function () {
                         </div>
                     </div>
 
-                    <!-- دکمه‌ها -->
-                    <div style="display:flex;gap:8px;justify-content:flex-end;">
-                        <button type="button" class="ed-cancel" style="padding:10px 20px;background:#F1F5F9;color:#475569;border:1px solid #E2E8F0;border-radius:8px;cursor:pointer;">
+                    <!-- ═══ Footer ═══ -->
+                    <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;background:#F8FAFC;border-top:1px solid #E2E8F0;">
+                        <button type="button" class="ed-cancel"
+                                style="padding:10px 20px;background:#F1F5F9;color:#475569;border:1px solid #E2E8F0;border-radius:8px;cursor:pointer;">
                             انصراف
                         </button>
-                        <button class="ed-submit" style="padding:10px 24px;background:#6366F1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">
-                            ثبت ${isReturn ? 'برگشت' : 'اصلاحی'}
+                        <button class="ed-submit"
+                                style="padding:10px 24px;background:#6366F1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">
+                            ${isPresend ? 'ذخیره تغییرات' : ('ثبت ' + (isReturn ? 'برگشت' : 'اصلاحی'))}
                         </button>
                     </div>
                 </div>
+
+                <style>
+                    .ed-lb { display:block; font-size:11px; color:#475569; margin-bottom:4px; font-weight:600; }
+                    .ed-inp { width:100%; padding:6px; border:1px solid #CBD5E1; border-radius:6px; font-size:12px; font-family:inherit; }
+                    .ed-inp:focus { outline:none; border-color:#6366F1; box-shadow:0 0 0 3px rgba(99,102,241,0.1); }
+                </style>
             `;
-           
+
             window.App.openModal(formTitle, html);
-           
-            // ⭐ Bind events
+
+            // ═══ Bind tabs ═══
             const container = document.querySelector('.modal-body') || document.querySelector('.modal');
-            if (container) {
-                container.querySelectorAll('input[type=number]').forEach(inp => {
-                    inp.addEventListener('input', () => recalcEdForm(mode));
-                });
-                container.querySelectorAll('.btn-rm-row').forEach(btn => {
-                    btn.addEventListener('click', function () {
-                        this.closest('tr').remove();
-                        recalcEdForm(mode);
+            if (!container) return;
+
+            container.querySelectorAll('.ed-tab').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    const tab = this.dataset.tab;
+                    container.querySelectorAll('.ed-tab').forEach(b => {
+                        b.classList.remove('active');
+                        b.style.background = 'transparent';
+                        b.style.borderBottom = 'none';
+                        b.style.marginBottom = '0';
+                        b.style.color = '#64748B';
+                    });
+                    this.classList.add('active');
+                    this.style.background = '#fff';
+                    this.style.borderBottom = '2px solid #6366F1';
+                    this.style.marginBottom = '-2px';
+                    this.style.color = '#4338CA';
+
+                    container.querySelectorAll('.ed-pane').forEach(p => {
+                        p.style.display = p.dataset.pane === tab ? 'block' : 'none';
                     });
                 });
-                container.querySelector('.ed-submit')?.addEventListener('click', () => {
-                    submitEditForm(headerId, mode);
-                });
+            });
 
-                container.querySelector('.ed-cancel')?.addEventListener('click', () => {
-                    _closeAllModals();
+            // ═══ Bind inputs ═══
+            container.querySelectorAll('input[type=number]').forEach(inp => {
+                inp.addEventListener('input', () => {
+                    // ⭐ اگه کاربر vam رو دستی تغییر داد، flag بذار
+                    if (inp.classList.contains('ed-vam')) {
+                        inp.dataset.vamManual = '1';
+                    }
+                    // ⭐ اگه vra عوض شد، flag vam رو پاک کن تا auto محاسبه بشه
+                    if (inp.classList.contains('ed-vra')) {
+                        const tr = inp.closest('tr');
+                        const vamEl = tr?.querySelector('.ed-vam');
+                        if (vamEl) vamEl.dataset.vamManual = '0';
+                    }
+                    recalcEdForm(mode);
                 });
+            });
 
-                // ⭐ Bind دکمه‌های Picker کالا
-                container.querySelectorAll('.ed-pick-article').forEach(btn => {
-                    btn.addEventListener('click', function () {
-                        const idx = parseInt(this.dataset.idx);
-                        const tr = this.closest('tr');
-                        openArticlePicker(tr, mode);
-                    });
+            // ═══ Picker کالا ═══
+            container.querySelectorAll('.ed-pick-article').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    const tr = this.closest('tr');
+                    openArticlePicker(tr, mode);
                 });
+            });
 
-                // ⭐ دکمه افزودن ردیف
-                container.querySelector('#ed-add-row')?.addEventListener('click', () => {
-                    addNewEditRow(mode);
+            // ═══ حذف ردیف ═══
+            container.querySelectorAll('.btn-rm-row').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    this.closest('tr').remove();
+                    recalcEdForm(mode);
                 });
-            }
+            });
 
-            // محاسبه اولیه
+            // ═══ افزودن ردیف ═══
+            container.querySelector('#ed-add-row')?.addEventListener('click', () => {
+                addNewEditRow(mode);
+            });
+
+            // ═══ انصراف ═══
+            container.querySelector('.ed-cancel')?.addEventListener('click', () => {
+                _closeAllModals();
+            });
+
+            // ═══ ثبت ═══
+            container.querySelector('.ed-submit')?.addEventListener('click', () => {
+                submitEditForm(headerId, mode);
+            });
+
             setTimeout(() => recalcEdForm(mode), 50);
+
         } catch (err) {
             window.App.toast('خطا: ' + err.message, 'error');
+            console.error(err);
         }
     }
     // ⭐⭐ Picker کالا
@@ -1654,83 +1861,77 @@ window.App.Features.Moadian = (function () {
         }
     }
 
+    //function applyArticleToRow(tr, article) {
+    //    // به‌روز کردن دکمه Picker
+    //    const btn = tr.querySelector('.ed-pick-article');
+    //    if (btn) {
+    //        btn.querySelector('.ed-art-label').textContent = article.name || '';
+    //        btn.querySelector('.ed-art-code').textContent = article.taxId || '';
+    //    }
+
+    //    // به‌روز کردن input‌ها
+    //    const amEl = tr.querySelector('.ed-am');
+    //    const feeEl = tr.querySelector('.ed-fee');
+    //    const disEl = tr.querySelector('.ed-dis');
+    //    const vraEl = tr.querySelector('.ed-vra');
+
+    //    if (amEl) {
+    //        amEl.dataset.stuff = article.id || 0;
+    //        amEl.dataset.unit = article.unitId || 0;
+    //        amEl.dataset.sstt = article.name || '';
+    //        amEl.dataset.sstid = article.taxId || '';
+    //    }
+    //    if (feeEl) feeEl.value = article.fee || 0;
+    //    if (disEl) disEl.value = 0;
+    //    if (vraEl) vraEl.value = article.vra || 0;
+    //}
+
     function applyArticleToRow(tr, article) {
-        // به‌روز کردن دکمه Picker
         const btn = tr.querySelector('.ed-pick-article');
         if (btn) {
             btn.querySelector('.ed-art-label').textContent = article.name || '';
             btn.querySelector('.ed-art-code').textContent = article.taxId || '';
         }
 
-        // به‌روز کردن input‌ها
         const amEl = tr.querySelector('.ed-am');
-        const feeEl = tr.querySelector('.ed-fee');
-        const disEl = tr.querySelector('.ed-dis');
-        const vraEl = tr.querySelector('.ed-vra');
-
         if (amEl) {
             amEl.dataset.stuff = article.id || 0;
             amEl.dataset.unit = article.unitId || 0;
-            amEl.dataset.sstt = article.name || '';
-            amEl.dataset.sstid = article.taxId || '';
         }
+
+        const feeEl = tr.querySelector('.ed-fee');
         if (feeEl) feeEl.value = article.fee || 0;
+
+        const disEl = tr.querySelector('.ed-dis');
         if (disEl) disEl.value = 0;
+
+        const vraEl = tr.querySelector('.ed-vra');
         if (vraEl) vraEl.value = article.vra || 0;
     }
 
     // ⭐ افزودن ردیف جدید
+
     function addNewEditRow(mode) {
         const tbody = document.getElementById('ed-items-tbody');
         if (!tbody) return;
 
         const idx = tbody.querySelectorAll('tr').length;
-        const tr = document.createElement('tr');
-        tr.style.borderBottom = '1px solid #E2E8F0;';
-        tr.setAttribute('data-idx', idx);
+        const emptyBody = {
+            stuffId: 0, unitId: 0, am: 1, fee: 0, dis: 0, vra: 0, vam: 0,
+            cut: 'IRR', exr: 1, ssrv: 0, sscv: 0, bros: 0,
+            sstt: '', sstid: ''
+        };
 
-        tr.innerHTML = `
-            <td style="padding:6px;text-align:center;">${idx + 1}</td>
-            <td colspan="2" style="padding:6px;text-align:right;">
-                <button type="button" class="ed-pick-article"
-                        data-idx="${idx}"
-                        style="width:100%;text-align:right;background:#FEF3C7;border:1px dashed #F59E0B;
-                               border-radius:6px;padding:5px 8px;cursor:pointer;font-size:11px;
-                               display:flex;justify-content:space-between;align-items:center;gap:6px;">
-                    <span class="ed-art-label" style="color:#92400E;">➕ کالا انتخاب کن...</span>
-                    <span style="font-size:10px;color:#94A3B8;direction:ltr;" class="ed-art-code"></span>
-                    <span style="color:#F59E0B;font-size:12px;">🔍</span>
-                </button>
-            </td>
-            <td style="padding:6px;text-align:center;">
-                <input type="number" class="ed-am" step="0.01" min="0"
-                       data-stuff="0" data-unit="0"
-                       data-orig-am="0" data-fee="0" data-dis="0" data-vra="0"
-                       data-sstt="" data-sstid=""
-                       value="1"
-                       style="width:70px;padding:4px;border:1px solid #CBD5E1;border-radius:4px;text-align:center;">
-            </td>
-            <td style="padding:6px;text-align:center;">
-                <input type="number" class="ed-fee" value="0"
-                       style="width:90px;padding:4px;border:1px solid #CBD5E1;border-radius:4px;text-align:center;">
-            </td>
-            <td style="padding:6px;text-align:center;">
-                <input type="number" class="ed-dis" value="0"
-                       style="width:80px;padding:4px;border:1px solid #CBD5E1;border-radius:4px;text-align:center;">
-            </td>
-            <td style="padding:6px;text-align:center;">
-                <input type="number" class="ed-vra" value="0"
-                       style="width:60px;padding:4px;border:1px solid #CBD5E1;border-radius:4px;text-align:center;">
-            </td>
-            <td style="padding:6px;text-align:left;font-weight:600;" class="ed-line-total">0</td>
-            <td style="padding:6px;text-align:center;">
-                <button type="button" class="btn-rm-row" style="background:#FEE2E2;color:#DC2626;border:none;border-radius:4px;padding:4px 8px;cursor:pointer;">🗑️</button>
-            </td>
-        `;
+        const tr = document.createElement('tr');
+        tr.setAttribute('data-idx', idx);
+        tr.innerHTML = _editBodyRowHtml(emptyBody, idx, mode).replace('class="ed-art-label"', 'class="ed-art-label" style="color:#92400E;"');
+
+        // پیام placeholder
+        tr.querySelector('.ed-art-label').textContent = '➕ کالا انتخاب کن...';
 
         tbody.appendChild(tr);
 
-        // Bind events
+        // Bind
         tr.querySelectorAll('input[type=number]').forEach(inp => {
             inp.addEventListener('input', () => recalcEdForm(mode));
         });
@@ -1744,6 +1945,7 @@ window.App.Features.Moadian = (function () {
 
         recalcEdForm(mode);
     }
+    // ⭐ محاسبه‌ی زنده    // ⭐ محاسبه‌ی زنده
     // ⭐ محاسبه‌ی زنده
     function recalcEdForm(mode) {
         const container = document.querySelector('.modal-body') || document.querySelector('.modal');
@@ -1752,17 +1954,34 @@ window.App.Features.Moadian = (function () {
         let tprdis = 0, tdis = 0, tvam = 0;
 
         container.querySelectorAll('#ed-items-tbody tr').forEach(tr => {
-            const am = parseFloat(tr.querySelector('.ed-am')?.value) || 0;
-            const fee = parseFloat(tr.querySelector('.ed-fee')?.value) || 0;
-            const dis = parseFloat(tr.querySelector('.ed-dis')?.value) || 0;
-            const vra = parseFloat(tr.querySelector('.ed-vra')?.value) || 0;
+            const amEl = tr.querySelector('.ed-am');
+            const feeEl = tr.querySelector('.ed-fee');
+            const disEl = tr.querySelector('.ed-dis');
+            const vraEl = tr.querySelector('.ed-vra');
+            const vamEl = tr.querySelector('.ed-vam');
+
+            const am = parseFloat(amEl?.value) || 0;
+            const fee = parseFloat(feeEl?.value) || 0;
+            const dis = parseFloat(disEl?.value) || 0;
+            const vra = parseFloat(vraEl?.value) || 0;
 
             const prdis = Math.round(fee * am);
             const adis = prdis - dis;
-            const vam = Math.trunc(adis * vra / 100);
+
+            // ⭐ محاسبه‌ی auto VAT: اگه کاربر دست نزده باشه، از vra محاسبه کن
+            let vam = parseFloat(vamEl?.value) || 0;
+            const manualVam = vamEl?.dataset?.vamManual === '1';
+
+            if (!manualVam) {
+                vam = Math.trunc(adis * vra / 100);
+                if (vamEl) vamEl.value = vam;
+            }
+
             const line = adis + vam;
 
-            tr.querySelector('.ed-line-total').textContent = H.fmt(line);
+            const lt = tr.querySelector('.ed-line-total');
+            if (lt) lt.textContent = H.fmt(line);
+
             tprdis += prdis;
             tdis += dis;
             tvam += vam;
@@ -1771,17 +1990,21 @@ window.App.Features.Moadian = (function () {
         const tadis = tprdis - tdis;
         const tbill = tadis + tvam;
 
-        container.querySelector('#ed-tprdis').textContent = H.fmt(tprdis);
-        container.querySelector('#ed-tdis').textContent = H.fmt(tdis);
-        container.querySelector('#ed-tvam').textContent = H.fmt(tvam);
-        container.querySelector('#ed-tbill').textContent = H.fmt(tbill);
+        const q = (s) => container.querySelector(s);
+        if (q('#ed-tprdis')) q('#ed-tprdis').textContent = H.fmt(tprdis);
+        if (q('#ed-tdis')) q('#ed-tdis').textContent = H.fmt(tdis);
+        if (q('#ed-tvam')) q('#ed-tvam').textContent = H.fmt(tvam);
+        if (q('#ed-tbill')) q('#ed-tbill').textContent = H.fmt(tbill);
     }
-
+    // ⭐ ثبت نهایی
     // ⭐ ثبت نهایی
     async function submitEditForm(headerId, mode) {
         const container = document.querySelector('.modal-body') || document.querySelector('.modal');
         if (!container) return;
 
+        const isPresend = mode === 'presend';
+
+        // ═══ جمع‌آوری اقلام ═══
         const items = [];
         container.querySelectorAll('#ed-items-tbody tr').forEach(tr => {
             const amEl = tr.querySelector('.ed-am');
@@ -1789,8 +2012,7 @@ window.App.Features.Moadian = (function () {
 
             const stuffId = parseInt(amEl.dataset.stuff) || 0;
             const unitId = parseInt(amEl.dataset.unit) || 0;
-
-            if (stuffId === 0) return;    // کالای انتخاب‌نشده
+            if (stuffId === 0) return;
 
             const am = parseFloat(amEl.value) || 0;
             if (am <= 0) return;
@@ -1801,7 +2023,13 @@ window.App.Features.Moadian = (function () {
                 am: am,
                 fee: parseInt(tr.querySelector('.ed-fee')?.value) || 0,
                 dis: parseInt(tr.querySelector('.ed-dis')?.value) || 0,
-                vra: parseInt(tr.querySelector('.ed-vra')?.value) || 0
+                vra: parseInt(tr.querySelector('.ed-vra')?.value) || 0,
+                vam: parseInt(tr.querySelector('.ed-vam')?.value) || 0,
+                cut: tr.querySelector('.ed-cut')?.value || 'IRR',
+                exr: parseInt(tr.querySelector('.ed-exr')?.value) || 1,
+                ssrv: parseInt(tr.querySelector('.ed-ssrv')?.value) || 0,
+                sscv: parseInt(tr.querySelector('.ed-sscv')?.value) || 0,
+                bros: parseInt(tr.querySelector('.ed-bros')?.value) || 0
             });
         });
 
@@ -1810,35 +2038,72 @@ window.App.Features.Moadian = (function () {
             return;
         }
 
-        const persianDate = container.querySelector('#ed-persian-date')?.value?.trim() || null;
-        const setm = parseInt(container.querySelector('#ed-setm')?.value) || null;
-
         const btn = container.querySelector('.ed-submit');
         if (btn) { btn.disabled = true; btn.textContent = '⏳ ...'; }
 
         try {
-            const resp = await window.App.Http.api('/api/moadian/headers/' + headerId + '/correct-with-items', {
-                method: 'POST',
-                body: JSON.stringify({
-                    mode: mode,
-                    indatimPersian: persianDate,
-                    setm: setm,
+            if (isPresend) {
+                // ═══ ویرایش درجا (PUT) ═══
+                const payload = {
+                    inno: container.querySelector('#ed-inno')?.value?.trim() || null,
+                    inty: parseInt(container.querySelector('#ed-inty')?.value) || 1,
+                    inp: parseInt(container.querySelector('#ed-inp')?.value) || 1,
+                    setm: parseInt(container.querySelector('#ed-setm')?.value) || 1,
+                    indatimPersian: container.querySelector('#ed-persian-date')?.value?.trim() || null,
+                    Indati2mPersian: container.querySelector('#ed-create-date')?.value?.trim() || null,
+                    cdcn: container.querySelector('#ed-cdcn')?.value?.trim() || null,
+                    cdcd: parseInt(container.querySelector('#ed-cdcd')?.value) || null,
+                    scc: container.querySelector('#ed-scc')?.value?.trim() || null,
+                    scln: container.querySelector('#ed-scln')?.value?.trim() || null,
+                    crn: container.querySelector('#ed-crn')?.value?.trim() || null,
+                    billId: container.querySelector('#ed-billid')?.value?.trim() || null,
+                    bbc: container.querySelector('#ed-bbc')?.value?.trim() || null,
+                    sbc: container.querySelector('#ed-sbc')?.value?.trim() || null,
+                    ft: parseInt(container.querySelector('#ed-ft')?.value) || null,
+                    
                     items: items
-                })
-            });
+                };
 
-            if (resp.success) {
-                _closeAllModals();
+                const resp = await window.App.Http.api('/api/moadian/headers/' + headerId, {
+                    method: 'PUT',
+                    body: JSON.stringify(payload)
+                });
 
-                const label = mode === 'return' ? 'برگشت' : 'اصلاحی';
-                window.App.toast(
-                    `✅ سند ${label} با سریال ${resp.inno} ساخته شد (${H.fmt(resp.tbill)} ریال) — برو ارسال کن`,
-                    'success'
-                );
-                setTimeout(() => renderHeaders(), 600);
+                if (resp.success) {
+                    _closeAllModals();
+                    window.App.toast('✅ سند ویرایش شد', 'success');
+                    setTimeout(() => renderHeaders(), 600);
+                } else {
+                    window.App.toast('خطا: ' + (resp.error || 'نامشخص'), 'error');
+                    if (btn) { btn.disabled = false; btn.textContent = 'ذخیره تغییرات'; }
+                }
             } else {
-                window.App.toast('خطا: ' + (resp.error || 'نامشخص'), 'error');
-                if (btn) { btn.disabled = false; btn.textContent = 'ثبت ' + (mode === 'return' ? 'برگشت' : 'اصلاحی'); }
+                // ═══ اصلاحی/برگشتی (POST) ═══
+                const persianDate = container.querySelector('#ed-persian-date')?.value?.trim() || null;
+                const setm = parseInt(container.querySelector('#ed-setm')?.value) || null;
+
+                const resp = await window.App.Http.api('/api/moadian/headers/' + headerId + '/correct-with-items', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        mode: mode,
+                        indatimPersian: persianDate,
+                        setm: setm,
+                        items: items
+                    })
+                });
+
+                if (resp.success) {
+                    _closeAllModals();
+                    const label = mode === 'return' ? 'برگشت' : 'اصلاحی';
+                    window.App.toast(
+                        `✅ سند ${label} با سریال ${resp.inno} ساخته شد (${H.fmt(resp.tbill)} ریال)`,
+                        'success'
+                    );
+                    setTimeout(() => renderHeaders(), 600);
+                } else {
+                    window.App.toast('خطا: ' + (resp.error || 'نامشخص'), 'error');
+                    if (btn) { btn.disabled = false; btn.textContent = 'ثبت ' + (mode === 'return' ? 'برگشت' : 'اصلاحی'); }
+                }
             }
         } catch (err) {
             window.App.toast('خطا: ' + err.message, 'error');
@@ -1863,6 +2128,7 @@ window.App.Features.Moadian = (function () {
         deleteHeader,
         openCorrectDialog, 
         doCorrect,
+        openEditForm,
         // ⭐ فاکتورهای آماده
         searchPending,
         resetPendingSearch,
