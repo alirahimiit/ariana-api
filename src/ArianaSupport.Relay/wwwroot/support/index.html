@@ -1,0 +1,51 @@
+﻿<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>پنل پشتیبانی - آریانا</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-title">
+            <span class="topbar-logo">آ</span>
+            <span>پنل پشتیبانی</span>
+        </div>
+        <div class="topbar-actions">
+            <span id="unreadBadge" class="unread-badge hidden">0</span>
+            <button id="logoutBtn" class="topbar-btn">خروج</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h3>تیکت‌ها</h3>
+                <button id="refreshBtn" class="btn-icon" title="بروزرسانی">🔄</button>
+            </div>
+            <div id="ticketList" class="ticket-list">
+                <div class="loading">در حال بارگذاری...</div>
+            </div>
+        </aside>
+
+        <main class="chat-area">
+            <div id="chatHeader" class="chat-header">
+                <span class="chat-empty-text">یک تیکت را انتخاب کنید</span>
+            </div>
+            <div id="chatMessages" class="chat-messages">
+                <div class="chat-empty">
+                    <div class="chat-empty-icon">💬</div>
+                    <p>برای مشاهده پیام‌ها، یک تیکت از لیست انتخاب کنید</p>
+                </div>
+            </div>
+            <div class="chat-input-bar">
+                <textarea id="replyInput" placeholder="متن پاسخ..." disabled rows="1"></textarea>
+                <button id="sendBtn" disabled>ارسال</button>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -25,6 +25,11 @@ window.App = Object.assign(window.App || {}, {
     handleLogin: (e) => window.App.Auth.handleLogin(e),
     handleLogout: () => {
         window.App.Permissions.clear();
+        // ⭐ پاک‌سازی FAB و Popup پیام‌رسان
+        window.App.Features.Messaging?._stopFabPolling?.();
+        window.App.Features.Messaging?._stopPolling?.();
+        document.getElementById('msgFab')?.remove();
+        document.getElementById('msgPopupOverlay')?.remove();
         return window.App.Auth.handleLogout();
     },
     showLogin: () => window.App.Auth.showLogin(),
@@ -100,6 +105,7 @@ window.App = Object.assign(window.App || {}, {
         if (this.state.token) {
             this.showApp();
             this.navigate('dashboard');
+            
         } else {
             this.showLogin();
             // ⭐ اول لایسنس، بعد سازمان‌ها (به صورت موازی)
@@ -113,6 +119,8 @@ window.App = Object.assign(window.App || {}, {
                 window.App.Permissions.applyMenuFilter();
             });
         }
+
+        window.App.Features.Messaging?.initFab();
     },
 
     // ═══════════════════════════════════════════

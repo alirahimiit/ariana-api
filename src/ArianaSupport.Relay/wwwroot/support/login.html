@@ -1,0 +1,52 @@
+﻿<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ورود پشتیبان - آریانا</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-body">
+    <div class="login-card">
+        <div class="login-logo">آ</div>
+        <h1>پنل پشتیبانی آریانا</h1>
+        <p class="login-sub">لطفاً رمز عبور را وارد کنید</p>
+        <form id="loginForm">
+            <input type="password" id="password" placeholder="رمز عبور" autofocus required>
+            <div id="error" class="error-box hidden"></div>
+            <button type="submit" id="submitBtn">ورود</button>
+        </form>
+    </div>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const pwd = document.getElementById('password').value;
+            const err = document.getElementById('error');
+            const btn = document.getElementById('submitBtn');
+            err.classList.add('hidden');
+            btn.disabled = true;
+            btn.textContent = 'در حال بررسی...';
+            try {
+                const r = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ password: pwd })
+                });
+                if (r.ok) {
+                    window.location.href = 'index.html';
+                } else {
+                    const data = await r.json();
+                    err.textContent = data.message || 'رمز اشتباه است';
+                    err.classList.remove('hidden');
+                }
+            } catch (ex) {
+                err.textContent = 'خطای شبکه';
+                err.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'ورود';
+            }
+        });
+    </script>
+</body>
+</html>

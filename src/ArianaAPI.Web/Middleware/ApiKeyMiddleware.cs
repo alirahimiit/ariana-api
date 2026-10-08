@@ -31,9 +31,11 @@ public class ApiKeyMiddleware
             path.StartsWith("/api/auth/refresh") ||
             path.StartsWith("/api/license") ||
             path.StartsWith("/api/lookup") ||
+            path.StartsWith("/api/messaging") ||  
             path.StartsWith("/css") ||
             path.StartsWith("/js") ||
             path.StartsWith("/assets") ||
+            path.StartsWith("/api/local-support") ||   
             path == "/" ||
             path.EndsWith(".html") ||
             path.EndsWith(".css") ||

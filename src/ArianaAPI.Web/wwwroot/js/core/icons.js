@@ -83,6 +83,7 @@ window.App.Icons = (function () {
         'kind': svg('<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>'),
         //مودیان
         'moadian': svg('<path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><line x1="9" y1="9" x2="9" y2="9"/><line x1="9" y1="12" x2="9" y2="12"/><line x1="9" y1="15" x2="9" y2="15"/><circle cx="15" cy="8" r="2"/><circle cx="15" cy="15" r="2"/>'),
+        'messaging': svg('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
         // ─── عمومی ───
         'default': svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'),
         'search': svg('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),
@@ -147,6 +148,7 @@ window.App.Icons = (function () {
         'party-factor': 'party-factor',
         'factor-profit-loss': 'factor-profit-loss',
         'moadian': 'moadian',
+        'messaging': 'messaging',
         'hesab': 'hesab',
         'tafzili': 'tafzili',
         'article': 'article',

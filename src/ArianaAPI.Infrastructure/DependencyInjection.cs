@@ -17,13 +17,14 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-  
         // ═══ تنظیمات ═══
         services.Configure<AppSettings>(configuration);
         services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
         services.Configure<ApiKeySettings>(configuration.GetSection(ApiKeySettings.SectionName));
-//===========داشبورد===========
+
+        // ═══ داشبورد ═══
         services.AddScoped<IDashboardRepository, DashboardRepository>();
+
         // ═══ Data Layer ═══
         services.AddSingleton<ITenantConnectionFactory, TenantConnectionFactory>();
 
@@ -43,7 +44,6 @@ public static class DependencyInjection
         services.AddSingleton<ILicenseService, LicenseService>();
         services.AddScoped<ILicenseRegistryService, LicenseRegistryService>();
         services.AddScoped<ILookupRepository, LookupRepository>();
-        services.AddScoped<ILookupRepository, LookupRepository>();
         services.AddSingleton<ITenantDbNameProvider, TenantDbNameProvider>();
         services.AddScoped<ILedgerRepository, LedgerRepository>();
         services.AddScoped<ITarazRepository, TarazRepository>();
@@ -62,15 +62,28 @@ public static class DependencyInjection
         services.AddScoped<IArticleStockRepository, ArticleStockRepository>();
         services.AddScoped<ISpecialHesabRepository, SpecialHesabRepository>();
 
-        // ⭐ HttpClient برای MoadianService
+        // ═══════════════════════════════════════════════════════
+        //  ⭐ Messaging (بله / ایتا / روبیکا)
+        // ═══════════════════════════════════════════════════════
+        services.AddHttpClient<IBaleService, BaleService>();
+        services.AddScoped<IMessagingRepository, MessagingRepository>();
+        services.AddScoped<IMessagingService, MessagingService>();
+        services.AddScoped<IBotConfigRepository, BotConfigRepository>();  
+        services.AddHostedService<MessagingPollingWorker>();
+        // ═══ Support Relay Client ═══
+        services.AddHttpClient<SupportRelayClient>((sp, http) =>
+        {
+            http.Timeout = TimeSpan.FromSeconds(30);
+        });
+        // ═══════════════════════════════════════════════════════
+        //  Moadian
+        // ═══════════════════════════════════════════════════════
         services.AddHttpClient<IMoadianService, MoadianService>((sp, http) =>
         {
             http.Timeout = TimeSpan.FromSeconds(30);
         });
 
-        // ⭐ MoadianOptions — از تنظیمات میاد (بعداً از DB پر می‌شه)
         services.AddScoped<MoadianOptions>();
-
         services.AddScoped<MoadianServiceFactory>();
         services.AddScoped<IMoadianRepository, MoadianRepository>();
 
