@@ -32,10 +32,7 @@ namespace ArianaAPI.Infrastructure.Services
             _logger = logger;
         }
 
-        private string GetRelayUrl()
-        {
-            return _config["Support:RelayUrl"] ?? "";
-        }
+        private string GetRelayUrl() => _config["Support:RelayUrl"] ?? "";
 
         private object? LoadLicense()
         {
@@ -47,7 +44,6 @@ namespace ArianaAPI.Infrastructure.Services
                     _logger.LogWarning("ariana.lic پیدا نشد: {Path}", path);
                     return null;
                 }
-
                 var json = File.ReadAllText(path, Encoding.UTF8);
                 return JsonSerializer.Deserialize<object>(json);
             }
@@ -58,8 +54,28 @@ namespace ArianaAPI.Infrastructure.Services
             }
         }
 
+        private object? LoadLicensePayload()
+        {
+            try
+            {
+                var path = Path.Combine(AppContext.BaseDirectory, "ariana.lic");
+                if (!File.Exists(path)) return null;
+                var json = File.ReadAllText(path, Encoding.UTF8);
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("payload", out var payload))
+                {
+                    return JsonSerializer.Deserialize<object>(payload.GetRawText());
+                }
+                return null;
+            }
+            catch { return null; }
+        }
+
         public async Task<(bool Success, string Message)> SendAsync(
-            string sessionId, long? userId, string? userName, string message,
+            string sessionId,
+            long? userId, string? userName,
+            long orgId, long fyId, string? orgName, string? fyName,
+            string message,
             CancellationToken ct = default)
         {
             try
@@ -78,6 +94,10 @@ namespace ArianaAPI.Infrastructure.Services
                     sessionId,
                     userId,
                     userName,
+                    orgId,
+                    fyId,
+                    orgName,
+                    fyName,
                     message
                 };
 
@@ -103,19 +123,15 @@ namespace ArianaAPI.Infrastructure.Services
             }
         }
 
-        public async Task<string> PollAsync(
-            string sessionId, int sinceId,
-            CancellationToken ct = default)
+        public async Task<string> PollAsync(string sessionId, int sinceId, CancellationToken ct = default)
         {
             try
             {
                 var relayUrl = GetRelayUrl();
-                if (string.IsNullOrWhiteSpace(relayUrl))
-                    return "{\"items\":[]}";
+                if (string.IsNullOrWhiteSpace(relayUrl)) return "{\"items\":[]}";
 
                 var license = LoadLicense();
-                if (license == null)
-                    return "{\"items\":[]}";
+                if (license == null) return "{\"items\":[]}";
 
                 var body = new { license, sessionId, sinceId };
                 var json = JsonSerializer.Serialize(body, _jsonOptions);
@@ -124,8 +140,7 @@ namespace ArianaAPI.Infrastructure.Services
                 var url = relayUrl.TrimEnd('/') + "/api/support/poll";
                 var resp = await _http.PostAsync(url, content, ct);
 
-                if (!resp.IsSuccessStatusCode)
-                    return "{\"items\":[]}";
+                if (!resp.IsSuccessStatusCode) return "{\"items\":[]}";
 
                 return await resp.Content.ReadAsStringAsync(ct);
             }

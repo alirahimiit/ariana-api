@@ -1,6 +1,6 @@
 ﻿/* ═══════════════════════════════════════════════════
-  Feature / Sanad (اسناد حسابداری)
-  مسئولیت: لیست، جستجو، جزئیات سند + فیلتر خطاها
+  Feature / Sanad (اسناد حسابداری) — نسخه 2.0
+  ⭐ جدید: Multi-Select + Bulk Delete + Copy to FY
   ═══════════════════════════════════════════════════ */
 
 window.App = window.App || {};
@@ -9,15 +9,17 @@ window.App.Features = window.App.Features || {};
 window.App.Features.Sanad = (function () {
     'use strict';
 
-    // ─── state محلی این feature ───
     let _filters = {};
     let _sort = { by: 'noSanad', dir: 'desc' };
+    let _accountFilter = { codeCol: 0, codeMoein: 0, codeTafzil: 0, label: '' };
 
-    // ⭐ state فیلتر خطاها در modal جزئیات
     let _detailFilter = { errorType: 'all' };
     let _detailData = { detail: null, items: [] };
 
-    // ─── shortcut ها ───
+    // ⭐ جدید: انتخاب چندتایی
+    let _selected = new Set();
+    let _currentItems = [];
+
     const H = window.App.Helpers;
     const S = window.App.State;
 
@@ -29,22 +31,27 @@ window.App.Features.Sanad = (function () {
     }
 
     function sortBy(field) {
-        if (_sort.by === field) {
-            _sort.dir = _sort.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-            _sort.by = field;
-            _sort.dir = 'asc';
-        }
+        if (_sort.by === field) _sort.dir = _sort.dir === 'asc' ? 'desc' : 'asc';
+        else { _sort.by = field; _sort.dir = 'asc'; }
         window.App.state.sanadPage = 1;
         loadList();
     }
 
     // ═══════════════════════════════════════════
-    //  RENDER — صفحه لیست
+    //  RENDER
     // ═══════════════════════════════════════════
     function render() {
         const c = document.getElementById('content');
         c.innerHTML = `
+            <div class="sanad-account-bar">
+                <button type="button" class="btn btn-ghost btn-sm" id="openAccountPickerBtn">
+                    🏦 انتخاب از حساب‌ها
+                </button>
+                <span id="selectedAccountLabel" class="selected-account-label"></span>
+                <button type="button" class="btn btn-ghost btn-sm" id="clearAccountFilterBtn" style="display:none;">
+                    ✕ پاک کردن
+                </button>
+            </div>
             <div id="sanadFilters"></div>
             <div id="sanadListContainer">
                 <div class="loading"><div class="spinner"></div></div>
@@ -57,20 +64,27 @@ window.App.Features.Sanad = (function () {
             onRun: (values) => {
                 _filters = values;
                 window.App.state.sanadPage = 1;
+                _selected.clear();
                 loadList();
             }
         });
 
+        document.getElementById('openAccountPickerBtn')
+            ?.addEventListener('click', openAccountPicker);
+        document.getElementById('clearAccountFilterBtn')
+            ?.addEventListener('click', clearAccountFilter);
+        updateAccountBar();
+
         _filters = FilterPanel.getValues();
+        _selected.clear();
         loadList();
+        bindListShortcuts();
     }
 
     function buildFilterSchema() {
         return [
             {
-                title: 'بازه تاریخی و شماره',
-                icon: '📅',
-                cols: 4,
+                title: 'بازه تاریخی و شماره', icon: '📅', cols: 4,
                 fields: [
                     { name: 'fromDate', label: 'از تاریخ', type: 'date' },
                     { name: 'toDate', label: 'تا تاریخ', type: 'date' },
@@ -79,13 +93,10 @@ window.App.Features.Sanad = (function () {
                 ]
             },
             {
-                title: 'وضعیت و نوع',
-                icon: '🏷️',
-                cols: 4,
+                title: 'وضعیت و نوع', icon: '🏷️', cols: 4,
                 fields: [
                     {
-                        name: 'vazeit', label: 'وضعیت سند', type: 'select',
-                        placeholder: 'همه',
+                        name: 'vazeit', label: 'وضعیت سند', type: 'select', placeholder: 'همه',
                         options: [
                             { value: '0', label: 'پیش‌نویس' },
                             { value: '1', label: 'ثبت شده' },
@@ -93,8 +104,7 @@ window.App.Features.Sanad = (function () {
                         ]
                     },
                     {
-                        name: 'kindSanad', label: 'نوع سند', type: 'select',
-                        placeholder: 'همه',
+                        name: 'kindSanad', label: 'نوع سند', type: 'select', placeholder: 'همه',
                         options: [
                             { value: '0', label: 'عادی' },
                             { value: '1', label: 'افتتاحیه' },
@@ -102,11 +112,8 @@ window.App.Features.Sanad = (function () {
                         ]
                     },
                     {
-                        name: 'onlyWithErrors', label: 'نمایش', type: 'select',
-                        placeholder: 'همه اسناد',
-                        options: [
-                            { value: 'true', label: '⚠️ فقط دارای ایراد' }
-                        ]
+                        name: 'onlyWithErrors', label: 'نمایش', type: 'select', placeholder: 'همه اسناد',
+                        options: [{ value: 'true', label: '⚠️ فقط دارای ایراد' }]
                     }
                 ]
             }
@@ -114,7 +121,7 @@ window.App.Features.Sanad = (function () {
     }
 
     // ═══════════════════════════════════════════
-    //  LOAD — لیست اسناد
+    //  LOAD
     // ═══════════════════════════════════════════
     async function loadList() {
         const container = document.getElementById('sanadListContainer');
@@ -124,9 +131,12 @@ window.App.Features.Sanad = (function () {
         try {
             const url = buildUrl();
             const data = await window.App.Http.api(url);
-            const items = data || [];
+            _currentItems = data || [];
+            // پاک‌سازی انتخاب‌هایی که دیگه در لیست نیستن
+            const ids = new Set(_currentItems.map(x => x.parentSanadID));
+            [..._selected].forEach(id => { if (!ids.has(id)) _selected.delete(id); });
 
-            if (items.length === 0) {
+            if (_currentItems.length === 0) {
                 container.innerHTML = `
                     <div class="empty">
                         <div class="empty-icon">📭</div>
@@ -135,7 +145,7 @@ window.App.Features.Sanad = (function () {
                 return;
             }
 
-            container.innerHTML = buildListHtml(items);
+            container.innerHTML = buildListHtml(_currentItems);
 
             if (window.App.UI.PermissionGuard) {
                 window.App.UI.PermissionGuard.apply(container);
@@ -147,6 +157,9 @@ window.App.Features.Sanad = (function () {
                 subtitle: subtitle(),
                 filename: 'SanadList'
             });
+
+            bindCheckboxes();
+            updateBulkToolbar();
 
         } catch (err) {
             container.innerHTML = `<div class="error-box">${err.message}</div>`;
@@ -165,30 +178,36 @@ window.App.Features.Sanad = (function () {
         if (f.noTo != null && f.noTo !== '') url += `&noTo=${parseInt(f.noTo)}`;
         if (f.vazeit != null && f.vazeit !== '') url += `&vazeit=${parseInt(f.vazeit)}`;
         if (f.kindSanad != null && f.kindSanad !== '') url += `&kindSanad=${parseInt(f.kindSanad)}`;
-        if (_sort.by) {
-            url += `&sortBy=${_sort.by}&sortDir=${_sort.dir}`;
-        }
-        if (f.onlyWithErrors === 'true') {
-            url += `&onlyWithErrors=true`;
-        }
-
+        if (_sort.by) url += `&sortBy=${_sort.by}&sortDir=${_sort.dir}`;
+        if (f.onlyWithErrors === 'true') url += `&onlyWithErrors=true`;
+        // ⭐ فیلتر کدینگ
+        if (_accountFilter.codeCol > 0)
+            url += `&codeCol=${_accountFilter.codeCol}`;
+        if (_accountFilter.codeMoein > 0)
+            url += `&codeMoein=${_accountFilter.codeMoein}`;
+        if (_accountFilter.codeTafzil > 0)
+            url += `&codeTafzil=${_accountFilter.codeTafzil}`;
         return url;
     }
 
     function buildListHtml(items) {
         const pageSize = S.getSettings().pageSize;
         const page = window.App.state.sanadPage;
+        const allSelected = items.length > 0 && items.every(x => _selected.has(x.parentSanadID));
 
         const rows = items.map(s => {
             const bed = s.mabBed || 0;
             const bes = s.mabBes || 0;
             const isUnbalanced = Math.abs(bed - bes) > 0.01;
             const hasErrors = (s.totalErrorCount || 0) > 0;
-            const rowClass = hasErrors ? 'row-has-errors'
-                : (isUnbalanced ? 'row-unbalanced' : '');
+            const rowClass = hasErrors ? 'row-has-errors' : (isUnbalanced ? 'row-unbalanced' : '');
+            const isSel = _selected.has(s.parentSanadID);
 
             return `
-            <tr class="${rowClass}">
+            <tr class="${rowClass} ${isSel ? 'row-selected' : ''}" data-id="${s.parentSanadID}">
+                <td class="sd-col-check">
+                    <input type="checkbox" class="sanad-cb" data-id="${s.parentSanadID}" ${isSel ? 'checked' : ''}>
+                </td>
                 <td class="num">${H.fmt(s.noSanad)}</td>
                 <td class="num">${H.esc(s.dateIn || '-')}</td>
                 <td>${H.esc(s.otherParentSharh || '-')}</td>
@@ -216,19 +235,40 @@ window.App.Features.Sanad = (function () {
         }).join('');
 
         return `
-            <div class="card">
                 <div class="card-title">
                     <span>📄 اسناد حسابداری</span>
-                    <button class="btn btn-primary btn-sm"
-                        data-permission="101"
-                        onclick="App.Features.SanadForm.openCreate()">
-                          ➕ سند جدید
-                    </button>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <button class="btn btn-ghost btn-sm" id="importCsvBtn" title="ورود اسناد از فایل CSV">
+                            📥 ورود از فایل
+                        </button>
+                        <button class="btn btn-ghost btn-sm" id="downloadTemplateBtn" title="دانلود الگوی CSV">
+                            📋 الگو
+                        </button>
+                        <button class="btn btn-primary btn-sm"
+                            data-permission="101"
+                            onclick="App.Features.SanadForm.openCreate()">
+                              ➕ سند جدید
+                        </button>
+                    </div>
                 </div>
+
+                <!-- ⭐ Toolbar انتخاب گروهی -->
+                <div id="sanadBulkToolbar" class="sanad-bulk-toolbar" style="display:none;">
+                    <span class="bulk-count"><strong id="bulkCount">0</strong> سند انتخاب شده</span>
+                    <div class="bulk-actions">
+                        <button class="btn btn-sm btn-ghost" id="bulkExportBtn" title="خروجی CSV">📤 خروجی CSV</button>
+                        <button class="btn btn-sm btn-danger" id="bulkDeleteBtn" title="حذف گروهی">🗑️ حذف گروهی</button>
+                        <button class="btn btn-sm btn-ghost" id="bulkClearBtn">✕ لغو انتخاب</button>
+                    </div>
+                </div>
+
                 <div class="table-wrapper">
                     <table>
                       <thead>
                             <tr>
+                                <th style="width:36px;">
+                                    <input type="checkbox" id="sanadSelectAll" ${allSelected ? 'checked' : ''}>
+                                </th>
                                 <th class="sortable-th" onclick="App.Features.Sanad.sortBy('noSanad')">شماره ${sortIcon('noSanad')}</th>
                                 <th class="sortable-th" onclick="App.Features.Sanad.sortBy('dateIn')">تاریخ ${sortIcon('dateIn')}</th>
                                 <th class="sortable-th" onclick="App.Features.Sanad.sortBy('sharh')">شرح ${sortIcon('sharh')}</th>
@@ -253,20 +293,387 @@ window.App.Features.Sanad = (function () {
             </div>`;
     }
 
+    // ═══════════════════════════════════════════
+    //  BULK SELECT
+    // ═══════════════════════════════════════════
+    function bindCheckboxes() {
+        const container = document.getElementById('sanadListContainer');
+
+        // ═══ انتخاب همه ═══
+        document.getElementById('sanadSelectAll')?.addEventListener('change', function () {
+            if (this.checked) {
+                _currentItems.forEach(x => _selected.add(x.parentSanadID));
+            } else {
+                _currentItems.forEach(x => _selected.delete(x.parentSanadID));
+            }
+            container.querySelectorAll('.sanad-cb').forEach(cb => { cb.checked = this.checked; });
+            container.querySelectorAll('tr[data-id]').forEach(tr => {
+                tr.classList.toggle('row-selected', this.checked);
+            });
+            updateBulkToolbar();
+        });
+
+        // ═══ چک‌باکس هر ردیف ═══
+        container.querySelectorAll('.sanad-cb').forEach(cb => {
+            cb.addEventListener('change', function () {
+                const id = parseInt(this.dataset.id);
+                if (this.checked) _selected.add(id); else _selected.delete(id);
+                this.closest('tr').classList.toggle('row-selected', this.checked);
+                updateBulkToolbar();
+
+                const all = document.getElementById('sanadSelectAll');
+                if (all) {
+                    all.checked = _currentItems.length > 0 &&
+                        _currentItems.every(x => _selected.has(x.parentSanadID));
+                }
+            });
+        });
+
+        // ═══ دکمه‌های toolbar انتخاب گروهی ═══
+        document.getElementById('bulkExportBtn')?.addEventListener('click', exportCsv);
+        document.getElementById('bulkDeleteBtn')?.addEventListener('click', bulkDelete);
+        document.getElementById('bulkClearBtn')?.addEventListener('click', () => {
+            _selected.clear();
+            container.querySelectorAll('.sanad-cb').forEach(cb => { cb.checked = false; });
+            container.querySelectorAll('tr[data-id]').forEach(tr => tr.classList.remove('row-selected'));
+            const all = document.getElementById('sanadSelectAll');
+            if (all) all.checked = false;
+            updateBulkToolbar();
+        });
+
+        // ═══ دکمه‌های ورود/الگو ═══
+        document.getElementById('importCsvBtn')?.addEventListener('click', openImportDialog);
+        document.getElementById('downloadTemplateBtn')?.addEventListener('click', downloadTemplate);
+    }
+
+    function updateBulkToolbar() {
+        const tb = document.getElementById('sanadBulkToolbar');
+        const cnt = document.getElementById('bulkCount');
+        if (!tb) return;
+        const n = _selected.size;
+        tb.style.display = n > 0 ? 'flex' : 'none';
+        if (cnt) cnt.textContent = n;
+    }
+
+    // ═══════════════════════════════════════════
+    //  COPY DIALOG
+    // ═══════════════════════════════════════════
+    // ═══════════════════════════════════════════
+    //  EXPORT CSV
+    // ═══════════════════════════════════════════
+    async function exportCsv() {
+        if (_selected.size === 0) { window.App.toast('ابتدا سند انتخاب کنید', 'warn'); return; }
+
+        try {
+            // ⭐ از Http.api استفاده نمی‌کنیم چون blob برمی‌گردونه
+            // پس headerها رو دستی می‌سازیم — دقیقاً مثل Http.api
+            const headers = { 'Content-Type': 'application/json' };
+
+            // API Key
+            const apiKey = window.App.state.apiKey
+                || localStorage.getItem('ariana_api_key')
+                || (window.App.config && window.App.config.apiKey);
+            if (apiKey) headers['X-Api-Key'] = apiKey;
+
+            // JWT Token
+            const token = window.App.state.token
+                || localStorage.getItem('ariana_token')
+                || localStorage.getItem('token');
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+
+            const response = await fetch('/api/sanad/export-csv', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({ sanadIds: [..._selected] })
+            });
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ error: 'خطای ناشناخته' }));
+                throw new Error(err.error || response.statusText);
+            }
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Sanad_Export_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+
+            window.App.toast(`✅ ${_selected.size} سند خروجی گرفته شد`, 'success');
+        } catch (err) {
+            window.App.toast('خطا: ' + err.message, 'error');
+        }
+    }
+    // ═══════════════════════════════════════════
+    //  DOWNLOAD TEMPLATE
+    // ═══════════════════════════════════════════
+    function downloadTemplate() {
+        const header = 'شماره سند;تاريخ سند;شرح سند;شرح رديف;بدهکار;بستانکار;رديف;کد کل;کد معين;کد تفصيلي;کد تفصيلي2;شناسه تفضيلي2;مقدار\n';
+        const sample = '1001;1404/01/01;نمونه شرح سند;شرح ردیف 1;1000000;0;1;1101;1;0;0;0;0\n' +
+            '1001;1404/01/01;نمونه شرح سند;شرح ردیف 2;0;1000000;2;1102;1;0;0;0;0\n';
+
+        const blob = new Blob(['\uFEFF' + header + sample], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Sanad_Template.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    // ═══════════════════════════════════════════
+    //  IMPORT CSV
+    // ═══════════════════════════════════════════
+    function openImportDialog() {
+        const body = `
+            <div class="import-dialog">
+                <div class="import-info">
+                    📥 فایل CSV اسناد را انتخاب کنید. ابتدا اعتبارسنجی انجام می‌شود و پیش‌نمایش نشان داده خواهد شد.
+                </div>
+                <div class="form-group">
+                    <label>فایل CSV <span class="req">*</span></label>
+                    <input type="file" id="importFileInput" accept=".csv,text/csv" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="cb-line">
+                        <input type="checkbox" id="importForceNew">
+                        همه اسناد با شماره جدید ثبت شوند (حتی اگر شماره در CSV باشد)
+                    </label>
+                </div>
+                <div class="import-warning">
+                    ⚠️ این عملیات فقط سند جدید اضافه می‌کند و به اسناد موجود دست نمی‌زند.
+                    در صورت هر خطایی، کل عملیات لغو می‌شود.
+                </div>
+                <div id="importStatus" class="import-status" style="display:none;"></div>
+                <div class="copy-footer">
+                    <button class="btn btn-primary" id="importValidateBtn">🔍 بررسی فایل</button>
+                    <button class="btn btn-ghost" onclick="App.closeModal()">انصراف</button>
+                </div>
+            </div>`;
+
+        window.App.openModal('📥 ورود اسناد از فایل CSV', body);
+
+        document.getElementById('importValidateBtn')?.addEventListener('click', doImportValidate);
+    }
+
+    async function doImportValidate() {
+        const fileInput = document.getElementById('importFileInput');
+        const status = document.getElementById('importStatus');
+        const btn = document.getElementById('importValidateBtn');
+        const forceNew = document.getElementById('importForceNew').checked;
+
+        if (!fileInput.files || !fileInput.files[0]) {
+            window.App.toast('ابتدا فایل را انتخاب کنید', 'error');
+            return;
+        }
+
+        const file = fileInput.files[0];
+
+        try {
+            btn.disabled = true; btn.textContent = '⏳ در حال بررسی...';
+            status.style.display = 'block';
+            status.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+            const content = await file.text();
+
+            const preview = await window.App.Http.api('/api/sanad/import-preview', {
+                method: 'POST',
+                body: JSON.stringify({
+                    csvContent: content,
+                    forceNewNumbers: forceNew
+                })
+            });
+
+            if (!preview.isValid) {
+                renderPreviewErrors(status, preview);
+                btn.disabled = false; btn.textContent = '🔍 بررسی مجدد';
+                return;
+            }
+
+            renderPreviewSuccess(status, preview, content, forceNew);
+            btn.disabled = false; btn.textContent = '🔍 بررسی مجدد';
+
+        } catch (err) {
+            status.innerHTML = `<div class="import-error-box">❌ ${H.esc(err.message)}</div>`;
+            btn.disabled = false; btn.textContent = '🔍 بررسی فایل';
+        }
+    }
+
+    function renderPreviewErrors(container, preview) {
+        const errors = (preview.errors || []).slice(0, 20);
+        container.innerHTML = `
+            <div class="import-error-box">
+                <div class="import-error-title">❌ ${preview.errors.length} خطا یافت شد</div>
+                <ul class="import-error-list">
+                    ${errors.map(e => `<li>خط ${e.lineNumber}: ${H.esc(e.message)}</li>`).join('')}
+                </ul>
+                ${preview.errors.length > 20 ? '<div class="import-error-more">... و موارد بیشتر</div>' : ''}
+            </div>`;
+    }
+
+    function renderPreviewSuccess(container, preview, csvContent, forceNew) {
+        const warnings = (preview.warnings || []).slice(0, 10);
+
+        container.innerHTML = `
+            <div class="import-success-box">
+                <div class="import-success-title">✅ فایل معتبر است</div>
+                <div class="import-stats">
+                    <div class="import-stat">
+                        <div class="import-stat-label">تعداد اسناد</div>
+                        <div class="import-stat-value">${H.fmt(preview.sanadCount)}</div>
+                    </div>
+                    <div class="import-stat">
+                        <div class="import-stat-label">تعداد ردیف‌ها</div>
+                        <div class="import-stat-value">${H.fmt(preview.itemCount)}</div>
+                    </div>
+                    <div class="import-stat">
+                        <div class="import-stat-label">جمع بدهکار</div>
+                        <div class="import-stat-value">${H.fmt(preview.totalBed)}</div>
+                    </div>
+                    <div class="import-stat">
+                        <div class="import-stat-label">جمع بستانکار</div>
+                        <div class="import-stat-value">${H.fmt(preview.totalBes)}</div>
+                    </div>
+                </div>
+                ${warnings.length > 0 ? `
+                    <div class="import-warn-title">⚠️ هشدارها:</div>
+                    <ul class="import-warn-list">
+                        ${warnings.map(w => `<li>خط ${w.lineNumber}: ${H.esc(w.message)}</li>`).join('')}
+                    </ul>
+                ` : ''}
+                <div class="import-preview-table-wrap">
+                    <table class="import-preview-table">
+                        <thead>
+                            <tr>
+                                <th>شماره اصلی</th>
+                                <th>شماره جدید</th>
+                                <th>تاریخ</th>
+                                <th>شرح</th>
+                                <th>ردیف</th>
+                                <th>بدهکار</th>
+                                <th>بستانکار</th>
+                                <th>تراز</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${preview.preview.slice(0, 50).map(p => `
+                                <tr>
+                                    <td>${H.fmt(p.sourceNoSanad)}</td>
+                                    <td><strong>${H.fmt(p.newNoSanad)}</strong></td>
+                                    <td>${H.esc(p.dateIn || '-')}</td>
+                                    <td>${H.esc((p.sharh || '').substring(0, 40))}</td>
+                                    <td>${H.fmt(p.itemCount)}</td>
+                                    <td class="num">${H.fmt(p.totalBed)}</td>
+                                    <td class="num">${H.fmt(p.totalBes)}</td>
+                                    <td class="text-center">${p.isBalanced ? '✅' : '⚠️'}</td>
+                                </tr>`).join('')}
+                        </tbody>
+                    </table>
+                    ${preview.preview.length > 50 ? `<div class="import-more">... و ${preview.preview.length - 50} سند دیگر</div>` : ''}
+                </div>
+                <button class="btn btn-primary" id="importCommitBtn" style="margin-top:14px;">✅ ثبت نهایی</button>
+            </div>`;
+
+        document.getElementById('importCommitBtn')?.addEventListener('click', async (e) => {
+            if (!confirm(`آیا از ثبت ${preview.sanadCount} سند مطمئن هستید؟`)) return;
+            e.target.disabled = true;
+            e.target.textContent = '⏳ در حال ثبت...';
+
+            try {
+                const result = await window.App.Http.api('/api/sanad/import-commit', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        csvContent: csvContent,
+                        forceNewNumbers: forceNew
+                    })
+                });
+
+                window.App.toast(
+                    `✅ ${result.createdSanads} سند با ${result.createdItems} ردیف ثبت شد`,
+                    'success'
+                );
+                window.App.closeModal();
+                loadList();
+            } catch (err) {
+                window.App.toast('خطا: ' + err.message, 'error');
+                e.target.disabled = false;
+                e.target.textContent = '✅ ثبت نهایی';
+            }
+        });
+    }
+
+    //══════════════════
+    //  BULK DELETE
+    // ═══════════════════════════════════════════
+    async function bulkDelete() {
+        if (_selected.size === 0) return;
+
+        if (window.App.Permissions && !window.App.Permissions.can(108)) {
+            window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
+            return;
+        }
+
+        if (!confirm(`آیا از حذف ${_selected.size} سند مطمئن هستید؟\n(سند قطعی قابل حذف نیست)`)) return;
+
+        try {
+            const result = await window.App.Http.api('/api/sanad/bulk-delete', {
+                method: 'POST',
+                body: JSON.stringify({ sanadIds: [..._selected] })
+            });
+            window.App.toast(`✅ ${result.deleted} سند حذف شد`, 'success');
+            _selected.clear();
+            loadList();
+        } catch (err) {
+            window.App.toast('خطا: ' + err.message, 'error');
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  KEYBOARD SHORTCUTS
+    // ═══════════════════════════════════════════
+    let _listKeyHandler = null;
+    function bindListShortcuts() {
+        if (_listKeyHandler) document.removeEventListener('keydown', _listKeyHandler);
+        _listKeyHandler = function (e) {
+            if (document.querySelector('.modal-overlay, .modal-box')) return;
+
+            if (e.key === 'F9') { e.preventDefault(); gotoPage(1); }
+            else if (e.key === 'F12') { e.preventDefault(); gotoPage(window.App.state.sanadPage + 1); }
+            else if (e.key === 'F10') { e.preventDefault(); gotoPage(Math.max(1, window.App.state.sanadPage - 1)); }
+            else if (e.ctrlKey && (e.key === 'n' || e.key === 'N')) {
+                e.preventDefault(); window.App.Features.SanadForm.openCreate();
+            }
+            else if (e.ctrlKey && (e.key === 'r' || e.key === 'R')) {
+                e.preventDefault(); loadList();
+            }
+        };
+        document.addEventListener('keydown', _listKeyHandler);
+    }
+
     function gotoPage(page) {
         if (page < 1) return;
         window.App.state.sanadPage = page;
+        _selected.clear();
         loadList();
     }
 
     // ═══════════════════════════════════════════
-    //  SHOW DETAIL — modal سند
+    //  SHOW DETAIL (بدون تغییر)
     // ═══════════════════════════════════════════
-    async function showDetail(sanadId) {
+    async function showDetail(sanadId, options = {}) {
         if (!sanadId) return;
+
+        // ⭐ تشخیص: از کجا باز شده؟
+        const isFromExternal = options.fromExternal === true
+            || window.App.state.currentPage !== 'sanad';
+
         window.App.openModal('جزئیات سند',
             `<div class="loading"><div class="spinner"></div></div>`);
-
         _detailFilter.errorType = 'all';
 
         try {
@@ -274,13 +681,10 @@ window.App.Features.Sanad = (function () {
                 window.App.Http.api(`/api/sanad/${sanadId}`),
                 window.App.Http.api(`/api/sanad/${sanadId}/items`)
             ]);
-
             _detailData = { detail, items: items || [] };
-
-            document.getElementById('modalBody').innerHTML = buildDetailHtml(detail, items);
-
-            bindDetailFilter();
-
+            document.getElementById('modalBody').innerHTML =
+                buildDetailHtml(detail, items, { isFromExternal });
+            bindDetailFilter({ isFromExternal });
             Exporter.attach(document.getElementById('modalBody'), {
                 title: 'سند حسابداری - شماره ' + (detail?.noSanad || ''),
                 subtitle: subtitle(),
@@ -293,38 +697,40 @@ window.App.Features.Sanad = (function () {
         }
     }
 
-    // ═══════════════════════════════════════════
-    //  ⭐ BUILD DETAIL HTML — ساختار جدید + جمع چسبان
-    // ═══════════════════════════════════════════
-    function buildDetailHtml(detail, items) {
+    function buildDetailHtml(detail, items, opts = {}) {
         items = items || [];
-
-        // ─── شمارش خطاها ───
         const errorCounts = {
-            all: 0,
-            missingCoding: 0,
-            missingMoein: 0,
-            noMeghdar: 0,
-            noAmount: 0,
-            noDescr: 0
+            all: 0, missingCoding: 0, missingMoein: 0,
+            noMeghdar: 0, noAmount: 0, noDescr: 0
         };
 
         const itemsWithErrors = items.map(it => {
             const errs = detectRowErrors(it);
-            errs.forEach(e => {
-                if (errorCounts[e.code] !== undefined) errorCounts[e.code]++;
-            });
+            errs.forEach(e => { if (errorCounts[e.code] !== undefined) errorCounts[e.code]++; });
             if (errs.length > 0) errorCounts.all++;
             return Object.assign({}, it, { _errors: errs });
         });
 
-        // ─── فیلتر ───
         const f = _detailFilter.errorType;
         const visibleItems = (f === 'all')
             ? itemsWithErrors
             : itemsWithErrors.filter(x => x._errors.some(e => e.code === f));
 
-        // ─── کارت‌های اطلاعات بالای مدال ───
+        // ⭐ تشخیص نمایش دکمه ویرایش
+        const canEdit = !window.App.Permissions || window.App.Permissions.can(102);
+        const isConfirmed = (detail?.vazeit || 0) === 2;
+        const showEditBtn = opts.isFromExternal && canEdit && !isConfirmed;
+
+        const editHeader = showEditBtn ? `
+            <div class="sd-edit-header">
+                <div class="sd-edit-hint">
+                    📄 این سند از یک گزارش باز شده — حالت نمایش
+                </div>
+                <button class="btn btn-primary btn-sm" id="sdEditBtn">
+                    ✏️ ویرایش سند
+                </button>
+            </div>` : '';
+
         const infoGrid = `
             <div class="sd-info-grid">
                 <div class="sd-info-card">
@@ -353,34 +759,19 @@ window.App.Features.Sanad = (function () {
                 </div>
             </div>`;
 
-        // ─── نوار ابزار (فیلتر خطا + badge + راهنما) ───
         const toolbar = `
             <div class="sd-toolbar">
                 <select class="sd-error-filter" id="sanadErrFilter">
-                    <option value="all" ${f === 'all' ? 'selected' : ''}>
-                        📋 همه ردیف‌ها (${H.fmt(itemsWithErrors.length)})
-                    </option>
-                    <option value="missingCoding" ${f === 'missingCoding' ? 'selected' : ''}>
-                        ⛔ کدینگ ناقص (${H.fmt(errorCounts.missingCoding)})
-                    </option>
-                    <option value="missingMoein" ${f === 'missingMoein' ? 'selected' : ''}>
-                        ⚠️ بدون معین (${H.fmt(errorCounts.missingMoein)})
-                    </option>
-                    <option value="noMeghdar" ${f === 'noMeghdar' ? 'selected' : ''}>
-                        ⛔ مقدار خالی (${H.fmt(errorCounts.noMeghdar)})
-                    </option>
-                    <option value="noAmount" ${f === 'noAmount' ? 'selected' : ''}>
-                        ⚠️ مبلغ صفر (${H.fmt(errorCounts.noAmount)})
-                    </option>
-                    <option value="noDescr" ${f === 'noDescr' ? 'selected' : ''}>
-                        ℹ️ بدون شرح (${H.fmt(errorCounts.noDescr)})
-                    </option>
+                    <option value="all" ${f === 'all' ? 'selected' : ''}>📋 همه ردیف‌ها (${H.fmt(itemsWithErrors.length)})</option>
+                    <option value="missingCoding" ${f === 'missingCoding' ? 'selected' : ''}>⛔ کدینگ ناقص (${H.fmt(errorCounts.missingCoding)})</option>
+                    <option value="missingMoein" ${f === 'missingMoein' ? 'selected' : ''}>⚠️ بدون معین (${H.fmt(errorCounts.missingMoein)})</option>
+                    <option value="noMeghdar" ${f === 'noMeghdar' ? 'selected' : ''}>⛔ مقدار خالی (${H.fmt(errorCounts.noMeghdar)})</option>
+                    <option value="noAmount" ${f === 'noAmount' ? 'selected' : ''}>⚠️ مبلغ صفر (${H.fmt(errorCounts.noAmount)})</option>
+                    <option value="noDescr" ${f === 'noDescr' ? 'selected' : ''}>ℹ️ بدون شرح (${H.fmt(errorCounts.noDescr)})</option>
                 </select>
-
                 ${errorCounts.all > 0
                 ? `<span class="sd-badge sd-badge-err">⚠️ ${H.fmt(errorCounts.all)} ردیف دارای ایراد</span>`
                 : `<span class="sd-badge sd-badge-ok">✅ همه ردیف‌ها سالم</span>`}
-
                 <div class="sd-legend">
                     <span><span class="sd-err-icon sd-err-error">⛔</span> جدی</span>
                     <span><span class="sd-err-icon sd-err-warn">⚠️</span> هشدار</span>
@@ -388,14 +779,11 @@ window.App.Features.Sanad = (function () {
                 </div>
             </div>`;
 
-        // ─── ردیف‌های جدول ───
         const rows = visibleItems.map(it => {
             const errBadges = (it._errors || []).map(e =>
                 `<span class="sd-err-icon sd-err-${e.severity}" title="${H.esc(e.label)}">
                     ${e.severity === 'error' ? '⛔' : (e.severity === 'warn' ? '⚠️' : 'ℹ️')}
-                </span>`
-            ).join('');
-
+                </span>`).join('');
             const hasError = (it._errors || []).some(e => e.severity === 'error');
             const hasWarn = (it._errors || []).some(e => e.severity === 'warn');
             const rowClass = hasError ? 'sd-row-err' : (hasWarn ? 'sd-row-warn' : '');
@@ -419,12 +807,10 @@ window.App.Features.Sanad = (function () {
                 </tr>`;
         }).join('');
 
-        // ⭐ جمع‌ها (روی ردیف‌های visible)
         const totalBed = visibleItems.reduce((s, x) => s + (Number(x.mabBed) || 0), 0);
         const totalBes = visibleItems.reduce((s, x) => s + (Number(x.mabBes) || 0), 0);
         const totalMegh = visibleItems.reduce((s, x) => s + (Number(x.meghdar) || 0), 0);
 
-        // ─── جدول با tfoot چسبان ───
         const tableBlock = `
             <div class="sd-table-wrap">
                 <table>
@@ -460,58 +846,56 @@ window.App.Features.Sanad = (function () {
             </div>`;
 
         return `<div class="sanad-detail-modal">
-            ${infoGrid}
-            ${toolbar}
-            ${tableBlock}
-        </div>`;
+                ${editHeader}
+                ${infoGrid}
+                ${toolbar}
+                ${tableBlock}
+            </div>`;
     }
 
-    // ═══════════════════════════════════════════
-    //  تشخیص خطاهای ردیف
-    // ═══════════════════════════════════════════
     function detectRowErrors(it) {
         const errors = [];
         const hasBed = (it.mabBed || 0) > 0;
         const hasBes = (it.mabBes || 0) > 0;
         const hasAmount = hasBed || hasBes;
 
-        if (!it.code_Col || it.code_Col === 0) {
-            errors.push({ code: 'missingCoding', label: 'کد کل ندارد — نیاز به کدینگ', severity: 'error' });
-        }
-
-        if (it.code_Col > 0 && (!it.code_Moein || it.code_Moein === 0) && hasAmount) {
+        if (!it.code_Col || it.code_Col === 0)
+            errors.push({ code: 'missingCoding', label: 'کد کل ندارد', severity: 'error' });
+        if (it.code_Col > 0 && (!it.code_Moein || it.code_Moein === 0) && hasAmount)
             errors.push({ code: 'missingMoein', label: 'کد معین ندارد', severity: 'warn' });
-        }
-
-        if (it.isStock && hasAmount && (!it.meghdar || Math.abs(it.meghdar) === 0)) {
+        if (it.isStock && hasAmount && (!it.meghdar || Math.abs(it.meghdar) === 0))
             errors.push({ code: 'noMeghdar', label: 'مقدار انباری ندارد', severity: 'error' });
-        }
-
-        if (!hasAmount) {
-            errors.push({ code: 'noAmount', label: 'مبلغ بدهکار و بستانکار صفر است', severity: 'warn' });
-        }
-
-        if (!it.otherSharh || !String(it.otherSharh).trim()) {
-            errors.push({ code: 'noDescr', label: 'شرح ردیف خالی است', severity: 'info' });
-        }
+        if (!hasAmount)
+            errors.push({ code: 'noAmount', label: 'مبلغ صفر است', severity: 'warn' });
+        if (!it.otherSharh || !String(it.otherSharh).trim())
+            errors.push({ code: 'noDescr', label: 'شرح خالی است', severity: 'info' });
 
         return errors;
     }
 
-    function bindDetailFilter() {
+    function bindDetailFilter(opts = {}) {
         const sel = document.getElementById('sanadErrFilter');
-        if (!sel) return;
-        sel.addEventListener('change', function () {
-            _detailFilter.errorType = this.value;
-            const { detail, items } = _detailData;
-            document.getElementById('modalBody').innerHTML = buildDetailHtml(detail, items);
-            bindDetailFilter();
+        if (sel) {
+            sel.addEventListener('change', function () {
+                _detailFilter.errorType = this.value;
+                const { detail, items } = _detailData;
+                document.getElementById('modalBody').innerHTML =
+                    buildDetailHtml(detail, items, opts);
+                bindDetailFilter(opts);
+            });
+        }
+
+        // ⭐ دکمه ویرایش
+        document.getElementById('sdEditBtn')?.addEventListener('click', () => {
+            const id = _detailData.detail?.parentSanadID;
+            if (!id) return;
+            window.App.closeModal();
+            setTimeout(() => {
+                window.App.Features.SanadForm.openEdit(id);
+            }, 100);
         });
     }
 
-    // ═══════════════════════════════════════════
-    //  PRINT (خروجی چاپ و Excel)
-    // ═══════════════════════════════════════════
     function buildDetailPrintHtml(detail, items) {
         const headerBlock = `
             <table class="factor-info-table">
@@ -529,15 +913,6 @@ window.App.Features.Sanad = (function () {
                     <td class="label">شرح سند:</td>
                     <td colspan="7">${H.esc(detail?.otherParentSharh || '-')}</td>
                 </tr>
-                ${(detail?.creator || detail?.confirmer || detail?.date_Op || detail?.time_Op) ? `
-                <tr>
-                    <td class="label">ایجادکننده:</td>
-                    <td>${detail?.creator || '-'}</td>
-                    <td class="label">تأییدکننده:</td>
-                    <td>${detail?.confirmer || '-'}</td>
-                    <td class="label">تاریخ/ساعت ثبت:</td>
-                    <td colspan="3">${H.esc(detail?.date_Op || '')} ${H.esc(detail?.time_Op || '')}</td>
-                </tr>` : ''}
             </table>`;
 
         const itemsRows = (items || []).map((it, idx) => `
@@ -560,7 +935,7 @@ window.App.Features.Sanad = (function () {
         const totalBes = (items || []).reduce((s, x) => s + (x.mabBes || 0), 0);
         const totalMegh = (items || []).reduce((s, x) => s + (x.meghdar || 0), 0);
 
-        const itemsBlock = `
+        return headerBlock + `
             <div class="section-title">📋 ردیف‌های سند (${(items || []).length})</div>
             <table>
                 <thead>
@@ -578,9 +953,7 @@ window.App.Features.Sanad = (function () {
                         <th class="text-left" style="width:80px;">مقدار</th>
                     </tr>
                 </thead>
-                <tbody>
-                    ${itemsRows || '<tr><td colspan="12" class="text-center">ردیفی وجود ندارد</td></tr>'}
-                </tbody>
+                <tbody>${itemsRows}</tbody>
                 <tfoot>
                     <tr style="background:#EEF2FF; font-weight:700;">
                         <td colspan="8" class="text-center">جمع کل</td>
@@ -590,13 +963,8 @@ window.App.Features.Sanad = (function () {
                     </tr>
                 </tfoot>
             </table>`;
-
-        return headerBlock + itemsBlock;
     }
 
-    // ═══════════════════════════════════════════
-    //  Helpers (محلی)
-    // ═══════════════════════════════════════════
     function statusText(v) {
         const map = { 0: 'پیش‌نویس', 1: 'ثبت شده', 2: 'تأیید شده', 3: 'برگشتی' };
         return map[v] ?? '-';
@@ -612,22 +980,14 @@ window.App.Features.Sanad = (function () {
 
     function renderErrorBadge(s) {
         const total = s.totalErrorCount || 0;
-        if (total === 0) {
-            return '<span class="sanad-list-ok" title="بدون ایراد">✅</span>';
-        }
-
+        if (total === 0) return '<span class="sanad-list-ok" title="بدون ایراد">✅</span>';
         const coding = s.codingErrorCount || 0;
         const moein = s.moeinErrorCount || 0;
-
         const parts = [];
         if (coding > 0) parts.push(coding + ' کدینگ ناقص');
         if (moein > 0) parts.push(moein + ' بدون معین');
-
         const title = 'ایرادها: ' + parts.join('، ');
-
-        return `<span class="sanad-list-err" title="${H.esc(title)}">
-                    ⚠️ ${H.fmt(total)}
-                </span>`;
+        return `<span class="sanad-list-err" title="${H.esc(title)}">⚠️ ${H.fmt(total)}</span>`;
     }
 
     function subtitle() {
@@ -636,19 +996,193 @@ window.App.Features.Sanad = (function () {
     }
 
     // ═══════════════════════════════════════════
-    //  API عمومی
+    //  ACCOUNT FILTER — Picker
     // ═══════════════════════════════════════════
-    return {
-        render,
-        loadList,
-        gotoPage,
-        showDetail,
-        buildUrl,
-        sortBy
-    };
+    let _hesabCache = null;
+
+    async function loadHesabTree() {
+        if (_hesabCache) return _hesabCache;
+        const tree = await window.App.Http.api('/api/hesab/tree');
+        _hesabCache = tree || [];
+        return _hesabCache;
+    }
+
+    async function openAccountPicker() {
+        let tree;
+        try {
+            tree = await loadHesabTree();
+        } catch (err) {
+            window.App.toast('خطا در بارگذاری حساب‌ها: ' + err.message, 'error');
+            return;
+        }
+
+        const cols = tree.filter(x => x.level === 'col').sort((a, b) => a.codeCol - b.codeCol);
+        const moeins = tree.filter(x => x.level === 'moein');
+
+        const body = `
+            <div class="acc-picker">
+                <div class="acc-picker-search">
+                    <input type="text" id="accSearchInput" placeholder="🔍 جستجوی کد یا نام حساب..." autofocus>
+                </div>
+                <div class="acc-picker-list" id="accPickerList"></div>
+            </div>`;
+
+        window.App.openModal('🏦 انتخاب حساب', body);
+
+        const input = document.getElementById('accSearchInput');
+        const list = document.getElementById('accPickerList');
+
+        function render(filter = '') {
+            const f = filter.trim().toLowerCase();
+            let html = '';
+
+            // حساب‌های کل
+            const filteredCols = !f ? cols : cols.filter(c =>
+                String(c.codeCol).includes(f) ||
+                (c.name || '').toLowerCase().includes(f));
+
+            // حساب‌های معین
+            const filteredMoeins = !f ? moeins.slice(0, 200) : moeins.filter(m =>
+                String(m.codeMoein).includes(f) ||
+                (m.name || '').toLowerCase().includes(f) ||
+                String(m.codeCol).includes(f)).slice(0, 200);
+
+            if (filteredCols.length > 0) {
+                html += `<div class="acc-group-title">🔷 حساب‌های کل</div>`;
+                html += filteredCols.map(c => `
+                    <div class="acc-item acc-col" data-col="${c.codeCol}" data-moein="0">
+                        <span class="acc-code">${c.codeCol}</span>
+                        <span class="acc-name">${H.esc(c.name || '')}</span>
+                    </div>`).join('');
+            }
+
+            if (filteredMoeins.length > 0) {
+                html += `<div class="acc-group-title">🔶 حساب‌های معین</div>`;
+                html += filteredMoeins.map(m => `
+                    <div class="acc-item acc-moein" data-col="${m.codeCol}" data-moein="${m.codeMoein}">
+                        <span class="acc-code">${m.codeCol} / ${m.codeMoein}</span>
+                        <span class="acc-name">${H.esc(m.name || '')}</span>
+                        ${m.hasTafzili ? '<span class="acc-badge">تفصیلی</span>' : ''}
+                    </div>`).join('');
+            }
+
+            if (!html) html = '<div class="acc-empty">موردی یافت نشد</div>';
+            list.innerHTML = html;
+        }
+
+        render();
+        input.addEventListener('input', () => render(input.value));
+
+        list.addEventListener('click', async (e) => {
+            const item = e.target.closest('.acc-item');
+            if (!item) return;
+
+            const codeCol = parseInt(item.dataset.col);
+            const codeMoein = parseInt(item.dataset.moein);
+
+            // ⭐ اگه معین بود، بپرس آیا تفصیلی هم فیلتر بشه
+            if (codeMoein > 0) {
+                const moeinObj = moeins.find(x => x.codeCol === codeCol && x.codeMoein === codeMoein);
+                if (moeinObj && moeinObj.hasTafzili) {
+                    const t = await askTafzil(codeCol, codeMoein);
+                    if (t === null) return;   // انصراف
+                    applyAccountFilter(codeCol, codeMoein, t);
+                    return;
+                }
+            }
+
+            applyAccountFilter(codeCol, codeMoein, 0);
+        });
+    }
+
+    async function askTafzil(codeCol, codeMoein) {
+        return new Promise((resolve) => {
+            const body = `
+                <div class="acc-picker">
+                    <div style="padding:10px;font-size:13px;color:#374151;">
+                        آیا تفصیلی خاصی مد نظر است؟ (کد تفصیلی را وارد کنید یا خالی بگذارید)
+                    </div>
+                    <div style="padding:10px;">
+                        <input type="number" id="tafzilInput" placeholder="کد تفصیلی (خالی = همه)"
+                               style="width:100%;padding:8px;border:1px solid #D1D5DB;border-radius:6px;font-family:inherit;"
+                               autofocus>
+                    </div>
+                    <div style="display:flex;gap:8px;padding:10px;justify-content:flex-start;">
+                        <button class="btn btn-primary btn-sm" id="tafzilOk">تأیید</button>
+                        <button class="btn btn-ghost btn-sm" onclick="App.closeModal()">انصراف</button>
+                    </div>
+                </div>`;
+
+            window.App.openModal('🔍 انتخاب تفصیلی', body);
+
+            const cleanup = (v) => {
+                window.App.closeModal();
+                resolve(v);
+            };
+
+            document.getElementById('tafzilOk')?.addEventListener('click', () => {
+                const v = parseInt(document.getElementById('tafzilInput').value) || 0;
+                cleanup(v);
+            });
+
+            document.getElementById('tafzilInput')?.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const v = parseInt(e.target.value) || 0;
+                    cleanup(v);
+                }
+                if (e.key === 'Escape') cleanup(null);
+            });
+        });
+    }
+
+    function applyAccountFilter(codeCol, codeMoein, codeTafzil) {
+        _accountFilter.codeCol = codeCol;
+        _accountFilter.codeMoein = codeMoein;
+        _accountFilter.codeTafzil = codeTafzil;
+
+        // برچسب نمایش
+        const parts = [];
+        if (codeCol > 0) parts.push('کل: ' + codeCol);
+        if (codeMoein > 0) parts.push('معین: ' + codeMoein);
+        if (codeTafzil > 0) parts.push('تفصیلی: ' + codeTafzil);
+        _accountFilter.label = parts.join(' / ');
+
+        updateAccountBar();
+        window.App.closeModal();
+
+        window.App.state.sanadPage = 1;
+        _selected.clear();
+        loadList();
+    }
+
+    function clearAccountFilter() {
+        _accountFilter = { codeCol: 0, codeMoein: 0, codeTafzil: 0, label: '' };
+        updateAccountBar();
+        window.App.state.sanadPage = 1;
+        _selected.clear();
+        loadList();
+    }
+
+    function updateAccountBar() {
+        const label = document.getElementById('selectedAccountLabel');
+        const clear = document.getElementById('clearAccountFilterBtn');
+        if (!label || !clear) return;
+
+        if (_accountFilter.codeCol > 0) {
+            label.textContent = '🎯 ' + _accountFilter.label;
+            label.style.display = 'inline-block';
+            clear.style.display = 'inline-block';
+        } else {
+            label.textContent = '';
+            label.style.display = 'none';
+            clear.style.display = 'none';
+        }
+    }
+
+    return { render, loadList, gotoPage, showDetail, buildUrl, sortBy };
 })();
 
-// ⭐ alias
 window.App.Features = window.App.Features || {};
 window.App.Features.Sanad = window.App.Features.Sanad;
 window.App.showSanadDetail = window.App.Features.Sanad.showDetail;

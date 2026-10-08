@@ -1,5 +1,4 @@
-﻿using System.Text.Json;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ArianaAPI.Infrastructure.Services;
@@ -37,12 +36,27 @@ namespace ArianaAPI.Web.Controllers
         {
             if (string.IsNullOrWhiteSpace(req.Message))
                 return BadRequest(new { message = "متن پیام خالی است" });
-
             if (string.IsNullOrWhiteSpace(req.SessionId))
                 return BadRequest(new { message = "شناسه نشست نامعتبر" });
 
+            // ⭐ استخراج اطلاعات از JWT (کاربر لاگین‌شده)
+            var orgId = 0L;
+            var fyId = 0L;
+            string? orgName = null;
+            string? fyName = null;
+
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                long.TryParse(User.FindFirst("orgId")?.Value, out orgId);
+                long.TryParse(User.FindFirst("fyId")?.Value, out fyId);
+                orgName = User.FindFirst("orgName")?.Value;
+                fyName = User.FindFirst("fyName")?.Value;
+            }
+
             var result = await _client.SendAsync(
-                req.SessionId, req.UserId, req.UserName, req.Message);
+                req.SessionId, req.UserId, req.UserName,
+                orgId, fyId, orgName, fyName,
+                req.Message);
 
             if (result.Success)
                 return Ok(new { message = result.Message });

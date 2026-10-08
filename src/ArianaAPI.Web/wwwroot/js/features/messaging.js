@@ -1,5 +1,5 @@
 ﻿/* ═══════════════════════════════════════════════════
-   Ariana - Support Chat (Relay Web)
+   Ariana - Support Chat (Relay Web) — Per-User Isolation
    ═══════════════════════════════════════════════════ */
 
 window.App = window.App || {};
@@ -15,13 +15,30 @@ window.App.Features.Messaging = {
     _escHandler: null,
 
     // ═══════════════════════════════════════════
-    //  SESSION MANAGEMENT
+    //  SESSION MANAGEMENT (Per User)
     // ═══════════════════════════════════════════
+    _getSessionKey() {
+        const u = window.App.state?.user || {};
+        const orgId = u.orgId || 0;
+        const fyId = u.fyId || 0;
+        const userId = u.userId || 0;
+        return `ariana_support_session_${orgId}_${fyId}_${userId}`;
+    },
+
+    _getReadKey() {
+        const u = window.App.state?.user || {};
+        const orgId = u.orgId || 0;
+        const fyId = u.fyId || 0;
+        const userId = u.userId || 0;
+        return `ariana_support_last_read_${orgId}_${fyId}_${userId}`;
+    },
+
     _getSessionId() {
-        let sid = localStorage.getItem('ariana_support_session');
+        const key = this._getSessionKey();
+        let sid = localStorage.getItem(key);
         if (!sid) {
             sid = 'sess-' + Date.now() + '-' + Math.random().toString(36).substring(2, 10);
-            localStorage.setItem('ariana_support_session', sid);
+            localStorage.setItem(key, sid);
         }
         return sid;
     },
@@ -82,7 +99,7 @@ window.App.Features.Messaging = {
     async _updateFabBadge() {
         try {
             const sessionId = this._getSessionId();
-            const lastRead = parseInt(localStorage.getItem('ariana_support_last_read') || '0');
+            const lastRead = parseInt(localStorage.getItem(this._getReadKey()) || '0');
 
             const r = await this._pollApi(sessionId, 0);
             const items = r.items || [];
@@ -155,7 +172,6 @@ window.App.Features.Messaging = {
         this._loadMessages();
         this._startPolling();
 
-        // علامت‌گذاری خوانده‌شده
         setTimeout(() => this._markRead(), 1500);
     },
 
@@ -173,7 +189,6 @@ window.App.Features.Messaging = {
             this._escHandler = null;
         }
 
-        // علامت‌گذاری خوانده‌شده
         this._markRead();
 
         setTimeout(() => {
@@ -186,7 +201,7 @@ window.App.Features.Messaging = {
         const items = this._lastMessagesJson ? JSON.parse(this._lastMessagesJson) : [];
         if (items.length > 0) {
             const maxId = Math.max(...items.map(m => m.id));
-            localStorage.setItem('ariana_support_last_read', maxId.toString());
+            localStorage.setItem(this._getReadKey(), maxId.toString());
         }
     },
 
@@ -275,8 +290,7 @@ window.App.Features.Messaging = {
         }
 
         box.innerHTML = items.map(m => {
-            const isOut = m.direction === 1;   // 1=از کاربر (سمت راست در RTL = چپ منطقی)
-            // در RTL: پیام کاربر باید سمت چپ (out)، پیام پشتیبان سمت راست (in)
+            const isOut = m.direction === 1;
             const time = m.createdAt ? this._formatTime(m.createdAt) : '';
             const text = this._escapeHtml(m.message).replace(/\n/g, '<br>');
 

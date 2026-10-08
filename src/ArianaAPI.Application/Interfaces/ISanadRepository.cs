@@ -17,7 +17,10 @@ public interface ISanadRepository
         string? sortDir = null,
         int page = 1,
         int pageSize = 100,
-        bool? onlyWithErrors = null,           
+        bool? onlyWithErrors = null,
+        int? codeCol = null,        
+        int? codeMoein = null,      
+        int? codeTafzil = null,
         CancellationToken ct = default);
 
     Task<SanadDetailDto?> GetByIdAsync(
@@ -42,4 +45,28 @@ public interface ISanadRepository
 
     Task<int> GetVazeitAsync(
         long orgId, long fyId, long parentSanadId, CancellationToken ct = default);
+
+
+    Task<int> BulkDeleteAsync(
+        long orgId, long fyId,
+        List<long> sanadIds,
+        long userCode,
+        CancellationToken ct = default);
+    Task<string> ExportCsvAsync(
+    long orgId, long fyId,
+    List<long> sanadIds,
+    CancellationToken ct = default);
+
+    SanadImportPreviewResult ParseAndValidateCsv(
+        string csvContent,
+        List<int> existingNoSanads);
+
+    Task<SanadImportResult> ImportFromCsvAsync(
+        long orgId, long fyId,
+        string csvContent,
+        bool forceNewNumbers,
+        long userCode,
+        CancellationToken ct = default);
+
+    Task<List<int>> GetAllNoSanadAsync(long orgId, long fyId, CancellationToken ct = default);
 }

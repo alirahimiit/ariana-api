@@ -36,7 +36,10 @@ public class SanadController : ControllerBase
         [FromQuery] string? sortDir = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 100,
-        [FromQuery] bool? onlyWithErrors = null,       // ⭐ جدید
+        [FromQuery] bool? onlyWithErrors = null,
+        [FromQuery] int? codeCol = null,        
+        [FromQuery] int? codeMoein = null,    
+        [FromQuery] int? codeTafzil = null,   
         CancellationToken ct = default)
     {
         var orgId = User.GetOrgId();
@@ -46,7 +49,8 @@ public class SanadController : ControllerBase
             orgId, fyId,
             fromDate, toDate, noFrom, noTo, vazeit, kindSanad,
             sortBy, sortDir, page, pageSize,
-            onlyWithErrors,                            // ⭐ جدید
+            onlyWithErrors,
+            codeCol, codeMoein, codeTafzil,
             ct);
 
         return Ok(list);
@@ -170,5 +174,118 @@ public class SanadController : ControllerBase
         var vazeit = await _repo.GetVazeitAsync(orgId, fyId, id, ct);
         if (vazeit < 0) return NotFound();
         return Ok(new { vazeit });
+    }
+
+
+    // ═══════════════════════════════════════════
+    //  حذف گروهی اسناد
+    // ═══════════════════════════════════════════
+    [HttpPost("bulk-delete")]
+    [RequirePermission(108)]
+    public async Task<IActionResult> BulkDelete(
+        [FromBody] SanadBulkDeleteRequestDto dto, CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+        var userCode = User.GetUserId();
+
+        try
+        {
+            var deleted = await _repo.BulkDeleteAsync(orgId, fyId, dto.SanadIds, userCode, ct);
+            return Ok(new { deleted });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  📤 Export to CSV
+    // ═══════════════════════════════════════════
+    [HttpPost("export-csv")]
+    public async Task<IActionResult> ExportCsv(
+        [FromBody] SanadBulkDeleteRequestDto dto,   // فقط SanadIds لازمه
+        CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        try
+        {
+            var csv = await _repo.ExportCsvAsync(orgId, fyId, dto.SanadIds, ct);
+
+            // ⭐ BOM برای Excel فارسی
+            var bytes = System.Text.Encoding.UTF8.GetPreamble()
+                .Concat(System.Text.Encoding.UTF8.GetBytes(csv)).ToArray();
+
+            return File(bytes, "text/csv; charset=utf-8",
+                $"Sanad_Export_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  📥 Import Preview (بدون DB write)
+    // ═══════════════════════════════════════════
+    [HttpPost("import-preview")]
+    [RequirePermission(101)]
+    public async Task<ActionResult<SanadImportPreviewResult>> ImportPreview(
+        [FromBody] SanadImportRequest dto,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(dto.CsvContent))
+            return BadRequest(new { error = "محتوای فایل خالی است" });
+
+        try
+        {
+            var orgId = User.GetOrgId();
+            var fyId = User.GetFyId();
+
+            // ⭐ شماره‌های موجود
+            var existing = await _repo.GetAllNoSanadAsync(orgId, fyId, ct);
+
+            var result = _repo.ParseAndValidateCsv(dto.CsvContent, existing);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "خطا در پردازش فایل: " + ex.Message });
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  📥 Import Commit
+    // ═══════════════════════════════════════════
+    [HttpPost("import-commit")]
+    [RequirePermission(101)]
+    public async Task<ActionResult<SanadImportResult>> ImportCommit(
+        [FromBody] SanadImportRequest dto,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(dto.CsvContent))
+            return BadRequest(new { error = "محتوای فایل خالی است" });
+
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+        var userCode = User.GetUserId();
+
+        try
+        {
+            var result = await _repo.ImportFromCsvAsync(
+                orgId, fyId, dto.CsvContent, dto.ForceNewNumbers, userCode, ct);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "خطا در ورود اسناد: " + ex.Message });
+        }
     }
 }

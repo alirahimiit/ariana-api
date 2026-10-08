@@ -88,12 +88,18 @@ function renderTickets() {
             ? `<span class="ticket-badge">${t.unreadCount}</span>` : '';
         const hasUnread = t.unreadCount > 0 ? 'has-unread' : '';
         const cls = `${active ? 'active' : ''} ${hasUnread}`;
+
+        const userName = t.lastUserName || 'مهمان';
+        const orgName = t.lastOrgName || t.installName || '-';
+        const fyName = t.lastFyName ? ` — ${t.lastFyName}` : '';
+
         return `
             <div class="ticket-item ${cls}" data-install="${t.installId}" data-session="${t.sessionId}">
                 <div class="ticket-name">
-                    <span>${escapeHtml(t.installName)}</span>
+                    <span>👤 ${escapeHtml(userName)}</span>
                     ${unread}
                 </div>
+                <div class="ticket-customer">🏢 ${escapeHtml(orgName)}${escapeHtml(fyName)}</div>
                 <div class="ticket-preview">${escapeHtml(t.lastMessage || '')}</div>
                 <div class="ticket-time">${formatTime(t.lastAt)}</div>
             </div>`;
@@ -104,11 +110,11 @@ function renderTickets() {
             const installId = parseInt(el.dataset.install);
             const sessionId = el.dataset.session;
             const t = tickets.find(x => x.installId === installId && x.sessionId === sessionId);
-            selectTicket(installId, sessionId, t?.installName || '');
+            const title = `${t?.lastUserName || 'مهمان'} — ${t?.lastOrgName || ''}`;
+            selectTicket(installId, sessionId, title);
         });
     });
 }
-
 async function selectTicket(installId, sessionId, installName) {
     activeTicket = { installId, sessionId, installName };
     lastMsgId = 0;
@@ -153,14 +159,28 @@ function renderMessages(items) {
         return `
             <div class="msg-row ${isIn ? 'in' : 'out'}">
                 <div class="msg-bubble ${isIn ? 'in' : 'out'}">
+                    <button class="msg-del-btn" data-msg-id="${m.id}" title="حذف">✕</button>
                     ${sender}
                     <div>${escapeHtml(m.message).replace(/\n/g, '<br>')}</div>
                     <div class="msg-time">${time}</div>
                 </div>
             </div>`;
     }).join('');
-}
 
+    box.querySelectorAll('.msg-del-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const mid = btn.dataset.msgId;
+            if (!confirm('این پیام حذف شود؟')) return;
+            try {
+                await api(`/api/admin/messages/${mid}`, { method: 'DELETE' });
+                await loadMessages(activeTicket.installId, activeTicket.sessionId, true);
+            } catch (err) {
+                alert('خطا در حذف: ' + err.message);
+            }
+        });
+    });
+}
 // ═══ Send Reply ═══
 async function sendReply() {
     if (!activeTicket) return;

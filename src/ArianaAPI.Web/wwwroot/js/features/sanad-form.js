@@ -1,5 +1,6 @@
 ﻿/* ═══════════════════════════════════════════════════
    Feature / SanadForm — فرم ثبت/ویرایش سند
+   نسخه 2.0 — با پشتیبانی کامل کلیدهای میان‌بر Delphi
    ═══════════════════════════════════════════════════ */
 
 window.App = window.App || {};
@@ -10,8 +11,14 @@ window.App.Features.SanadForm = (function () {
 
     const H = window.App.Helpers;
 
-    let _state = { isEdit: false, parentSanadId: null, items: [] };
+    let _state = {
+        isEdit: false,
+        parentSanadId: null,
+        items: [],
+        focusedIdx: 0
+    };
     let _cache = { cols: [], moeins: [], tafzils: [], loaded: false };
+    let _clipboard = [];              // ⭐ بافر کپی ردیف‌ها
 
     // ═══ UTILS ═══
     function today() {
@@ -36,8 +43,14 @@ window.App.Features.SanadForm = (function () {
 
     function parseNum(v) {
         if (!v) return 0;
-        const n = parseFloat(String(v).replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[^\d.\-]/g, ''));
+        const n = parseFloat(String(v)
+            .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+            .replace(/[^\d.\-]/g, ''));
         return isNaN(n) ? 0 : n;
+    }
+
+    function cloneItem(it) {
+        return JSON.parse(JSON.stringify(it));
     }
 
     // ═══ LOOKUPS ═══
@@ -72,18 +85,19 @@ window.App.Features.SanadForm = (function () {
 
     // ═══ OPEN CREATE ═══
     async function openCreate() {
-        // ⭐ گارد دسترسی (defense in depth)
         if (window.App.Permissions && !window.App.Permissions.can(101)) {
             window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
             return;
         }
-        _state = { isEdit: false, parentSanadId: null, items: [emptyRow()] };
+        _state = { isEdit: false, parentSanadId: null, items: [emptyRow()], focusedIdx: 0 };
+        _clipboard = [];
         await ensureLookups();
         const body = buildFormHtml({ noSanad: '', dateIn: today(), otherParentSharh: '', vazeit: 0, kindSanad: 0 });
         window.App.openModal('➕ سند جدید', body);
         document.querySelector('.modal-box')?.classList.add('wide-modal');
         bindEvents();
         renderRows();
+        focusRow(0, 'col');
     }
 
     // ═══ OPEN EDIT ═══
@@ -101,7 +115,7 @@ window.App.Features.SanadForm = (function () {
                 window.App.Http.api(`/api/sanad/${id}/items`)
             ]);
             _state = {
-                isEdit: true, parentSanadId: id,
+                isEdit: true, parentSanadId: id, focusedIdx: 0,
                 items: (items || []).map(it => ({
                     codeCol: it.code_Col || 0,
                     codeMoein: it.code_Moein || 0,
@@ -112,9 +126,10 @@ window.App.Features.SanadForm = (function () {
                     otherSharh: it.otherSharh || '',
                     mabBed: it.mabBed || 0,
                     mabBes: it.mabBes || 0,
-                    meghdar: Math.abs(it.meghdar || 0) 
+                    meghdar: Math.abs(it.meghdar || 0)
                 }))
             };
+            _clipboard = [];
             if (_state.items.length === 0) _state.items = [emptyRow()];
             const body = buildFormHtml({
                 noSanad: detail?.noSanad || '',
@@ -127,6 +142,7 @@ window.App.Features.SanadForm = (function () {
             document.querySelector('.modal-box')?.classList.add('wide-modal');
             bindEvents();
             renderRows();
+            focusRow(0, 'col');
         } catch (err) {
             window.App.toast('خطا: ' + err.message, 'error');
         }
@@ -171,7 +187,11 @@ window.App.Features.SanadForm = (function () {
 
                 <div class="sanad-form-rows-header">
                     <h4>📋 ردیف‌های سند</h4>
-                    <button type="button" class="btn btn-primary btn-sm" id="sfAddRow">➕ افزودن ردیف</button>
+                    <div class="sf-row-actions">
+                        <button type="button" class="btn btn-ghost btn-sm" id="sfCopyBtn" title="کپی ردیف‌های انتخاب‌شده (Ctrl+F9)">📋 کپی</button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="sfPasteBtn" title="چسباندن (Ctrl+F10)">📥 چسباندن</button>
+                        <button type="button" class="btn btn-primary btn-sm" id="sfAddRow" title="افزودن ردیف (Insert)">➕ افزودن ردیف</button>
+                    </div>
                 </div>
 
                 <div id="sfRowsWrap"></div>
@@ -179,9 +199,25 @@ window.App.Features.SanadForm = (function () {
                 <div class="sanad-form-sticky">
                     <div class="sanad-form-totals" id="sfTotals"></div>
                     <div class="sanad-form-footer">
-                        <button type="button" class="btn btn-primary" id="sfSaveBtn">💾 ذخیره <span class="kbd-hint">F2</span></button>
-                        <button type="button" class="btn btn-ghost" id="sfCancelBtn">انصراف</button>
+                        <button type="button" class="btn btn-primary" id="sfSaveBtn">💾 ذخیره <span class="kbd-hint">Ctrl+Enter</span></button>
+                        <button type="button" class="btn btn-ghost" id="sfCancelBtn">انصراف <span class="kbd-hint">Esc</span></button>
                         <span class="sanad-row-count" id="sfRowCount"></span>
+                    </div>
+                </div>
+
+                <div class="sanad-form-help" id="sfHelp">
+                    <div class="sf-help-title" id="sfHelpToggle">⌨️ کلیدهای میان‌بر <span class="sf-help-toggle">▼</span></div>
+                    <div class="sf-help-body" id="sfHelpBody">
+                        <div class="sf-help-item"><kbd>F6</kbd> انتقال ردیف به بالا</div>
+                        <div class="sf-help-item"><kbd>Ctrl</kbd>+<kbd>F6</kbd> انتقال ردیف به پایین</div>
+                        <div class="sf-help-item"><kbd>F7</kbd> جابجایی بدهکار ↔ بستانکار</div>
+                        <div class="sf-help-item"><kbd>Insert</kbd> افزودن ردیف</div>
+                        <div class="sf-help-item"><kbd>Ctrl</kbd>+<kbd>Delete</kbd> حذف ردیف جاری</div>
+                        <div class="sf-help-item"><kbd>Ctrl</kbd>+<kbd>F9</kbd> کپی ردیف‌های انتخاب‌شده</div>
+                        <div class="sf-help-item"><kbd>Ctrl</kbd>+<kbd>F10</kbd> چسباندن ردیف‌ها</div>
+                        <div class="sf-help-item"><kbd>↑</kbd> / <kbd>↓</kbd> جابجایی بین ردیف‌ها</div>
+                        <div class="sf-help-item"><kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>Alt</kbd>+<kbd>↓</kbd> جابجایی سریع ردیف</div>
+                        <div class="sf-help-item"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> ذخیره سند</div>
                     </div>
                 </div>
             </div>`;
@@ -195,6 +231,8 @@ window.App.Features.SanadForm = (function () {
         recalcTotals();
         const counter = document.getElementById('sfRowCount');
         if (counter) counter.textContent = `(${_state.items.length} ردیف)`;
+        updateFocusedRow();
+        updatePasteBtnState();
     }
 
     function buildRowHtml(item, idx) {
@@ -218,7 +256,7 @@ window.App.Features.SanadForm = (function () {
         const isStock = currentMoein?.isStock === true;
 
         return `
-            <div class="sf-row">
+            <div class="sf-row ${idx === _state.focusedIdx ? 'sf-row-focused' : ''}" data-row-idx="${idx}">
                 <div class="sf-row-num">${idx + 1}</div>
                 <div class="sf-row-body">
                     <div class="sf-line sf-line-codes">
@@ -236,7 +274,7 @@ window.App.Features.SanadForm = (function () {
                                 <button type="button" class="sf-pick-btn" data-idx="${idx}" data-pick="moein" title="انتخاب معین">🔍</button>
                             </div>
                         </div>
-                           <div class="sf-field">
+                        <div class="sf-field">
                             <label>تفصیلی ۱ ${tafzilName ? `<span class="sf-hint">— ${H.esc(tafzilName)}</span>` : ''}</label>
                             <div class="sf-input-with-btn">
                                 <input type="number" class="sf-tafzil num-input" data-idx="${idx}"
@@ -253,7 +291,6 @@ window.App.Features.SanadForm = (function () {
                                        ${canTafzil2 ? '' : 'disabled title="این معین تفصیلی ۲ ندارد"'}>
                             </div>
                         </div>
-
                     </div>
                     <div class="sf-line sf-line-values">
                         <div class="sf-field">
@@ -276,36 +313,262 @@ window.App.Features.SanadForm = (function () {
                         </div>
                     </div>
                 </div>
-                <button type="button" class="sf-row-del" data-idx="${idx}" title="حذف">🗑️</button>
+                <div class="sf-row-tools">
+                    <button type="button" class="sf-row-tool" data-idx="${idx}" data-action="up" title="انتقال به بالا (F6)">▲</button>
+                    <button type="button" class="sf-row-tool" data-idx="${idx}" data-action="down" title="انتقال به پایین (Ctrl+F6)">▼</button>
+                    <button type="button" class="sf-row-tool" data-idx="${idx}" data-action="swap" title="جابجایی بدهکار/بستانکار (F7)">⇅</button>
+                    <button type="button" class="sf-row-tool" data-idx="${idx}" data-action="dup" title="تکثیر ردیف">⧉</button>
+                    <button type="button" class="sf-row-tool sf-row-del" data-idx="${idx}" data-action="del" title="حذف ردیف">🗑️</button>
+                </div>
             </div>`;
     }
 
-    // ═══ BIND ═══
+    // ═══ FOCUS MANAGEMENT ═══
+    function focusRow(idx, fieldClass) {
+        if (idx < 0 || idx >= _state.items.length) return;
+        _state.focusedIdx = idx;
+        updateFocusedRow();
+        setTimeout(() => {
+            const row = document.querySelector(`.sf-row[data-row-idx="${idx}"]`);
+            if (!row) return;
+            const sel = fieldClass ? `.${fieldClass}[data-idx="${idx}"]` : `[data-idx="${idx}"]`;
+            const el = row.querySelector(sel);
+            if (el) {
+                el.focus();
+                if (el.select && el.tagName === 'INPUT') el.select();
+            }
+        }, 0);
+    }
+
+    function updateFocusedRow() {
+        document.querySelectorAll('.sf-row').forEach(el => {
+            const i = parseInt(el.dataset.rowIdx);
+            el.classList.toggle('sf-row-focused', i === _state.focusedIdx);
+        });
+    }
+
+    function getFocusedRowIdx() {
+        // اگر کاربر روی یک input خاص فوکوس داره، از data-idx استفاده کن
+        const active = document.activeElement;
+        if (active && active.dataset && active.dataset.idx !== undefined) {
+            const i = parseInt(active.dataset.idx);
+            if (!isNaN(i)) return i;
+        }
+        return _state.focusedIdx;
+    }
+
+    // ═══ ROW OPERATIONS ═══
+    function moveRowUp(idx) {
+        if (idx <= 0) { window.App.toast('ردیف اول قابل جابجایی نیست', 'info'); return; }
+        const items = _state.items;
+        [items[idx - 1], items[idx]] = [items[idx], items[idx - 1]];
+        _state.focusedIdx = idx - 1;
+        renderRows();
+        focusRow(idx - 1, 'col');
+    }
+
+    function moveRowDown(idx) {
+        if (idx >= _state.items.length - 1) { window.App.toast('ردیف آخر قابل جابجایی نیست', 'info'); return; }
+        const items = _state.items;
+        [items[idx], items[idx + 1]] = [items[idx + 1], items[idx]];
+        _state.focusedIdx = idx + 1;
+        renderRows();
+        focusRow(idx + 1, 'col');
+    }
+
+    function swapBedBes(idx) {
+        const it = _state.items[idx];
+        if (!it) return;
+        const tmp = it.mabBed;
+        it.mabBed = it.mabBes;
+        it.mabBes = tmp;
+        renderRows();
+        focusRow(idx, 'bed');
+        window.App.toast('بدهکار و بستانکار جابجا شد', 'success');
+    }
+
+    function duplicateRow(idx) {
+        const it = _state.items[idx];
+        if (!it) return;
+        _state.items.splice(idx + 1, 0, cloneItem(it));
+        _state.focusedIdx = idx + 1;
+        renderRows();
+        focusRow(idx + 1, 'col');
+    }
+
+    function deleteRowAt(idx) {
+        _state.items.splice(idx, 1);
+        if (_state.items.length === 0) _state.items.push(emptyRow());
+        const newIdx = Math.min(idx, _state.items.length - 1);
+        _state.focusedIdx = newIdx;
+        renderRows();
+        focusRow(newIdx, 'col');
+    }
+
+    function addRowAt(idx) {
+        _state.items.splice(idx + 1, 0, emptyRow());
+        _state.focusedIdx = idx + 1;
+        renderRows();
+        focusRow(idx + 1, 'col');
+    }
+
+    // ═══ COPY / PASTE ROWS ═══
+    function copyRows() {
+        // اول ردیف‌های "انتخاب‌شده" رو ببین، اگه نبود ردیف جاری
+        const selected = _state.items.filter((_, i) => i === _state.focusedIdx);
+        _clipboard = selected.map(cloneItem);
+        // همچنین ردیف‌های چک‌باکس‌دار (اگه داشتیم) — فعلاً فقط ردیف جاری
+        if (_clipboard.length === 0) {
+            window.App.toast('ردیفی برای کپی انتخاب نشده', 'warn');
+            return;
+        }
+        window.App.toast(`${_clipboard.length} ردیف کپی شد`, 'success');
+        updatePasteBtnState();
+    }
+
+    function pasteRows() {
+        if (_clipboard.length === 0) {
+            window.App.toast('بافر خالی است', 'warn');
+            return;
+        }
+        const idx = getFocusedRowIdx();
+        const newRows = _clipboard.map(cloneItem);
+        _state.items.splice(idx + 1, 0, ...newRows);
+        _state.focusedIdx = idx + newRows.length;
+        renderRows();
+        focusRow(_state.focusedIdx, 'col');
+        window.App.toast(`${newRows.length} ردیف چسبانده شد`, 'success');
+    }
+
+    function updatePasteBtnState() {
+        const btn = document.getElementById('sfPasteBtn');
+        if (btn) {
+            btn.disabled = _clipboard.length === 0;
+            btn.title = _clipboard.length > 0
+                ? `چسباندن ${_clipboard.length} ردیف (Ctrl+F10)`
+                : 'بافر خالی است';
+        }
+    }
+
+    // ═══ KEYBOARD HANDLER ═══
     let _keyHandler = null;
 
+    function handleGlobalKey(e) {
+        // F6 → انتقال به بالا
+        if (e.key === 'F6' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+            e.preventDefault();
+            moveRowUp(getFocusedRowIdx());
+            return;
+        }
+        // Ctrl+F6 → انتقال به پایین
+        if (e.key === 'F6' && e.ctrlKey) {
+            e.preventDefault();
+            moveRowDown(getFocusedRowIdx());
+            return;
+        }
+        // F7 → swap bed/bes
+        if (e.key === 'F7') {
+            e.preventDefault();
+            swapBedBes(getFocusedRowIdx());
+            return;
+        }
+        // Ctrl+F9 → کپی
+        if (e.key === 'F9' && e.ctrlKey) {
+            e.preventDefault();
+            copyRows();
+            return;
+        }
+        // Ctrl+F10 → چسباندن
+        if (e.key === 'F10' && e.ctrlKey) {
+            e.preventDefault();
+            pasteRows();
+            return;
+        }
+        // Insert → افزودن ردیف
+        if (e.key === 'Insert') {
+            e.preventDefault();
+            addRowAt(getFocusedRowIdx());
+            return;
+        }
+        // Ctrl+Delete → حذف ردیف جاری
+        if ((e.key === 'Delete' && e.ctrlKey)) {
+            e.preventDefault();
+            if (confirm('این ردیف حذف شود؟')) {
+                deleteRowAt(getFocusedRowIdx());
+            }
+            return;
+        }
+        // Alt+↑ / Alt+↓ → جابجایی سریع
+        if (e.altKey && e.key === 'ArrowUp') {
+            e.preventDefault();
+            moveRowUp(getFocusedRowIdx());
+            return;
+        }
+        if (e.altKey && e.key === 'ArrowDown') {
+            e.preventDefault();
+            moveRowDown(getFocusedRowIdx());
+            return;
+        }
+        // Ctrl+S / Ctrl+Enter → ذخیره
+        if ((e.ctrlKey && e.key === 's') || (e.ctrlKey && e.key === 'Enter')) {
+            e.preventDefault();
+            save();
+            return;
+        }
+        // Escape → بستن
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            window.App.closeModal();
+            document.removeEventListener('keydown', _keyHandler);
+            _keyHandler = null;
+        }
+    }
+
+    // ═══ BIND ═══
     function bindEvents() {
         const mb = document.getElementById('modalBody');
         if (!mb) return;
 
         document.getElementById('sfAddRow')?.addEventListener('click', () => {
-            _state.items.push(emptyRow());
-            renderRows();
+            addRowAt(_state.items.length - 1);
         });
 
         document.getElementById('sfSaveBtn')?.addEventListener('click', save);
         document.getElementById('sfCancelBtn')?.addEventListener('click', () => window.App.closeModal());
+        document.getElementById('sfCopyBtn')?.addEventListener('click', copyRows);
+        document.getElementById('sfPasteBtn')?.addEventListener('click', pasteRows);
+
+        // toggle راهنما
+        document.getElementById('sfHelpToggle')?.addEventListener('click', () => {
+            const body = document.getElementById('sfHelpBody');
+            const icon = document.querySelector('#sfHelpToggle .sf-help-toggle');
+            if (body) {
+                const visible = body.style.display !== 'none';
+                body.style.display = visible ? 'none' : 'grid';
+                if (icon) icon.textContent = visible ? '▼' : '▲';
+            }
+        });
 
         mb.addEventListener('change', onFieldChange);
         mb.addEventListener('input', onFieldInput);
         mb.addEventListener('click', onRowClick);
+        mb.addEventListener('focusin', onRowFocus);
 
         // keyboard
         if (_keyHandler) document.removeEventListener('keydown', _keyHandler);
-        _keyHandler = (e) => {
-            if ((e.ctrlKey && e.key === 's') || e.key === 'F2') { e.preventDefault(); save(); }
-            else if (e.key === 'Escape') { e.preventDefault(); window.App.closeModal(); document.removeEventListener('keydown', _keyHandler); _keyHandler = null; }
-        };
+        _keyHandler = handleGlobalKey;
         document.addEventListener('keydown', _keyHandler);
+    }
+
+    function onRowFocus(e) {
+        const t = e.target;
+        if (t && t.dataset && t.dataset.idx !== undefined) {
+            const idx = parseInt(t.dataset.idx);
+            if (!isNaN(idx)) {
+                _state.focusedIdx = idx;
+                updateFocusedRow();
+            }
+        }
     }
 
     function onFieldChange(e) {
@@ -319,7 +582,7 @@ window.App.Features.SanadForm = (function () {
             _state.items[idx].codeTafzil = 0;
             _state.items[idx].codeTafzili2 = 0;
             renderRows();
-        }  else if (t.classList.contains('sf-tafzil2')) {
+        } else if (t.classList.contains('sf-tafzil2')) {
             _state.items[idx].codeTafzili2 = parseInt(t.value) || 0;
         } else if (t.classList.contains('sf-tafzil')) {
             _state.items[idx].codeTafzil = parseInt(t.value) || 0;
@@ -357,9 +620,8 @@ window.App.Features.SanadForm = (function () {
             }
             recalcTotals();
         } else if (t.classList.contains('sf-meghdar')) {
-            const v = Math.abs(parseNum(t.value));   // ⭐ همیشه مثبت
+            const v = Math.abs(parseNum(t.value));
             _state.items[idx].meghdar = v;
-            // اگه کاربر منفی زد، خودکار مثبت شه
             if (t.value.startsWith('-')) {
                 t.value = H.fmt(v);
             }
@@ -367,18 +629,34 @@ window.App.Features.SanadForm = (function () {
     }
 
     function onRowClick(e) {
+        const tool = e.target.closest('.sf-row-tool');
+        if (tool) {
+            const idx = parseInt(tool.dataset.idx);
+            const action = tool.dataset.action;
+            if (action === 'up') moveRowUp(idx);
+            else if (action === 'down') moveRowDown(idx);
+            else if (action === 'swap') swapBedBes(idx);
+            else if (action === 'dup') duplicateRow(idx);
+            else if (action === 'del') {
+                if (confirm('این ردیف حذف شود؟')) deleteRowAt(idx);
+            }
+            return;
+        }
+
         if (e.target.classList.contains('sf-row-del')) {
             const idx = parseInt(e.target.dataset.idx);
-            _state.items.splice(idx, 1);
-            if (_state.items.length === 0) _state.items.push(emptyRow());
-            renderRows();
-        } else if (e.target.classList.contains('sf-pick-btn')) {
+            if (confirm('این ردیف حذف شود؟')) deleteRowAt(idx);
+            return;
+        }
+
+        if (e.target.classList.contains('sf-pick-btn')) {
             const idx = parseInt(e.target.dataset.idx);
             const pick = e.target.dataset.pick;
             if (pick === 'moein') openMoeinPicker(idx);
             else openTafzilPicker(idx);
         }
     }
+
     // ═══ Tafzil Picker ═══
     function openTafzilPicker(rowIdx) {
         const list = _cache.tafzils || [];
@@ -432,9 +710,7 @@ window.App.Features.SanadForm = (function () {
         }
 
         renderPickerList();
-
         searchInput.addEventListener('input', () => renderPickerList(searchInput.value));
-
         picker.querySelector('.sf-picker-close').addEventListener('click', () => picker.remove());
 
         picker.addEventListener('click', (e) => {
@@ -442,10 +718,10 @@ window.App.Features.SanadForm = (function () {
             const item = e.target.closest('.sf-picker-item');
             if (!item) return;
             const code = parseInt(item.dataset.code);
-            const name = item.dataset.name;
             _state.items[rowIdx].codeTafzil = code;
             picker.remove();
             renderRows();
+            focusRow(rowIdx, 'col');
         });
 
         searchInput.addEventListener('keydown', (e) => {
@@ -458,13 +734,13 @@ window.App.Features.SanadForm = (function () {
 
         setTimeout(() => searchInput.focus(), 50);
     }
+
     // ═══ Moein Picker ═══
     function openMoeinPicker(rowIdx) {
         const allMoeins = _cache.moeins || [];
         const currentCodeCol = _state.items[rowIdx].codeCol;
         const currentMoein = _state.items[rowIdx].codeMoein;
 
-        // نگاشت col names برای نمایش
         const colNameMap = {};
         (_cache.cols || []).forEach(c => { colNameMap[c.codeCol] = c.name; });
 
@@ -495,12 +771,7 @@ window.App.Features.SanadForm = (function () {
         function renderList(filter = '') {
             const f = filter.trim().toLowerCase();
             let filtered = allMoeins;
-
-            // اگه کاربر ابتدا کل رو انتخاب کرده، فیلتر به همون کل
-            if (currentCodeCol > 0) {
-                filtered = filtered.filter(m => m.codeCol === currentCodeCol);
-            }
-
+            if (currentCodeCol > 0) filtered = filtered.filter(m => m.codeCol === currentCodeCol);
             if (f) {
                 filtered = filtered.filter(m =>
                     String(m.codeMoein).includes(f) ||
@@ -508,19 +779,16 @@ window.App.Features.SanadForm = (function () {
                     String(m.codeCol).includes(f)
                 );
             }
-
             if (filtered.length === 0) {
                 listWrap.innerHTML = '<div class="sf-picker-empty">موردی یافت نشد</div>';
                 return;
             }
-
             listWrap.innerHTML = filtered.slice(0, 300).map(m => {
                 const isSelected = m.codeCol === currentCodeCol && m.codeMoein === currentMoein;
                 const colName = colNameMap[m.codeCol] || '';
                 return `
                     <div class="sf-picker-item moein-item ${isSelected ? 'selected' : ''}"
-                         data-col="${m.codeCol}"
-                         data-moein="${m.codeMoein}">
+                         data-col="${m.codeCol}" data-moein="${m.codeMoein}">
                         <span class="sf-picker-code">${m.codeCol} - ${m.codeMoein}</span>
                         <div class="sf-picker-name">
                             <div>${H.esc(m.name || '')}</div>
@@ -539,23 +807,21 @@ window.App.Features.SanadForm = (function () {
         setTimeout(() => searchInput.focus(), 50);
 
         searchInput.addEventListener('input', () => renderList(searchInput.value));
-
         picker.querySelector('.sf-picker-close').addEventListener('click', () => picker.remove());
+
         picker.addEventListener('click', (e) => {
             if (e.target === picker) { picker.remove(); return; }
             const item = e.target.closest('.moein-item');
             if (!item) return;
-
             const codeCol = parseInt(item.dataset.col);
             const codeMoein = parseInt(item.dataset.moein);
-
             _state.items[rowIdx].codeCol = codeCol;
             _state.items[rowIdx].codeMoein = codeMoein;
             _state.items[rowIdx].codeTafzil = 0;
             _state.items[rowIdx].codeTafzili2 = 0;
-
             picker.remove();
             renderRows();
+            focusRow(rowIdx, 'col');
         });
 
         searchInput.addEventListener('keydown', (e) => {
@@ -566,6 +832,7 @@ window.App.Features.SanadForm = (function () {
             }
         });
     }
+
     // ═══ TOTALS ═══
     function recalcTotals() {
         const wrap = document.getElementById('sfTotals');
@@ -625,7 +892,22 @@ window.App.Features.SanadForm = (function () {
             if (_keyHandler) document.removeEventListener('keydown', _keyHandler);
             _keyHandler = null;
             window.App.closeModal();
-            window.App.Features.Sanad.loadList();
+
+            // ⭐ رفرش صفحه‌ی مناسب
+            const currentPage = window.App.state.currentPage;
+            if (currentPage === 'sanad') {
+                window.App.Features.Sanad.loadList();
+            } else {
+                // ⭐ سعی کن گزارش فعلی رو رفرش کنی
+                const feat = window.App.Features[currentPage];
+                if (feat && typeof feat.reload === 'function') {
+                    feat.reload();
+                } else if (feat && typeof feat.loadList === 'function') {
+                    feat.loadList();
+                } else if (feat && typeof feat.run === 'function') {
+                    feat.run();
+                }
+            }
         } catch (err) {
             window.App.toast('خطا: ' + err.message, 'error');
         } finally {
@@ -635,7 +917,6 @@ window.App.Features.SanadForm = (function () {
 
     // ═══ DELETE ═══
     async function deleteSanad(id) {
-        // ⭐ گارد دسترسی
         if (window.App.Permissions && !window.App.Permissions.can(108)) {
             window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
             return;

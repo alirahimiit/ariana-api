@@ -31,30 +31,34 @@ await using (var conn = new SqliteConnection($"Data Source={dbPath}"))
     await conn.OpenAsync();
     var cmd = conn.CreateCommand();
     cmd.CommandText = @"
-        CREATE TABLE IF NOT EXISTS support_install (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            license_id TEXT NOT NULL UNIQUE,
-            customer_id TEXT,
-            customer_name TEXT,
-            system_id TEXT,
-            last_seen TEXT
-        );
+    CREATE TABLE IF NOT EXISTS support_install (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        license_id TEXT NOT NULL UNIQUE,
+        customer_id TEXT,
+        customer_name TEXT,
+        system_id TEXT,
+        last_seen TEXT
+    );
 
-        CREATE TABLE IF NOT EXISTS support_message (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            install_id INTEGER NOT NULL,
-            session_id TEXT,
-            user_id INTEGER,
-            user_name TEXT,
-            direction INTEGER NOT NULL,
-            message_text TEXT,
-            created_at TEXT NOT NULL,
-            admin_read INTEGER DEFAULT 0
-        );
+      CREATE TABLE IF NOT EXISTS support_message (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                install_id INTEGER NOT NULL,
+                session_id TEXT,
+                user_id INTEGER,
+                user_name TEXT,
+                org_id INTEGER DEFAULT 0,
+                fy_id INTEGER DEFAULT 0,
+                org_name TEXT,
+                fy_name TEXT,
+                direction INTEGER NOT NULL,
+                message_text TEXT,
+                created_at TEXT NOT NULL,
+                admin_read INTEGER DEFAULT 0
+            );
 
-        CREATE INDEX IF NOT EXISTS ix_msg_install ON support_message (install_id, session_id, id);
-        CREATE INDEX IF NOT EXISTS ix_msg_admin_read ON support_message (admin_read);
-    ";
+            CREATE INDEX IF NOT EXISTS ix_msg_install ON support_message (install_id, session_id, id);
+            CREATE INDEX IF NOT EXISTS ix_msg_admin_read ON support_message (admin_read);
+        ";
     await cmd.ExecuteNonQueryAsync();
 }
 
@@ -139,8 +143,12 @@ app.MapPost("/api/admin/tickets/{installId}/{sessionId}/reply", async (
     if (string.IsNullOrWhiteSpace(req.Message))
         return Results.BadRequest(new { message = "متن پیام خالی است" });
 
-    await db.SaveMessageAsync(installId, sessionId, null, "پشتیبان",
+    await db.SaveMessageAsync(
+        installId, sessionId,
+        null, "پشتیبان",
+        0, 0, null, null,
         direction: 2, req.Message, adminRead: 1);
+
     await db.MarkTicketReadAsync(installId, sessionId);
     return Results.Ok(new { message = "پاسخ ارسال شد" });
 });
@@ -155,6 +163,21 @@ app.MapPost("/api/admin/tickets/{installId}/{sessionId}/read", async (
 app.MapGet("/api/admin/unread-count", async () =>
     Results.Ok(new { count = await db.GetAdminUnreadCountAsync() }));
 
+// ⭐ حذف پیام تکی
+app.MapDelete("/api/admin/messages/{messageId}", async (int messageId) =>
+{
+    await db.DeleteMessageAsync(messageId);
+    return Results.Ok(new { message = "پیام حذف شد" });
+});
+
+// ⭐ حذف کل تیکت
+app.MapDelete("/api/admin/tickets/{installId}/{sessionId}", async (
+    int installId, string sessionId) =>
+{
+    await db.DeleteTicketAsync(installId, sessionId);
+    return Results.Ok(new { message = "تیکت حذف شد" });
+});
+
 // ═══════════════════════════════════════════════════════════
 //  CUSTOMER ENDPOINTS (با لایسنس)
 // ═══════════════════════════════════════════════════════════
@@ -164,7 +187,7 @@ app.MapPost("/api/support/send", async (SupportSendRequest req) =>
     var devMode = builder.Configuration.GetValue<bool?>("Relay:DevMode") ?? false;
     LicensePayload? payload = null;
 
-    if (devMode)
+    if (devMode && req.License == null)
     {
         payload = new LicensePayload
         {
@@ -182,7 +205,7 @@ app.MapPost("/api/support/send", async (SupportSendRequest req) =>
     else
     {
         if (req.License == null || req.License.Payload == null)
-            return Results.Json(new { message = "لایسنس ارسال نشده" }, statusCode: 401);
+            return Results.BadRequest(new { message = "لایسنس ارسال نشده" });
 
         var verifyResult = LicenseVerifier.Verify(req.License);
         if (!verifyResult.IsValid)
@@ -200,7 +223,9 @@ app.MapPost("/api/support/send", async (SupportSendRequest req) =>
         payload.LicenseId, payload.CustomerId, payload.CustomerName, payload.SystemId ?? "");
 
     var msgId = await db.SaveMessageAsync(
-        installId, req.SessionId, req.UserId, req.UserName,
+        installId, req.SessionId,
+        req.UserId, req.UserName,
+        req.OrgId, req.FyId, req.OrgName, req.FyName,
         direction: 1, req.Message, adminRead: 0);
 
     if (emailEnabled)
@@ -216,7 +241,7 @@ app.MapPost("/api/support/poll", async (SupportPollRequest req) =>
     var devMode = builder.Configuration.GetValue<bool?>("Relay:DevMode") ?? false;
     LicensePayload? payload = null;
 
-    if (devMode)
+    if (devMode && req.License == null)
     {
         payload = new LicensePayload
         {
@@ -249,7 +274,8 @@ app.MapPost("/api/support/poll", async (SupportPollRequest req) =>
     var items = await db.GetMessagesAsync(installId, req.SessionId ?? "", req.SinceId);
     return Results.Ok(new { items });
 });
-app.Run();
+
+app.Run();   // ⭐ این خط باید آخرین خط قبل از تعریف کلاس‌ها باشد
 
 // ═══════════════════════════════════════════════════════════
 //  Helpers & Classes
@@ -385,9 +411,12 @@ public class SupportSendRequest
     public string SessionId { get; set; } = "";
     public long? UserId { get; set; }
     public string? UserName { get; set; }
+    public long OrgId { get; set; }
+    public long FyId { get; set; }
+    public string? OrgName { get; set; }
+    public string? FyName { get; set; }
     public string Message { get; set; } = "";
 }
-
 public class SupportPollRequest
 {
     public LicenseFile? License { get; set; }
@@ -395,13 +424,17 @@ public class SupportPollRequest
     public int SinceId { get; set; } = 0;
 }
 
+// ⭐ TicketItem با LastUserName
 public record TicketItem(
     int InstallId,
     string InstallName,
     string SessionId,
     string? LastMessage,
     string LastAt,
-    int UnreadCount);
+    int UnreadCount,
+    string LastUserName,
+    string LastOrgName,
+    string LastFyName);
 
 public record MessageItem(
     long Id,
@@ -460,49 +493,65 @@ public class RelayDb
         return Convert.ToInt32(await ins.ExecuteScalarAsync());
     }
 
-    public async Task<long> SaveMessageAsync(int installId, string? sessionId, long? userId, string? userName,
+    public async Task<long> SaveMessageAsync(
+        int installId, string? sessionId,
+        long? userId, string? userName,
+        long orgId, long fyId, string? orgName, string? fyName,
         int direction, string message, int adminRead)
     {
         await using var conn = Open();
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"INSERT INTO support_message
-            (install_id, session_id, user_id, user_name, direction, message_text, created_at, admin_read)
-            VALUES (@i, @s, @u, @un, @d, @m, @now, @ar);
-            SELECT last_insert_rowid();";
+        (install_id, session_id, user_id, user_name, org_id, fy_id, org_name, fy_name,
+         direction, message_text, created_at, admin_read)
+        VALUES (@i, @s, @u, @un, @oi, @fi, @on, @fn, @d, @m, @now, @ar);
+        SELECT last_insert_rowid();";
         cmd.Parameters.AddWithValue("@i", installId);
         cmd.Parameters.AddWithValue("@s", (object?)sessionId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@u", (object?)userId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@un", (object?)userName ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@oi", orgId);
+        cmd.Parameters.AddWithValue("@fi", fyId);
+        cmd.Parameters.AddWithValue("@on", (object?)orgName ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@fn", (object?)fyName ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@d", direction);
         cmd.Parameters.AddWithValue("@m", message);
         cmd.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("o"));
         cmd.Parameters.AddWithValue("@ar", adminRead);
         return Convert.ToInt64(await cmd.ExecuteScalarAsync());
     }
-
     public async Task<List<TicketItem>> GetTicketsAsync()
     {
         await using var conn = Open();
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT 
-                i.id,
-                IFNULL(i.customer_name, 'نامشخص'),
-                IFNULL(m.session_id, ''),
-                (SELECT message_text FROM support_message 
-                 WHERE install_id = i.id AND IFNULL(session_id,'') = IFNULL(m.session_id,'')
-                 ORDER BY id DESC LIMIT 1),
-                (SELECT created_at FROM support_message 
-                 WHERE install_id = i.id AND IFNULL(session_id,'') = IFNULL(m.session_id,'')
-                 ORDER BY id DESC LIMIT 1),
-                (SELECT COUNT(*) FROM support_message 
-                 WHERE install_id = i.id AND IFNULL(session_id,'') = IFNULL(m.session_id,'')
-                   AND direction = 1 AND admin_read = 0)
-            FROM support_install i
-            INNER JOIN (SELECT DISTINCT install_id, session_id FROM support_message) m 
-                ON m.install_id = i.id
-            WHERE IFNULL(m.session_id,'') <> ''
-            ORDER BY 5 DESC";
+        SELECT 
+            i.id,
+            IFNULL(i.customer_name, 'نامشخص'),
+            IFNULL(m.session_id, ''),
+            (SELECT message_text FROM support_message 
+             WHERE install_id = i.id AND IFNULL(session_id,'') = IFNULL(m.session_id,'')
+             ORDER BY id DESC LIMIT 1),
+            (SELECT created_at FROM support_message 
+             WHERE install_id = i.id AND IFNULL(session_id,'') = IFNULL(m.session_id,'')
+             ORDER BY id DESC LIMIT 1),
+            (SELECT COUNT(*) FROM support_message 
+             WHERE install_id = i.id AND IFNULL(session_id,'') = IFNULL(m.session_id,'')
+               AND direction = 1 AND admin_read = 0),
+            (SELECT user_name FROM support_message 
+             WHERE install_id = i.id AND IFNULL(session_id,'') = IFNULL(m.session_id,'')
+               AND direction = 1 ORDER BY id DESC LIMIT 1),
+            (SELECT org_name FROM support_message 
+             WHERE install_id = i.id AND IFNULL(session_id,'') = IFNULL(m.session_id,'')
+               AND direction = 1 ORDER BY id DESC LIMIT 1),
+            (SELECT fy_name FROM support_message 
+             WHERE install_id = i.id AND IFNULL(session_id,'') = IFNULL(m.session_id,'')
+               AND direction = 1 ORDER BY id DESC LIMIT 1)
+        FROM support_install i
+        INNER JOIN (SELECT DISTINCT install_id, session_id FROM support_message) m 
+            ON m.install_id = i.id
+        WHERE IFNULL(m.session_id,'') <> ''
+        ORDER BY 5 DESC";
 
         var list = new List<TicketItem>();
         await using var r = await cmd.ExecuteReaderAsync();
@@ -514,7 +563,10 @@ public class RelayDb
                 r.IsDBNull(2) ? "" : r.GetString(2),
                 r.IsDBNull(3) ? null : r.GetString(3),
                 r.IsDBNull(4) ? "" : r.GetString(4),
-                r.IsDBNull(5) ? 0 : r.GetInt32(5)));
+                r.IsDBNull(5) ? 0 : r.GetInt32(5),
+                r.IsDBNull(6) ? "مهمان" : r.GetString(6),
+                r.IsDBNull(7) ? "" : r.GetString(7),
+                r.IsDBNull(8) ? "" : r.GetString(8)));
         }
         return list;
     }
@@ -563,6 +615,28 @@ public class RelayDb
         cmd.CommandText = "SELECT COUNT(*) FROM support_message WHERE direction = 1 AND admin_read = 0";
         return Convert.ToInt32(await cmd.ExecuteScalarAsync());
     }
+
+    // ⭐ حذف پیام تکی
+    public async Task DeleteMessageAsync(long messageId)
+    {
+        await using var conn = Open();
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM support_message WHERE id = @id";
+        cmd.Parameters.AddWithValue("@id", messageId);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    // ⭐ حذف کل تیکت
+    public async Task DeleteTicketAsync(int installId, string sessionId)
+    {
+        await using var conn = Open();
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = @"DELETE FROM support_message 
+                            WHERE install_id = @i AND IFNULL(session_id,'') = @s";
+        cmd.Parameters.AddWithValue("@i", installId);
+        cmd.Parameters.AddWithValue("@s", sessionId ?? "");
+        await cmd.ExecuteNonQueryAsync();
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -607,7 +681,7 @@ public class EmailSender
     <div style='background:#f9fafb;border-right:4px solid #4F46E5;padding:14px;margin-top:16px;'>
       {safeMsg}
     </div>
-    <a href='https://ariana.iewco.ir/support/index.html' style='display:inline-block;margin-top:20px;background:#4F46E5;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;'>مشاهده در پنل</a>
+    <a href='https://support.ariana.iewco.ir/support/index.html' style='display:inline-block;margin-top:20px;background:#4F46E5;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;'>مشاهده در پنل</a>
   </div>
 </div>";
 

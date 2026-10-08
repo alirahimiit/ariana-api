@@ -208,3 +208,651 @@ body:has(.sanad-detail-modal) .modal-content {
             font-size: 12px;
         }
 }
+/* ═══════════════════════════════════════════════════
+   Sanad Form 2.0 — Row Actions & Keyboard Hints
+   ═══════════════════════════════════════════════════ */
+
+.sanad-form-rows-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0 8px;
+    padding: 0 4px;
+}
+
+    .sanad-form-rows-header h4 {
+        margin: 0;
+        font-size: 14px;
+        color: #374151;
+    }
+
+.sf-row-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+/* ردیف focus شده */
+.sf-row {
+    position: relative;
+    transition: background .15s, box-shadow .15s;
+}
+
+    .sf-row.sf-row-focused {
+        background: #EEF2FF;
+        box-shadow: inset 4px 0 0 #4F46E5;
+        border-radius: 6px;
+    }
+
+/* ابزارهای ردیف (فقط هنگام hover یا focus) */
+.sf-row-tools {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    display: flex;
+    gap: 3px;
+    opacity: 0;
+    transition: opacity .15s;
+    z-index: 5;
+    background: rgba(255,255,255,.95);
+    border-radius: 6px;
+    padding: 3px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+
+.sf-row:hover .sf-row-tools,
+.sf-row.sf-row-focused .sf-row-tools {
+    opacity: 1;
+}
+
+.sf-row-tool {
+    width: 24px;
+    height: 24px;
+    border: 1px solid #E5E7EB;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    color: #4B5563;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .12s;
+    padding: 0;
+}
+
+    .sf-row-tool:hover {
+        background: #4F46E5;
+        color: #fff;
+        border-color: #4F46E5;
+    }
+
+    .sf-row-tool:active {
+        transform: scale(.94);
+    }
+
+    .sf-row-tool.sf-row-del:hover {
+        background: #DC2626;
+        border-color: #DC2626;
+    }
+
+/* راهنمای کلیدهای میان‌بر */
+.sanad-form-help {
+    margin-top: 16px;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    background: #F9FAFB;
+    overflow: hidden;
+}
+
+.sf-help-title {
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #4B5563;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+    .sf-help-title:hover {
+        background: #F3F4F6;
+    }
+
+.sf-help-toggle {
+    font-size: 10px;
+    color: #9CA3AF;
+}
+
+.sf-help-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 4px 16px;
+    padding: 8px 12px 12px;
+    border-top: 1px dashed #E5E7EB;
+    font-size: 12px;
+    color: #4B5563;
+}
+
+.sf-help-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-family: 'Vazirmatn', monospace;
+    color: #111827;
+    background: #fff;
+    border: 1px solid #D1D5DB;
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    min-width: 18px;
+    text-align: center;
+    line-height: 1.2;
+}
+
+/* hidden در موبایل */
+@media (max-width: 640px) {
+    .sf-row-tools {
+        opacity: 1;
+        position: static;
+        box-shadow: none;
+        background: transparent;
+        padding: 0;
+        margin-top: 4px;
+    }
+
+    .sf-help-body {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ═══════════════════════════════════════════════════
+   Bulk Selection + Copy Dialog (Sanad 2.0)
+   ═══════════════════════════════════════════════════ */
+
+/* ستون چک‌باکس در جدول */
+.sd-col-check {
+    width: 36px;
+    text-align: center;
+    padding: 4px !important;
+}
+
+    .sd-col-check input[type="checkbox"],
+    .sanad-cb {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: #4F46E5;
+    }
+
+/* ردیف انتخاب شده */
+tr.row-selected {
+    background: #EEF2FF !important;
+}
+
+    tr.row-selected:hover {
+        background: #E0E7FF !important;
+    }
+
+/* Toolbar انتخاب گروهی */
+.sanad-bulk-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px 14px;
+    margin: 8px 12px;
+    background: linear-gradient(90deg, #EEF2FF, #E0E7FF);
+    border: 1px solid #C7D2FE;
+    border-radius: 8px;
+    animation: bulkSlideIn .2s ease-out;
+}
+
+@keyframes bulkSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.bulk-count {
+    font-size: 13px;
+    color: #3730A3;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+    .bulk-count strong {
+        font-size: 16px;
+        color: #4F46E5;
+    }
+
+.bulk-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.btn-danger {
+    background: #DC2626 !important;
+    color: #fff !important;
+    border-color: #DC2626 !important;
+}
+
+    .btn-danger:hover {
+        background: #B91C1C !important;
+        border-color: #B91C1C !important;
+    }
+
+/* دیالوگ کپی */
+.copy-dialog {
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.copy-info {
+    padding: 12px 14px;
+    background: #F0FDF4;
+    border: 1px solid #BBF7D0;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #166534;
+    text-align: center;
+}
+
+.copy-count {
+    font-weight: 700;
+    color: #059669;
+    font-size: 15px;
+}
+
+.copy-dialog .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+    .copy-dialog .form-group > label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+    }
+
+.copy-dialog .form-control {
+    padding: 8px 12px;
+    border: 1px solid #D1D5DB;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13px;
+    background: #fff;
+}
+
+    .copy-dialog .form-control:focus {
+        outline: none;
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, .1);
+    }
+
+.cb-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500 !important;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    transition: background .12s;
+}
+
+    .cb-line:hover {
+        background: #F9FAFB;
+    }
+
+    .cb-line input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: #4F46E5;
+    }
+
+.copy-warning {
+    padding: 10px 12px;
+    background: #FEF3C7;
+    border: 1px solid #FDE68A;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #92400E;
+    line-height: 1.6;
+}
+
+.copy-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-start;
+    padding-top: 4px;
+    border-top: 1px solid #F3F4F6;
+    margin-top: 4px;
+    padding-top: 14px;
+}
+
+/* موبایل */
+@media (max-width: 640px) {
+    .sanad-bulk-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+
+    .bulk-actions {
+        justify-content: center;
+    }
+}
+
+/* ═══════════════════════════════════════════════════
+   Import Dialog
+   ═══════════════════════════════════════════════════ */
+.import-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.import-info {
+    padding: 10px 14px;
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #1E40AF;
+}
+
+.import-warning {
+    padding: 10px 12px;
+    background: #FEF3C7;
+    border: 1px solid #FDE68A;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #92400E;
+    line-height: 1.6;
+}
+
+.import-status {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-top: 4px;
+}
+
+.import-error-box {
+    padding: 14px;
+    background: #FEF2F2;
+    border: 1px solid #FECACA;
+    border-radius: 8px;
+    color: #991B1B;
+}
+
+.import-error-title {
+    font-weight: 700;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.import-error-list {
+    margin: 0;
+    padding-right: 20px;
+    font-size: 12px;
+    line-height: 1.8;
+}
+
+.import-error-more {
+    font-size: 11px;
+    color: #7F1D1D;
+    margin-top: 6px;
+}
+
+.import-success-box {
+    padding: 14px;
+    background: #F0FDF4;
+    border: 1px solid #BBF7D0;
+    border-radius: 8px;
+    color: #166534;
+}
+
+.import-success-title {
+    font-weight: 700;
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+
+.import-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.import-stat {
+    background: #fff;
+    padding: 8px;
+    border-radius: 6px;
+    text-align: center;
+    border: 1px solid #D1FAE5;
+}
+
+.import-stat-label {
+    font-size: 11px;
+    color: #6B7280;
+    margin-bottom: 4px;
+}
+
+.import-stat-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: #059669;
+}
+
+.import-warn-title {
+    font-weight: 600;
+    margin: 8px 0 4px;
+    font-size: 12px;
+    color: #B45309;
+}
+
+.import-warn-list {
+    margin: 0;
+    padding-right: 20px;
+    font-size: 11px;
+    line-height: 1.7;
+    color: #92400E;
+}
+
+.import-preview-table-wrap {
+    max-height: 220px;
+    overflow-y: auto;
+    margin-top: 10px;
+    border: 1px solid #D1FAE5;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.import-preview-table {
+    width: 100%;
+    font-size: 11px;
+    border-collapse: collapse;
+}
+
+    .import-preview-table th {
+        background: #F0FDF4;
+        padding: 6px 4px;
+        font-weight: 600;
+        text-align: center;
+        border-bottom: 1px solid #D1FAE5;
+        position: sticky;
+        top: 0;
+    }
+
+    .import-preview-table td {
+        padding: 4px 6px;
+        border-bottom: 1px solid #F3F4F6;
+        text-align: center;
+    }
+
+        .import-preview-table td.num {
+            text-align: left;
+            font-family: monospace;
+        }
+
+.import-more {
+    padding: 6px;
+    text-align: center;
+    font-size: 11px;
+    color: #6B7280;
+}
+
+/* ═══════════════════════════════════════════════════
+   Account Filter Bar
+   ═══════════════════════════════════════════════════ */
+.sanad-account-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    background: #F9FAFB;
+    border: 1px dashed #D1D5DB;
+    border-radius: 8px;
+    flex-wrap: wrap;
+}
+
+.selected-account-label {
+    padding: 4px 10px;
+    background: #EEF2FF;
+    color: #3730A3;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    display: none;
+}
+
+/* ═══ Account Picker Modal ═══ */
+.acc-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.acc-picker-search input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+}
+
+    .acc-picker-search input:focus {
+        outline: none;
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, .1);
+    }
+
+.acc-picker-list {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.acc-group-title {
+    padding: 6px 12px;
+    background: #F3F4F6;
+    font-size: 11px;
+    font-weight: 700;
+    color: #6B7280;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.acc-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #F3F4F6;
+    transition: background .12s;
+}
+
+    .acc-item:hover {
+        background: #EEF2FF;
+    }
+
+.acc-code {
+    font-family: monospace;
+    font-weight: 700;
+    color: #4F46E5;
+    min-width: 90px;
+    font-size: 12px;
+}
+
+.acc-name {
+    flex: 1;
+    font-size: 13px;
+    color: #374151;
+}
+
+.acc-badge {
+    padding: 2px 6px;
+    background: #DBEAFE;
+    color: #1E40AF;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.acc-empty {
+    padding: 40px;
+    text-align: center;
+    color: #9CA3AF;
+    font-size: 13px;
+}
+
+/* ═══ Edit Header در مودال جزئیات ═══ */
+.sd-edit-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    background: linear-gradient(90deg, #FEF3C7, #FDE68A);
+    border: 1px solid #FCD34D;
+    border-radius: 8px;
+    flex-wrap: wrap;
+}
+
+.sd-edit-hint {
+    font-size: 12px;
+    color: #92400E;
+    font-weight: 600;
+}
