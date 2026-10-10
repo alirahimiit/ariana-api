@@ -1,0 +1,341 @@
+﻿/* ═══════════════════════════════════════════════════
+   Toast Notifications — Modern
+   ═══════════════════════════════════════════════════ */
+
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 99998;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 380px;
+    width: calc(100% - 40px);
+    pointer-events: none;
+}
+
+.toast-item {
+    pointer-events: auto;
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 14px 14px 42px; /* padding-left برای close btn */
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(15, 23, 42, 0.14), 0 2px 8px rgba(15, 23, 42, 0.06);
+    border: 1px solid #E5E7EB;
+    border-right: 4px solid #4F46E5;
+    opacity: 0;
+    transform: translateX(30px);
+    transition: opacity .28s ease, transform .32s cubic-bezier(0.34, 1.56, 0.64, 1);
+    overflow: hidden;
+    direction: rtl;
+}
+
+    .toast-item.toast-in {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    .toast-item.toast-out {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+
+.toast-icon {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    background: #4F46E5;
+    line-height: 1;
+    margin-top: 2px;
+}
+
+.toast-body {
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+}
+
+.toast-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #111827;
+    margin-bottom: 3px;
+}
+
+.toast-message {
+    font-size: 12.5px;
+    color: #4B5563;
+    line-height: 1.7;
+    word-break: break-word;
+}
+
+.toast-close {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    color: #9CA3AF;
+    cursor: pointer;
+    border-radius: 50%;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .15s;
+    padding: 0;
+    font-family: inherit;
+}
+
+    .toast-close:hover {
+        background: #F3F4F6;
+        color: #DC2626;
+    }
+
+.toast-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: currentColor;
+    opacity: 0.35;
+    transform-origin: right;
+    animation: toastProgress linear forwards;
+}
+
+@keyframes toastProgress {
+    from {
+        transform: scaleX(1);
+    }
+
+    to {
+        transform: scaleX(0);
+    }
+}
+
+.toast-item:hover .toast-progress {
+    animation-play-state: paused;
+}
+
+/* ═══ رنگ‌ها بر اساس نوع ═══ */
+.toast-success {
+    border-right-color: #059669;
+}
+
+    .toast-success .toast-icon {
+        background: #059669;
+    }
+
+    .toast-success .toast-progress {
+        background: #059669;
+    }
+
+.toast-error {
+    border-right-color: #DC2626;
+}
+
+    .toast-error .toast-icon {
+        background: #DC2626;
+    }
+
+    .toast-error .toast-progress {
+        background: #DC2626;
+    }
+
+.toast-warning {
+    border-right-color: #F59E0B;
+}
+
+    .toast-warning .toast-icon {
+        background: #F59E0B;
+    }
+
+    .toast-warning .toast-progress {
+        background: #F59E0B;
+    }
+
+.toast-info {
+    border-right-color: #4F46E5;
+}
+
+    .toast-info .toast-icon {
+        background: #4F46E5;
+    }
+
+    .toast-info .toast-progress {
+        background: #4F46E5;
+    }
+
+.toast-alert {
+    border-right-color: #8B5CF6;
+}
+
+    .toast-alert .toast-icon {
+        background: #8B5CF6;
+    }
+
+    .toast-alert .toast-progress {
+        background: #8B5CF6;
+    }
+
+/* ═══ موبایل ═══ */
+@media (max-width: 640px) {
+    .toast-container {
+        top: 12px;
+        left: 12px;
+        right: 12px;
+        max-width: none;
+        width: auto;
+    }
+
+    .toast-item {
+        padding: 12px 12px 12px 38px;
+    }
+}
+
+/* ═══════════════════════════════════════════════════
+   Alert & Confirm — Center Modal
+   ═══════════════════════════════════════════════════ */
+
+/* آیکن دایره‌ای — override برای alert/confirm */
+.sf-confirm-box .sf-confirm-icon.sf-icon-circle {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    font-size: 34px;
+    line-height: 1;
+    animation: sfIconPulse 2s ease-in-out infinite;
+}
+
+@keyframes sfIconPulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+/* ═══ Alert Variations ═══ */
+.sf-confirm-box.alert-success {
+    border-top: 4px solid #059669 !important;
+}
+
+    .sf-confirm-box.alert-success .sf-icon-circle {
+        background: #ECFDF5;
+        color: #059669;
+    }
+
+.sf-confirm-box.alert-error {
+    border-top: 4px solid #DC2626 !important;
+}
+
+    .sf-confirm-box.alert-error .sf-icon-circle {
+        background: #FEF2F2;
+        color: #DC2626;
+    }
+
+.sf-confirm-box.alert-warning {
+    border-top: 4px solid #F59E0B !important;
+}
+
+    .sf-confirm-box.alert-warning .sf-icon-circle {
+        background: #FFFBEB;
+        color: #F59E0B;
+    }
+
+.sf-confirm-box.alert-info {
+    border-top: 4px solid #4F46E5 !important;
+}
+
+    .sf-confirm-box.alert-info .sf-icon-circle {
+        background: #EEF2FF;
+        color: #4F46E5;
+    }
+
+.sf-confirm-box.alert-question {
+    border-top: 4px solid #8B5CF6 !important;
+}
+
+    .sf-confirm-box.alert-question .sf-icon-circle {
+        background: #F5F3FF;
+        color: #8B5CF6;
+    }
+
+/* ═══ Confirm Variations ═══ */
+.sf-confirm-box.confirm-question {
+    border-top: 4px solid #8B5CF6 !important;
+}
+
+    .sf-confirm-box.confirm-question .sf-icon-circle {
+        background: #F5F3FF;
+        color: #8B5CF6;
+    }
+
+.sf-confirm-box.confirm-warning {
+    border-top: 4px solid #F59E0B !important;
+}
+
+    .sf-confirm-box.confirm-warning .sf-icon-circle {
+        background: #FFFBEB;
+        color: #F59E0B;
+    }
+
+.sf-confirm-box.confirm-error {
+    border-top: 4px solid #DC2626 !important;
+}
+
+    .sf-confirm-box.confirm-error .sf-icon-circle {
+        background: #FEF2F2;
+        color: #DC2626;
+    }
+
+.sf-confirm-box.confirm-info {
+    border-top: 4px solid #4F46E5 !important;
+}
+
+    .sf-confirm-box.confirm-info .sf-icon-circle {
+        background: #EEF2FF;
+        color: #4F46E5;
+    }
+
+/* ═══ انیمیشن بستن ═══ */
+.sf-confirm-overlay.closing {
+    animation: sfConfFadeOut .15s ease-in forwards;
+}
+
+@keyframes sfConfFadeOut {
+    to {
+        opacity: 0;
+    }
+}
+
+.sf-confirm-overlay.closing .sf-confirm-box {
+    animation: sfConfBoxOut .15s ease-in forwards;
+}
+
+@keyframes sfConfBoxOut {
+    to {
+        transform: scale(.95);
+        opacity: 0;
+    }
+}

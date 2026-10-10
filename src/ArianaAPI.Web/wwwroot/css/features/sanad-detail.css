@@ -238,6 +238,7 @@ body:has(.sanad-detail-modal) .modal-content {
 .sf-row {
     position: relative;
     transition: background .15s, box-shadow .15s;
+    padding: 6px 4px;
 }
 
     .sf-row.sf-row-focused {
@@ -246,20 +247,16 @@ body:has(.sanad-detail-modal) .modal-content {
         border-radius: 6px;
     }
 
-/* ابزارهای ردیف (فقط هنگام hover یا focus) */
+/* ⭐ ابزارهای ردیف — inline در خط مقادیر (راست‌چین) */
 .sf-row-tools {
-    position: absolute;
-    top: 6px;
-    left: 6px;
     display: flex;
     gap: 3px;
-    opacity: 0;
-    transition: opacity .15s;
-    z-index: 5;
-    background: rgba(255,255,255,.95);
-    border-radius: 6px;
-    padding: 3px;
-    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    align-items: center;
+    justify-content: flex-start;
+    padding: 4px 2px;
+    margin-top: 4px;
+    opacity: 0.5;
+    transition: opacity .18s;
 }
 
 .sf-row:hover .sf-row-tools,
@@ -268,30 +265,36 @@ body:has(.sanad-detail-modal) .modal-content {
 }
 
 .sf-row-tool {
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    margin: 0;
     border: 1px solid #E5E7EB;
     background: #fff;
     border-radius: 4px;
     cursor: pointer;
     font-size: 12px;
-    line-height: 1;
+    line-height: 26px;
     color: #4B5563;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     transition: all .12s;
-    padding: 0;
+    font-family: 'Vazirmatn', Tahoma, sans-serif;
+    flex: 0 0 26px;
+    box-sizing: border-box;
+    vertical-align: middle;
 }
 
     .sf-row-tool:hover {
         background: #4F46E5;
         color: #fff;
         border-color: #4F46E5;
+        transform: translateY(-1px);
     }
 
     .sf-row-tool:active {
-        transform: scale(.94);
+        transform: scale(.96);
     }
 
     .sf-row-tool.sf-row-del:hover {
@@ -299,7 +302,7 @@ body:has(.sanad-detail-modal) .modal-content {
         border-color: #DC2626;
     }
 
-/* راهنمای کلیدهای میان‌بر */
+/* راهنمای کلیدهای میان‌بر (قدیمی — بی‌استفاده) */
 .sanad-form-help {
     margin-top: 16px;
     border: 1px solid #E5E7EB;
@@ -360,22 +363,33 @@ kbd {
     line-height: 1.2;
 }
 
-/* hidden در موبایل */
+/* موبایل */
 @media (max-width: 640px) {
     .sf-row-tools {
         opacity: 1;
-        position: static;
-        box-shadow: none;
-        background: transparent;
-        padding: 0;
-        margin-top: 4px;
+        padding: 6px 0 2px;
+        gap: 4px;
     }
 
-    .sf-help-body {
-        grid-template-columns: 1fr;
+    .sf-row-tool {
+        width: 32px;
+        height: 30px;
+        font-size: 13px;
+    }
+
+    .sf-field-meghdar {
+        max-width: 90px;
+        flex: 0 1 90px;
+    }
+
+        .sf-field-meghdar input {
+            max-width: 90px;
+        }
+
+    .sf-field-money {
+        min-width: 120px;
     }
 }
-
 /* ═══════════════════════════════════════════════════
    Bulk Selection + Copy Dialog (Sanad 2.0)
    ═══════════════════════════════════════════════════ */
@@ -855,4 +869,461 @@ tr.row-selected {
     font-size: 12px;
     color: #92400E;
     font-weight: 600;
+}
+/* ═══════════════════════════════════════════════════
+   Shortcuts Bar — بالای فرم سند
+   ═══════════════════════════════════════════════════ */
+.sf-shortcuts-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    background: linear-gradient(90deg, #EEF2FF, #F5F3FF);
+    border: 1px solid #C7D2FE;
+    border-radius: 8px;
+    font-size: 11px;
+    color: #3730A3;
+}
+
+.sf-sc-label {
+    font-size: 14px;
+    margin-left: 4px;
+}
+
+.sf-sc-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 8px;
+    background: #fff;
+    border: 1px solid #E0E7FF;
+    border-radius: 20px;
+    white-space: nowrap;
+    font-weight: 500;
+    transition: all .12s;
+}
+
+    .sf-sc-item:hover {
+        background: #4F46E5;
+        color: #fff;
+        border-color: #4F46E5;
+    }
+
+        .sf-sc-item:hover kbd {
+            background: #fff;
+            border-color: #fff;
+            color: #3730A3;
+        }
+
+.sf-shortcuts-bar kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    font-size: 10px;
+    font-family: 'Vazirmatn', monospace;
+    color: #1F2937;
+    background: #F3F4F6;
+    border: 1px solid #D1D5DB;
+    border-bottom-width: 2px;
+    border-radius: 3px;
+    line-height: 1.2;
+    min-width: 16px;
+    text-align: center;
+}
+
+/* موبایل — فقط ۲-۳ تا مهم */
+@media (max-width: 640px) {
+    .sf-shortcuts-bar {
+        gap: 4px 6px;
+        padding: 6px 8px;
+        font-size: 10px;
+    }
+
+    .sf-sc-item {
+        padding: 2px 6px;
+    }
+        /* آخرین ۳ آیتم مخفی در موبایل */
+        .sf-sc-item:nth-last-child(-n+3) {
+            display: none;
+        }
+}
+/* ⭐ مقدار — کوچک‌تر، اعشاری */
+.sf-field-meghdar {
+    max-width: 110px;
+    flex: 0 1 110px;
+}
+
+    .sf-field-meghdar input {
+        max-width: 110px;
+        text-align: center;
+        font-family: 'Consolas', monospace;
+        letter-spacing: 0.5px;
+    }
+
+/* ⭐ اندازه فیلد مبلغ + شرح */
+.sf-field-money {
+    flex: 0 1 auto;
+    min-width: 140px;
+}
+
+.sf-field-sharh {
+    flex: 1 1 260px;
+    min-width: 200px;
+}
+
+/* ⭐ مقدار — کوچک، اعشاری */
+.sf-field-meghdar {
+    max-width: 110px;
+    flex: 0 1 110px;
+}
+
+    .sf-field-meghdar input {
+        max-width: 110px;
+        text-align: center;
+        font-family: 'Consolas', monospace;
+        letter-spacing: 0.5px;
+    }
+
+/* ⭐ چیدمان بهتر sf-line-values */
+.sf-line-values {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: flex-end;
+}
+/* ⭐ دکمه راهنمای کلیدها (آیکن کوچک در header) */
+.sf-help-btn {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #EEF2FF;
+    border: 1px solid #C7D2FE;
+    color: #4F46E5;
+    cursor: pointer;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .15s;
+    z-index: 10;
+}
+
+    .sf-help-btn:hover {
+        background: #4F46E5;
+        color: #fff;
+        transform: scale(1.08);
+    }
+
+/* ⭐ چیدمان compact برای header */
+.sanad-form-header {
+    position: relative;
+    display: grid;
+    grid-template-columns: 100px 1fr 1fr 1fr 2fr;
+    gap: 8px;
+    padding: 8px 10px;
+}
+
+    .sanad-form-header .sf-field-wide {
+        grid-column: span 2;
+    }
+
+/* ⭐ خط مقادیر — چیدمان افقی */
+.sf-line-values {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    align-items: flex-end;
+}
+
+/* ⭐ فیلدهای کوچک */
+.sf-field-money {
+    flex: 0 1 auto;
+    min-width: 120px;
+    max-width: 160px;
+}
+
+.sf-field-sharh {
+    flex: 1 1 auto;
+    min-width: 180px;
+}
+
+.sf-field-meghdar {
+    max-width: 95px;
+    flex: 0 1 95px;
+}
+
+    .sf-field-meghdar input {
+        max-width: 95px;
+        text-align: center;
+        font-family: 'Consolas', monospace;
+    }
+
+/* ⭐ فشرده‌تر کردن ردیف */
+.sf-row-body .sf-field label {
+    font-size: 10.5px;
+    margin-bottom: 2px;
+}
+
+.sf-row-body .sf-field input,
+.sf-row-body .sf-field select {
+    padding: 4px 6px;
+    font-size: 12.5px;
+    height: 28px;
+}
+
+.sf-line-codes {
+    margin-bottom: 4px;
+}
+
+/* ⭐ Help modal */
+.sf-help-modal {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.sf-hm-section {
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.sf-hm-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed #E5E7EB;
+}
+
+.sf-hm-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 12px;
+    color: #4B5563;
+}
+
+    .sf-hm-row kbd {
+        min-width: 26px;
+        padding: 2px 6px;
+        background: #fff;
+        border: 1px solid #D1D5DB;
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        font-size: 10.5px;
+        text-align: center;
+        font-family: 'Vazirmatn', monospace;
+    }
+
+@media (max-width: 640px) {
+    .sf-help-modal {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ⭐ پنل راهنما به‌صورت inline (نه modal) */
+.sf-help-inline {
+    margin: 8px 0;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, #EEF2FF, #F5F3FF);
+    border: 1px solid #C7D2FE;
+    border-radius: 10px;
+    animation: sfHelpSlideDown .2s ease-out;
+}
+
+@keyframes sfHelpSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+        max-height: 0;
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        max-height: 200px;
+    }
+}
+
+.sf-hi-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed #C7D2FE;
+    font-size: 13px;
+    font-weight: 700;
+    color: #3730A3;
+}
+
+.sf-hi-close {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: #6B7280;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+    .sf-hi-close:hover {
+        background: #fff;
+        color: #DC2626;
+    }
+
+.sf-hi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 6px 12px;
+}
+
+.sf-hi-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #4B5563;
+}
+
+    .sf-hi-item kbd {
+        display: inline-block;
+        padding: 2px 6px;
+        font-size: 10.5px;
+        background: #fff;
+        border: 1px solid #D1D5DB;
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        font-family: 'Vazirmatn', monospace;
+        min-width: 22px;
+        text-align: center;
+        color: #1F2937;
+    }
+
+@media (max-width: 640px) {
+    .sf-hi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* ⭐ تأیید خروج — وسط صفحه، بالای همه چیز */
+.sf-confirm-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 99999 !important;
+    animation: sfConfIn .18s ease-out;
+    padding: 20px;
+    box-sizing: border-box;
+}
+.sf-confirm-box {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px 36px;
+    max-width: 460px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    animation: sfConfBox .22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    z-index: 1;
+}
+.sf-confirm-btns {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+    .sf-confirm-btns .btn {
+        min-width: 140px;
+        padding: 10px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: 8px;
+    }
+
+    .sf-confirm-btns .btn-primary {
+        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%) !important;
+        color: #fff !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+    }
+
+        .sf-confirm-btns .btn-primary:hover {
+            box-shadow: 0 6px 18px rgba(79, 70, 229, 0.4);
+            transform: translateY(-1px);
+        }
+
+    .sf-confirm-btns .btn-danger {
+        background: #DC2626 !important;
+        color: #fff !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+    }
+
+        .sf-confirm-btns .btn-danger:hover {
+            background: #B91C1C !important;
+            box-shadow: 0 6px 18px rgba(220, 38, 38, 0.35);
+            transform: translateY(-1px);
+        }
+
+    .sf-confirm-btns .btn-ghost {
+        background: #F9FAFB !important;
+        color: #4B5563 !important;
+        border: 1px solid #E5E7EB !important;
+    }
+
+        .sf-confirm-btns .btn-ghost:hover {
+            background: #F3F4F6 !important;
+        }
+.sf-confirm-icon {
+    font-size: 52px;
+    margin-bottom: 14px;
+    line-height: 1;
+    animation: sfConfPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes sfConfPulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.08);
+    }
+}
+
+.sf-confirm-title {
+    font-size: 17px;
+    font-weight: 800;
+    color: #111827;
+    margin-bottom: 10px;
+}
+
+.sf-confirm-msg {
+    font-size: 13.5px;
+    color: #6B7280;
+    margin-bottom: 26px;
+    line-height: 1.8;
 }

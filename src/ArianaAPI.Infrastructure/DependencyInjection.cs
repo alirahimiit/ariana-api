@@ -62,14 +62,6 @@ public static class DependencyInjection
         services.AddScoped<IArticleStockRepository, ArticleStockRepository>();
         services.AddScoped<ISpecialHesabRepository, SpecialHesabRepository>();
 
-        // ═══════════════════════════════════════════════════════
-        //  ⭐ Messaging (بله / ایتا / روبیکا)
-        // ═══════════════════════════════════════════════════════
-        services.AddHttpClient<IBaleService, BaleService>();
-        services.AddScoped<IMessagingRepository, MessagingRepository>();
-        services.AddScoped<IMessagingService, MessagingService>();
-        services.AddScoped<IBotConfigRepository, BotConfigRepository>();  
-        services.AddHostedService<MessagingPollingWorker>();
         // ═══ Support Relay Client ═══
         services.AddHttpClient<SupportRelayClient>((sp, http) =>
         {
