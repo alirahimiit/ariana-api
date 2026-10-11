@@ -19,7 +19,49 @@ public class SanadRepository : ISanadRepository
     {
         _factory = factory;
     }
+    // ⭐⭐ چک اعتبار سند برای Vazeit > 0
+    private void ValidateForVazeit(SanadCreateDto dto)
+    {
+        if (dto.Vazeit < 1) return;
 
+        var errors = new List<string>();
+        decimal totalBed = 0, totalBes = 0;
+
+        for (int i = 0; i < dto.Items.Count; i++)
+        {
+            var it = dto.Items[i];
+            var row = i + 1;
+            var hasBed = it.MabBed > 0;
+            var hasBes = it.MabBes > 0;
+            var hasAmount = hasBed || hasBes;
+
+            totalBed += it.MabBed;
+            totalBes += it.MabBes;
+
+            // ⛔ ایراد جدی
+            if (it.CodeCol == 0 && hasAmount)
+                errors.Add($"ردیف {row}: کد کل ندارد");
+            // ⛔ مقدار انباری (اگه CodeMoein داره و انباریه ولی مقدار نداره)
+            // ⚠️ برای بررسی انباری نیاز به DB هست — این فقط توی Frontend
+            //    چون Frontend از cache استفاده می‌کنه
+        }
+
+        // برای قطعی: باید تراز باشه
+        if (dto.Vazeit == 2)
+        {
+            var diff = Math.Abs(totalBed - totalBes);
+            if (diff > 0.01m)
+                errors.Add($"سند تراز نیست (تفاوت: {diff:N0})");
+        }
+
+        if (errors.Count > 0)
+        {
+            var label = dto.Vazeit == 1 ? "رسیدگی" : "قطعی";
+            throw new InvalidOperationException(
+                $"امکان تغییر وضعیت به «{label}» وجود ندارد. " +
+                $"ایرادها: {string.Join(" | ", errors)}");
+        }
+    }
     // ═══════════════════════════════════════════════════
     //  لیست اسناد + شمارش خطاها
     // ═══════════════════════════════════════════════════
@@ -325,7 +367,7 @@ public class SanadRepository : ISanadRepository
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         if (conn.State != ConnectionState.Open)
             await conn.OpenAsync(ct);
-
+        ValidateForVazeit(dto);
         using var tx = conn.BeginTransaction();
         try
         {
@@ -427,8 +469,12 @@ public class SanadRepository : ISanadRepository
             throw new InvalidOperationException("شناسه سند نامعتبر است");
         if (dto.Items == null || dto.Items.Count == 0)
             throw new InvalidOperationException("سند باید حداقل یک ردیف داشته باشد");
-
-        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        // ⭐ چک اعتبار Vazeit
+        ValidateForVazeit(new SanadCreateDto       {
+            Vazeit = dto.Vazeit,
+            Items = dto.Items
+        });
+         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         if (conn.State != ConnectionState.Open)
             await conn.OpenAsync(ct);
 
@@ -436,15 +482,15 @@ public class SanadRepository : ISanadRepository
         try
         {
             var vazeit = await conn.ExecuteScalarAsync<int?>(
-                new CommandDefinition(
-                    "SELECT Vazeit FROM ParentSanad WHERE ParentSanadID = @id",
-                    new { id = dto.ParentSanadId },
-                    transaction: tx, cancellationToken: ct));
+               new CommandDefinition(
+          "SELECT Vazeit FROM ParentSanad WHERE ParentSanadID = @id",
+          new { id = dto.ParentSanadId },
+          transaction: tx, cancellationToken: ct));
 
             if (vazeit == null)
                 throw new InvalidOperationException("سند یافت نشد");
-            if (vazeit.Value == 2)
-                throw new InvalidOperationException("سند قطعی قابل ویرایش نیست");
+
+            // ⭐ چک Vazeit حذف شد — دسترسی در Controller انجام می‌شه
 
             const string updateParentSql = @"
                 UPDATE ParentSanad 
@@ -554,6 +600,15 @@ public class SanadRepository : ISanadRepository
 
             if (vazeit == null)
                 throw new InvalidOperationException("سند یافت نشد");
+
+            // ⭐⭐ قفل سختگیرانه — فقط پیش‌نویس قابل حذف
+            if (vazeit.Value != 0)
+            {
+                var label = vazeit.Value == 1 ? "رسیدگی" : "قطعی";
+                throw new InvalidOperationException(
+                    $"سند «{label}» قابل حذف نیست. ابتدا وضعیت سند را به پیش‌نویس تغییر دهید");
+            }
+
             if (vazeit.Value == 2)
                 throw new InvalidOperationException("سند قطعی قابل حذف نیست");
 
@@ -1176,6 +1231,155 @@ public class SanadRepository : ISanadRepository
                 cancellationToken: ct));
         return list.ToList();
     }
+
+    // ═══════════════════════════════════════════════════
+    //  تغییر وضعیت گروهی اسناد
+    // ═══════════════════════════════════════════════════
+    public async Task<BulkChangeVazeitResult> BulkChangeVazeitAsync(
+        long orgId, long fyId,
+        List<long> sanadIds, int targetVazeit,
+        long userCode, CancellationToken ct = default)
+    {
+        if (sanadIds == null || sanadIds.Count == 0)
+            throw new InvalidOperationException("هیچ سندی انتخاب نشده است");
+
+        if (targetVazeit < 0 || targetVazeit > 2)
+            throw new InvalidOperationException("وضعیت مقصد نامعتبر است");
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        if (conn.State != ConnectionState.Open)
+            await conn.OpenAsync(ct);
+
+        using var tx = conn.BeginTransaction();
+        try
+        {
+            // ─── ۱. لیست اسناد و وضعیت فعلی ───
+            var items = (await conn.QueryAsync<(long Id, int Vazeit)>(
+                new CommandDefinition(
+                    @"SELECT ParentSanadID, Vazeit
+                      FROM ParentSanad
+                      WHERE ParentSanadID IN @ids",
+                    new { ids = sanadIds },
+                    transaction: tx, cancellationToken: ct))).ToList();
+
+            var result = new BulkChangeVazeitResult();
+            var toUpdate = new List<long>();
+
+            // ─── ۲. اعتبارسنجی هر سند ───
+            foreach (var item in items)
+            {
+                if (item.Vazeit == targetVazeit)
+                {
+                    result.SkippedCount++;
+                    continue;
+                }
+
+                // ⭐ برای رسیدگی/قطعی: چک ایراد
+                if (targetVazeit >= 1)
+                {
+                    var errInfo = await GetSanadErrorInfoAsync(conn, tx, item.Id, ct);
+
+                    if (targetVazeit == 1 && errInfo.HasCodingError)
+                    {
+                        result.Errors.Add($"سند {item.Id}: کدینگ ناقص دارد");
+                        result.SkippedCount++;
+                        continue;
+                    }
+
+                    if (targetVazeit == 2)
+                    {
+                        if (errInfo.HasCodingError)
+                        {
+                            result.Errors.Add($"سند {item.Id}: کدینگ ناقص دارد");
+                            result.SkippedCount++;
+                            continue;
+                        }
+                        if (!errInfo.IsBalanced)
+                        {
+                            result.Errors.Add($"سند {item.Id}: تراز نیست");
+                            result.SkippedCount++;
+                            continue;
+                        }
+                    }
+                }
+
+                toUpdate.Add(item.Id);
+            }
+
+            if (toUpdate.Count == 0)
+            {
+                tx.Rollback();
+                return result;
+            }
+
+            // ─── ۳. آپدیت گروهی ───
+            var todayPersian = GetTodayPersian();
+            var nowTime = GetCurrentTime();
+
+            await conn.ExecuteAsync(
+                new CommandDefinition(
+                    @"UPDATE ParentSanad
+                      SET Vazeit = @targetVazeit,
+                          Updater = @userCode,
+                          Code_Op = @userCode,
+                          Date_Op = @dateOp,
+                          Time_Op = @timeOp
+                      WHERE ParentSanadID IN @ids",
+                    new
+                    {
+                        targetVazeit = targetVazeit,
+                        userCode = userCode,
+                        dateOp = todayPersian,
+                        timeOp = nowTime,
+                        ids = toUpdate
+                    },
+                    transaction: tx, cancellationToken: ct));
+
+            tx.Commit();
+
+            result.UpdatedCount = toUpdate.Count;
+            result.UpdatedIds = toUpdate;
+            return result;
+        }
+        catch
+        {
+            try { tx.Rollback(); } catch { }
+            throw;
+        }
+    }
+
+    // ⭐ Helper: چک خطا و تراز یک سند
+    private async Task<(bool HasCodingError, bool IsBalanced)> GetSanadErrorInfoAsync(
+        System.Data.IDbConnection conn,
+        System.Data.IDbTransaction tx,
+        long parentSanadId,
+        CancellationToken ct)
+    {
+        const string sql = @"
+            SELECT 
+                SUM(CASE 
+                    WHEN (Code_Col IS NULL OR Code_Col = 0) 
+                         AND (ISNULL(Mab_Bed,0) <> 0 OR ISNULL(Mab_Bes,0) <> 0)
+                    THEN 1 ELSE 0 
+                END) AS CodingErrors,
+                SUM(ISNULL(Mab_Bed, 0)) AS TotalBed,
+                SUM(ISNULL(Mab_Bes, 0)) AS TotalBes
+            FROM Sanad
+            WHERE ParentSanadCode = @id";
+
+        var row = await conn.QueryFirstOrDefaultAsync<dynamic>(
+            new CommandDefinition(sql, new { id = parentSanadId },
+                transaction: tx, cancellationToken: ct));
+
+        if (row == null) return (false, true);
+
+        int codingErrors = (int)(decimal)(row.CodingErrors ?? 0);
+        decimal totalBed = (decimal)(row.TotalBed ?? 0);
+        decimal totalBes = (decimal)(row.TotalBes ?? 0);
+        bool balanced = Math.Abs(totalBed - totalBes) < 0.01m;
+
+        return (codingErrors > 0, balanced);
+    }
     public async Task<int> GetVazeitAsync(
         long orgId, long fyId, long parentSanadId, CancellationToken ct = default)
     {
@@ -1185,7 +1389,34 @@ public class SanadRepository : ISanadRepository
             new CommandDefinition(sql, new { id = parentSanadId }, cancellationToken: ct));
         return result ?? -1;
     }
+    // ⭐⭐ چک دسترسی برای تغییر Vazeit
+    private void ValidateVazeitChange(int originalVazeit, int newVazeit, IEnumerable<int> userPerms)
+    {
+        if (originalVazeit == newVazeit) return;
 
+        var perms = userPerms?.ToHashSet() ?? new HashSet<int>();
+
+        // از قطعی (2) → نیاز به 103
+        if (originalVazeit == 2 && !perms.Contains(103))
+        {
+            throw new InvalidOperationException(
+                "برای تغییر وضعیت سند قطعی به دسترسی ۱۰۳ (تغییر سندهای تأیید شده) نیاز دارید");
+        }
+
+        // از رسیدگی (1) → نیاز به 104 یا 105
+        if (originalVazeit == 1 && !perms.Contains(104) && !perms.Contains(105))
+        {
+            throw new InvalidOperationException(
+                "برای تغییر وضعیت سند رسیدگی به دسترسی ۱۰۴ نیاز دارید");
+        }
+
+        // از پیش‌نویس (0) → نیاز به 102
+        if (originalVazeit == 0 && !perms.Contains(102))
+        {
+            throw new InvalidOperationException(
+                "برای تغییر سند به دسترسی ۱۰۲ نیاز دارید");
+        }
+    }
     // ═══════════════════════════════════════════════════
     //  حذف گروهی اسناد
     // ═══════════════════════════════════════════════════
@@ -1204,17 +1435,18 @@ public class SanadRepository : ISanadRepository
         using var tx = conn.BeginTransaction();
         try
         {
-            // بررسی: سند قطعی نباید حذف بشه
-            var confirmedCount = await conn.ExecuteScalarAsync<int>(
+            // ⭐⭐ بررسی: فقط اسناد پیش‌نویس قابل حذف هستن
+            var nonDraftCount = await conn.ExecuteScalarAsync<int>(
                 new CommandDefinition(
                     @"SELECT COUNT(*) FROM ParentSanad
-                      WHERE ParentSanadID IN @ids AND Vazeit = 2",
+                      WHERE ParentSanadID IN @ids AND Vazeit <> 0",
                     new { ids = sanadIds },
                     transaction: tx, cancellationToken: ct));
 
-            if (confirmedCount > 0)
+            if (nonDraftCount > 0)
                 throw new InvalidOperationException(
-                    $"{confirmedCount} سند قطعی قابل حذف نیست. ابتدا وضعیت آن‌ها را تغییر دهید.");
+                    $"{nonDraftCount} سند در وضعیت «رسیدگی» یا «قطعی» قرار دارن و قابل حذف نیستن. " +
+                    $"ابتدا وضعیت آن‌ها را به پیش‌نویس تغییر دهید.");
 
             // آرشیو به RecycleSanad
             await conn.ExecuteAsync(

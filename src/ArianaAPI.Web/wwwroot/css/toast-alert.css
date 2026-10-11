@@ -339,3 +339,158 @@
         opacity: 0;
     }
 }
+/* ═══════════════════════════════════════════════════
+   Tab Sync — قفل تک-دوره در یک مرورگر
+   ═══════════════════════════════════════════════════ */
+.tab-sync-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 999999 !important;
+    padding: 20px;
+    box-sizing: border-box;
+    animation: tabSyncIn .25s ease-out;
+}
+
+@keyframes tabSyncIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.tab-sync-box {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px 36px;
+    max-width: 500px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 25px 70px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    animation: tabSyncBoxIn .3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes tabSyncBoxIn {
+    from {
+        transform: scale(.9);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.tab-sync-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: #FEF3C7;
+    color: #D97706;
+    font-size: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 18px;
+    animation: tabSyncPulse 2s ease-in-out infinite;
+    line-height: 1;
+}
+
+@keyframes tabSyncPulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.08);
+    }
+}
+
+.tab-sync-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #111827;
+    margin-bottom: 12px;
+    line-height: 1.5;
+}
+
+.tab-sync-msg {
+    font-size: 13.5px;
+    color: #4B5563;
+    line-height: 1.85;
+    margin-bottom: 20px;
+}
+
+.tab-sync-hint {
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 12.5px;
+    color: #1E40AF;
+    line-height: 1.8;
+    margin-bottom: 24px;
+    text-align: right;
+}
+
+    .tab-sync-hint b {
+        color: #1E3A8A;
+    }
+
+.tab-sync-btns {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+    .tab-sync-btns .btn {
+        min-width: 180px;
+        padding: 10px 20px;
+        font-size: 13.5px;
+        font-weight: 600;
+        border-radius: 8px;
+    }
+
+    .tab-sync-btns .btn-primary {
+        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%) !important;
+        color: #fff !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+    }
+
+        .tab-sync-btns .btn-primary:hover {
+            box-shadow: 0 6px 18px rgba(79, 70, 229, 0.45);
+            transform: translateY(-1px);
+        }
+
+@media (max-width: 640px) {
+    .tab-sync-box {
+        padding: 24px 20px;
+    }
+
+    .tab-sync-icon {
+        width: 60px;
+        height: 60px;
+        font-size: 30px;
+    }
+
+    .tab-sync-title {
+        font-size: 16px;
+    }
+
+    .tab-sync-btns .btn {
+        min-width: 100%;
+    }
+}

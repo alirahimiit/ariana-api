@@ -121,6 +121,7 @@ window.App = Object.assign(window.App || {}, {
         }
 
         window.App.Features.Messaging?.initFab();
+        this._setupTabSync();
     },
 
     // ═══════════════════════════════════════════
@@ -946,6 +947,158 @@ window.App = Object.assign(window.App || {}, {
             el.addEventListener('keydown', e => {
                 if (e.key === 'Enter') { e.preventDefault(); doSave(); }
             });
+        });
+    },
+
+    // ═══════════════════════════════════════════
+    //  TAB SYNC — قفل تک-دوره در یک مرورگر
+    //  برای دو دوره مختلف همزمان → مرورگر دیگه
+    // ═══════════════════════════════════════════
+    _tabSyncInitialized: false,
+
+    _setupTabSync() {
+        if (this._tabSyncInitialized) return;
+        this._tabSyncInitialized = true;
+
+        const self = this;
+
+        window.addEventListener('storage', function (e) {
+            // ⭐ تغییر توکن JWT (login مجدد یا سوییچ دوره)
+            if (e.key === 'ariana_token') {
+                if (!e.newValue && e.oldValue) {
+                    self._handleTabLogout();
+                    return;
+                }
+                if (e.newValue && e.newValue !== e.oldValue) {
+                    self._handleTabTokenChange(e.newValue);
+                    return;
+                }
+            }
+
+            // ⭐ تغییر API Key (logout ناقص)
+            if (e.key === 'ariana_api_key' && !e.newValue && e.oldValue) {
+                self._handleTabLogout();
+                return;
+            }
+
+            // ⭐ پاکسازی سراسری (localStorage.clear)
+            if (e.key === null) {
+                self._handleTabLogout();
+                return;
+            }
+        });
+
+        console.log('[TabSync] ✓ فعال — قفل تک-دوره');
+    },
+
+    _decodeJwt(token) {
+        try {
+            const parts = String(token).split('.');
+            if (parts.length !== 3) return null;
+            const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            return JSON.parse(atob(payload));
+        } catch {
+            return null;
+        }
+    },
+
+    _handleTabTokenChange(newToken) {
+        const newPayload = this._decodeJwt(newToken);
+        if (!newPayload) return;
+
+        const curState = (window.App.State && window.App.State.get) ? window.App.State.get() : {};
+        const curUser = curState.user || {};
+        const curToken = curState.token;
+
+        // اگه این تب لاگین نیست → کاربر تو تب دیگه Login کرد
+        if (!curToken) {
+            this._showTabLoginNotice();
+            return;
+        }
+
+        // استخراج fyId / orgId
+        const curPayload = this._decodeJwt(curToken) || {};
+        const curFy = curUser.fyId || curPayload.fyId;
+        const curOrg = curUser.orgId || curPayload.orgId;
+        const newFy = newPayload.fyId;
+        const newOrg = newPayload.orgId;
+
+        // اگه دوره یا سازمان عوض شد → قفل
+        if (String(curFy) !== String(newFy) || String(curOrg) !== String(newOrg)) {
+            this._showTabSwitchWarning();
+        }
+    },
+
+    _handleTabLogout() {
+        const curState = (window.App.State && window.App.State.get) ? window.App.State.get() : {};
+        if (!curState.token) return;   // این تب هم خارج بود
+
+        console.warn('[TabSync] کاربر در تب دیگه Logout کرد → این تب هم خارج می‌شه');
+
+        try { window.App.State.clearAuth(); } catch { }
+
+        if (window.App.Auth && typeof window.App.Auth.showLogin === 'function') {
+            window.App.Auth.showLogin();
+        } else {
+            location.href = '/';
+        }
+    },
+
+    _showTabSwitchWarning() {
+        if (document.getElementById('tabSyncSwitchOverlay')) return;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'tabSyncSwitchOverlay';
+        overlay.className = 'tab-sync-overlay';
+        overlay.innerHTML = `
+            <div class="tab-sync-box">
+                <div class="tab-sync-icon">🔄</div>
+                <div class="tab-sync-title">تغییر دوره مالی در تب دیگر</div>
+                <div class="tab-sync-msg">
+                    در یکی دیگر از تب‌های این مرورگر، دوره مالی یا سازمان تغییر کرد.
+                    <br>
+                    برای جلوگیری از اختلاط داده‌ها، این تب باید بسته شود.
+                </div>
+                <div class="tab-sync-hint">
+                    💡 اگر می‌خواهید <b>دو دوره مالی مختلف</b> را همزمان کار کنید،
+                    از یک <b>مرورگر دیگر</b> استفاده کنید (مثلاً Chrome + Firefox).
+                </div>
+                <div class="tab-sync-btns">
+                    <button class="btn btn-primary" id="tabSyncClose">🔄 بستن و ادامه</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        // ⭐ اجباری — کاربر نمی‌تونه ببنده (فقط دکمه)
+        document.getElementById('tabSyncClose')?.addEventListener('click', () => {
+            try { window.App.State.clearAuth(); } catch { }
+            location.href = '/';
+        });
+    },
+
+    _showTabLoginNotice() {
+        if (document.getElementById('tabSyncLoginOverlay')) return;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'tabSyncLoginOverlay';
+        overlay.className = 'tab-sync-overlay';
+        overlay.innerHTML = `
+            <div class="tab-sync-box">
+                <div class="tab-sync-icon">✓</div>
+                <div class="tab-sync-title">ورود در تب دیگر</div>
+                <div class="tab-sync-msg">
+                    شما در یکی دیگر از تب‌های این مرورگر وارد سیستم شده‌اید.
+                    <br>
+                    برای استفاده از این تب، صفحه را دوباره باز کنید.
+                </div>
+                <div class="tab-sync-btns">
+                    <button class="btn btn-primary" id="tabSyncReload">🔄 بارگذاری مجدد</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        document.getElementById('tabSyncReload')?.addEventListener('click', () => {
+            location.reload();
         });
     },
 

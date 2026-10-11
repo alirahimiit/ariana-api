@@ -69,4 +69,9 @@ public interface ISanadRepository
         CancellationToken ct = default);
 
     Task<List<int>> GetAllNoSanadAsync(long orgId, long fyId, CancellationToken ct = default);
+
+    Task<BulkChangeVazeitResult> BulkChangeVazeitAsync(
+    long orgId, long fyId,
+    List<long> sanadIds, int targetVazeit,
+    long userCode, CancellationToken ct = default);
 }

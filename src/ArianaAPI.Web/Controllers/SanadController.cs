@@ -120,7 +120,7 @@ public class SanadController : ControllerBase
 
     /// <summary>ویرایش سند</summary>
     [HttpPut("{id:long}")]
-    [RequirePermission(102)]
+    [RequirePermission(102, 103, 104, 105)]
     public async Task<IActionResult> Update(
         long id,
         [FromBody] SanadUpdateDto dto,
@@ -129,14 +129,100 @@ public class SanadController : ControllerBase
         if (id != dto.ParentSanadId)
             return BadRequest(new { error = "شناسه سند در URL و بدنه یکسان نیست" });
 
+        // ⭐ اول این ۳ تا رو بگیر
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+        var userCode = User.GetUserId();
+
+        // ⭐⭐ حالا چک دسترسی برای تغییر وضعیت
+        try
+        {
+            var currentVazeit = await _repo.GetVazeitAsync(orgId, fyId, id, ct);
+
+            if (currentVazeit != dto.Vazeit)
+            {
+                // استخراج permission ها از claim
+                var perms = User.Claims
+                    .Where(c => c.Type == "perm" || c.Type == "permission")
+                    .Select(c => int.TryParse(c.Value, out var v) ? v : 0)
+                    .Where(v => v > 0)
+                    .ToHashSet();
+
+                if (currentVazeit == 2 && !perms.Contains(103))
+                    return StatusCode(403, new { error = "برای تغییر وضعیت سند قطعی به دسترسی ۱۰۳ نیاز دارید" });
+
+                if (currentVazeit == 1 && !perms.Contains(104) && !perms.Contains(105))
+                    return StatusCode(403, new { error = "برای تغییر وضعیت سند رسیدگی به دسترسی ۱۰۴ نیاز دارید" });
+
+                if (currentVazeit == 0 && !perms.Contains(102))
+                    return StatusCode(403, new { error = "برای تغییر سند به دسترسی ۱۰۲ نیاز دارید" });
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+
+        // ⭐ حالا ذخیره کن
+        try
+        {
+            await _repo.UpdateAsync(orgId, fyId, dto, userCode, ct);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  تغییر وضعیت گروهی
+    // ═══════════════════════════════════════════
+    [HttpPost("bulk-change-vazeit")]
+    [RequirePermission(102, 103, 104, 105)]
+    public async Task<ActionResult<BulkChangeVazeitResult>> BulkChangeVazeit(
+        [FromBody] BulkChangeVazeitRequest dto, CancellationToken ct)
+    {
         var orgId = User.GetOrgId();
         var fyId = User.GetFyId();
         var userCode = User.GetUserId();
 
         try
         {
-            await _repo.UpdateAsync(orgId, fyId, dto, userCode, ct);
-            return NoContent();
+            // ⭐ چک دسترسی برای هر سند بر اساس وضعیت مبدأ
+            var perms = User.Claims
+                .Where(c => c.Type == "perm" || c.Type == "permission")
+                .Select(c => int.TryParse(c.Value, out var v) ? v : 0)
+                .Where(v => v > 0)
+                .ToHashSet();
+
+            // خواندن وضعیت فعلی همه‌ی اسناد
+            var currentStates = new List<(long Id, int Vazeit)>();
+            foreach (var id in dto.SanadIds)
+            {
+                var v = await _repo.GetVazeitAsync(orgId, fyId, id, ct);
+                if (v >= 0) currentStates.Add((id, v));
+            }
+
+            // چک دسترسی برای هر سند
+            foreach (var (id, currentVazeit) in currentStates)
+            {
+                if (currentVazeit == dto.TargetVazeit) continue;
+
+                if (currentVazeit == 2 && !perms.Contains(103))
+                    return StatusCode(403, new { error = "برای تغییر سند قطعی به دسترسی ۱۰۳ نیاز دارید" });
+
+                if (currentVazeit == 1 && !perms.Contains(104) && !perms.Contains(105))
+                    return StatusCode(403, new { error = "برای تغییر سند رسیدگی به دسترسی ۱۰۴ نیاز دارید" });
+
+                if (currentVazeit == 0 && !perms.Contains(102))
+                    return StatusCode(403, new { error = "برای تغییر سند پیش‌نویس به دسترسی ۱۰۲ نیاز دارید" });
+            }
+
+            var result = await _repo.BulkChangeVazeitAsync(
+                orgId, fyId, dto.SanadIds, dto.TargetVazeit, userCode, ct);
+
+            return Ok(result);
         }
         catch (InvalidOperationException ex)
         {

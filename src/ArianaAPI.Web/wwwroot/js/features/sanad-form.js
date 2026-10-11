@@ -212,7 +212,35 @@ window.App.Features.SanadForm = (function () {
         }
         try {
             const vRes = await window.App.Http.api(`/api/sanad/${id}/vazeit`);
-            if (vRes?.vazeit === 2) { window.App.toast('سند قطعی قابل ویرایش نیست', 'error'); return; }
+            const currentVazeit = vRes?.vazeit ?? 0;
+
+            // ⭐ چک دسترسی بر اساس وضعیت سند
+            const P = window.App.Permissions;
+            if (P) {
+                let canEdit = false;
+                let needPerm = '';
+
+                if (currentVazeit === 2) {
+                    canEdit = P.can(103);
+                    needPerm = '۱۰۳ (تغییر سندهای تأیید شده)';
+                } else if (currentVazeit === 1) {
+                    canEdit = P.can(104) || P.can(105);
+                    needPerm = '۱۰۴ (تغییر سندهای تأیید موقت شده)';
+                } else {
+                    canEdit = P.can(102);
+                    needPerm = '۱۰۲ (تغییر سند)';
+                }
+
+                if (!canEdit) {
+                    const labels = { 0: 'پیش‌نویس', 1: 'رسیدگی', 2: 'قطعی' };
+                    window.App.toast(
+                        `برای ویرایش سند «${labels[currentVazeit] || ''}» به دسترسی ${needPerm} نیاز دارید`,
+                        'error'
+                    );
+                    return;
+                }
+            }
+
             await ensureLookups();
             const [detail, items] = await Promise.all([
                 window.App.Http.api(`/api/sanad/${id}`),
@@ -224,6 +252,7 @@ window.App.Features.SanadForm = (function () {
                 focusedIdx: 0,
                 dirty: false,
                 selectedRows: new Set(),
+                originalVazeit: currentVazeit,   
                 items: (items || []).map(it => ({
                     codeCol: it.code_Col || 0,
                     codeMoein: it.code_Moein || 0,
@@ -261,8 +290,45 @@ window.App.Features.SanadForm = (function () {
     function buildFormHtml(h) {
         const vazeitOpts = [
             { v: 0, t: 'پیش‌نویس' }, { v: 1, t: 'رسیدگی' }, { v: 2, t: 'قطعی' }
-        ].map(o => `<option value="${o.v}" ${h.vazeit === o.v ? 'selected' : ''}>${o.t}</option>`).join('');
+        ].map(o => {
+            let disabled = '';
+            let title = '';
+            const P = window.App.Permissions;
 
+            // ⭐ چک ایرادات سند
+            if (o.v >= 1) {
+                const tb = _state.items.reduce((s, x) => s + (x.mabBed || 0), 0);
+                const ts = _state.items.reduce((s, x) => s + (x.mabBes || 0), 0);
+                const check = _validateVazeit(o.v, tb, ts);
+                if (!check.ok) {
+                    disabled = 'disabled';
+                    title = `title="ابتدا ایرادها را رفع کنید: ${check.issues[0]}"`;
+                }
+            }
+
+            // ⭐ چک دسترسی بر اساس وضعیت اصلی سند
+            if (!disabled && _state.isEdit && P && _state.originalVazeit !== undefined) {
+                const origV = _state.originalVazeit;
+
+                // برگشت از قطعی → نیاز به 103
+                if (origV === 2 && !P.can(103)) {
+                    disabled = 'disabled';
+                    title = 'title="تغییر سند قطعی نیاز به دسترسی ۱۰۳ دارد"';
+                }
+                // برگشت از رسیدگی → نیاز به 104 یا 105
+                else if (origV === 1 && !(P.can(104) || P.can(105))) {
+                    disabled = 'disabled';
+                    title = 'title="تغییر سند رسیدگی نیاز به دسترسی ۱۰۴ دارد"';
+                }
+                // تغییر سند پیش‌نویس → نیاز به 102
+                else if (origV === 0 && !P.can(102)) {
+                    disabled = 'disabled';
+                    title = 'title="تغییر سند نیاز به دسترسی ۱۰۲ دارد"';
+                }
+            }
+
+            return `<option value="${o.v}" ${h.vazeit === o.v ? 'selected' : ''} ${disabled} ${title}>${o.t}${disabled ? ' 🚫' : ''}</option>`;
+        }).join('');
         const kindOpts = [
             { v: 0, t: 'عادی' }, { v: 1, t: 'افتتاحیه' }, { v: 2, t: 'اختتامیه' },
             { v: 3, t: 'انبار' }, { v: 4, t: 'حقوق' }, { v: 5, t: 'اموال' },
@@ -597,6 +663,7 @@ window.App.Features.SanadForm = (function () {
             });
         });
     }
+
     function swapBedBes(idx) {
         const it = _state.items[idx];
         if (!it) return;
@@ -1202,6 +1269,65 @@ async function handleGlobalKey(e) {
             <div class="sf-total-item" style="color:${color};"><span>تفاوت:</span><strong>${H.fmt(Math.abs(diff))} ${bal ? '✅ تراز' : ''}</strong></div>`;
     }
 
+    // ⭐⭐ بررسی ایراد ردیف برای Vazeit
+    function _detectRowErrorsForVazeit(it) {
+        const errs = [];
+        const hasBed = (it.mabBed || 0) > 0;
+        const hasBes = (it.mabBes || 0) > 0;
+        const hasAmount = hasBed || hasBes;
+
+        // ⛔ ایراد جدی — کد کل ندارد ولی مبلغ دارد
+        if ((!it.codeCol || it.codeCol === 0) && hasAmount) {
+            errs.push({ severity: 'error', label: 'کد کل ندارد' });
+        }
+
+        // ⚠️ هشدار — معین ندارد
+        if (it.codeCol > 0 && (!it.codeMoein || it.codeMoein === 0) && hasAmount) {
+            errs.push({ severity: 'warn', label: 'کد معین ندارد' });
+        }
+
+        // ⛔ ایراد جدی — حساب انباری ولی مقدار خالی
+        const currentMoein = it.codeMoein
+            ? (_cache.moeins.find(m => m.codeCol === it.codeCol && m.codeMoein === it.codeMoein) || null)
+            : null;
+        if (currentMoein?.isStock && hasAmount && (!it.meghdar || Math.abs(it.meghdar) === 0)) {
+            errs.push({ severity: 'error', label: 'مقدار انباری ندارد' });
+        }
+
+        // ⚠️ هشدار — مبلغ صفر
+        if (!hasAmount) {
+            errs.push({ severity: 'warn', label: 'مبلغ صفر است' });
+        }
+
+        return errs;
+    }
+
+    // ⭐⭐ چک کلی سند برای Vazeit
+    function _validateVazeit(vazeit, tb, ts) {
+        if (vazeit === 0) return { ok: true };   // پیش‌نویس → آزاد
+
+        const issues = [];
+        _state.items.forEach((it, i) => {
+            if (it.codeCol === 0 && (it.mabBed || 0) === 0 && (it.mabBes || 0) === 0) return; // ردیف خالی
+            const errs = _detectRowErrorsForVazeit(it);
+            errs.forEach(e => {
+                // برای رسیدگی: فقط error
+                // برای قطعی: error + warn
+                if (vazeit === 1 && e.severity !== 'error') return;
+                issues.push(`ردیف ${i + 1}: ${e.label}`);
+            });
+        });
+
+        // برای قطعی: چک تراز
+        if (vazeit === 2) {
+            const diff = Math.abs(tb - ts);
+            if (diff > 0.01) {
+                issues.push(`سند تراز نیست (تفاوت: ${H.fmt(diff)})`);
+            }
+        }
+
+        return { ok: issues.length === 0, issues };
+    }
     // ═══ SAVE ═══
    async function save() {
         const btn = document.getElementById('sfSaveBtn');
@@ -1212,12 +1338,35 @@ async function handleGlobalKey(e) {
         const vazeit = parseInt(document.getElementById('sfVazeit').value) || 0;
         const kind = parseInt(document.getElementById('sfKindSanad').value) || 0;
         const noStr = document.getElementById('sfNoSanad').value.trim();
+       // ⭐⭐ چک دسترسی برای تغییر وضعیت سند
+       if (_state.isEdit && _state.originalVazeit !== undefined && vazeit !== _state.originalVazeit) {
+           const P = window.App.Permissions;
+           if (P) {
+               const origV = _state.originalVazeit;
+
+               // تغییر وضعیت از قطعی (2) → نیاز به 103
+               if (origV === 2 && !P.can(103)) {
+                   window.App.toast('برای تغییر وضعیت سند قطعی به دسترسی ۱۰۳ نیاز دارید', 'error');
+                   return;
+               }
+               // تغییر وضعیت از رسیدگی (1) → نیاز به 104 یا 105
+               if (origV === 1 && !(P.can(104) || P.can(105))) {
+                   window.App.toast('برای تغییر وضعیت سند رسیدگی به دسترسی ۱۰۴ نیاز دارید', 'error');
+                   return;
+               }
+               // تغییر وضعیت از پیش‌نویس (0) → نیاز به 102
+               if (origV === 0 && !P.can(102)) {
+                   window.App.toast('برای تغییر وضعیت سند به دسترسی ۱۰۲ نیاز دارید', 'error');
+                   return;
+               }
+           }
+       }
 
        if (!dateIn) {
            console.warn('[save] تاریخ خالی است');
            window.App.toast('تاریخ سند الزامی است', 'error');
            return;
-}
+        }
 
         const valid = _state.items.filter(it => it.codeCol > 0 && (it.mabBed > 0 || it.mabBes > 0));
        if (valid.length === 0) {
@@ -1240,6 +1389,33 @@ async function handleGlobalKey(e) {
                }
            );
            if (!ok) return;
+       }
+       // ⭐⭐ چک ایراد برای Vazeit > 0
+       if (vazeit >= 1) {
+           const check = _validateVazeit(vazeit, tb, ts);
+
+           if (!check.ok) {
+               const vazeitLabel = vazeit === 1 ? 'رسیدگی' : 'قطعی';
+               const errText = '• ' + check.issues.join('\n• ');
+
+               try {
+                   if (window.App.alert && typeof window.App.alert.error === 'function') {
+                       await window.App.alert.error(
+                           `امکان تغییر وضعیت به «${vazeitLabel}» وجود ندارد.\n\n` +
+                           `ایرادهای زیر باید ابتدا رفع شوند:\n\n${errText}`,
+                           { title: '🚫 سند دارای ایراد', okText: 'برگشت به ویرایش' }
+                       );
+                   } else {
+                       window.App.toast(
+                           `سند دارای ${check.issues.length} ایراد است — ابتدا رفع کنید`,
+                           'error'
+                       );
+                   }
+               } catch { }
+
+               // برگرد به ویرایش
+               return;
+           }
        }
 
         const payload = {
@@ -1292,6 +1468,24 @@ async function handleGlobalKey(e) {
             window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
             return;
         }
+        try {
+            const vRes = await window.App.Http.api(`/api/sanad/${id}/vazeit`);
+            const vazeit = vRes?.vazeit ?? 0;
+
+            if (vazeit !== 0) {
+                const label = vazeit === 1 ? 'رسیدگی' : 'قطعی';
+                await window.App.alert.warning(
+                    `این سند در وضعیت «${label}» قرار دارد و قابل حذف نیست.\n\n` +
+                    `برای حذف، ابتدا آن را ویرایش کنید و وضعیت را به «پیش‌نویس» تغییر دهید.`,
+                    { title: '🔒 سند قفل شده' }
+                );
+                return;
+            }
+        } catch (err) {
+            window.App.toast('خطا در چک وضعیت: ' + err.message, 'error');
+            return;
+        }
+
         const ok = await _askConfirm(
             'آیا از حذف این سند مطمئن هستید؟ این عملیات قابل بازگشت نیست.',
             {

@@ -195,6 +195,8 @@ window.App.Features.Sanad = (function () {
         const page = window.App.state.sanadPage;
         const allSelected = items.length > 0 && items.every(x => _selected.has(x.parentSanadID));
 
+        const P = window.App.Permissions;
+
         const rows = items.map(s => {
             const bed = s.mabBed || 0;
             const bes = s.mabBes || 0;
@@ -202,6 +204,51 @@ window.App.Features.Sanad = (function () {
             const hasErrors = (s.totalErrorCount || 0) > 0;
             const rowClass = hasErrors ? 'row-has-errors' : (isUnbalanced ? 'row-unbalanced' : '');
             const isSel = _selected.has(s.parentSanadID);
+
+            // ⭐ محاسبه دکمه‌های عملیات قبل از return
+            let actionBtns = '';
+
+            if (P) {
+                const canEdit =
+                    (s.vazeit === 0 && P.can(102)) ||
+                    (s.vazeit === 1 && (P.can(104) || P.can(105))) ||
+                    (s.vazeit === 2 && P.can(103));
+
+                // ⭐⭐ فقط پیش‌نویس قابل حذف — رسیدگی و قطعی نه
+                const canDel = P.can(108) && s.vazeit === 0;
+
+                const editTitle = s.vazeit === 2 ? 'ویرایش/برگشت (نیاز به دسترسی ۱۰۳)'
+                    : s.vazeit === 1 ? 'ویرایش/برگشت (نیاز به دسترسی ۱۰۴)'
+                        : 'ویرایش';
+
+                if (canEdit) {
+                    actionBtns += `<button class="btn btn-sm btn-ghost"
+                        onclick="event.stopPropagation(); App.Features.SanadForm.openEdit(${s.parentSanadID})"
+                        title="${editTitle}">✏️</button>`;
+                }
+                if (canDel) {
+                    actionBtns += `<button class="btn btn-sm btn-ghost"
+                        onclick="event.stopPropagation(); App.Features.SanadForm.delete(${s.parentSanadID})"
+                        title="حذف" style="color:var(--danger);">🗑️</button>`;
+                } else if (P.can(108) && s.vazeit !== 0) {
+                    // ⭐ کاربر permission داره ولی سند قفل شده
+                    const lockReason = s.vazeit === 1
+                        ? 'سند رسیدگی — اول به پیش‌نویس برگردانید'
+                        : 'سند قطعی — اول به پیش‌نویس برگردانید';
+                    actionBtns += `<button class="btn btn-sm btn-ghost" disabled
+                        title="${lockReason}" style="opacity:0.35; cursor:not-allowed;">🔒</button>`;
+                }
+            } else {
+                // fallback اگه Permissions لود نشده
+                if (s.vazeit !== 2) {
+                    actionBtns += `<button class="btn btn-sm btn-ghost"
+                        onclick="event.stopPropagation(); App.Features.SanadForm.openEdit(${s.parentSanadID})"
+                        title="ویرایش">✏️</button>`;
+                }
+                actionBtns += `<button class="btn btn-sm btn-ghost"
+                    onclick="event.stopPropagation(); App.Features.SanadForm.delete(${s.parentSanadID})"
+                    title="حذف" style="color:var(--danger);">🗑️</button>`;
+            }
 
             return `
             <tr class="${rowClass} ${isSel ? 'row-selected' : ''}" data-id="${s.parentSanadID}">
@@ -220,16 +267,7 @@ window.App.Features.Sanad = (function () {
                     <button class="btn btn-sm btn-ghost"
                             onclick="App.Features.Sanad.showDetail(${s.parentSanadID})"
                             title="مشاهده">👁️</button>
-                        ${s.vazeit !== 2 ? `
-                            <button class="btn btn-sm btn-ghost"
-                                    data-permission="102"
-                                    onclick="event.stopPropagation(); App.Features.SanadForm.openEdit(${s.parentSanadID})"
-                                    title="ویرایش">✏️</button>
-                            <button class="btn btn-sm btn-ghost"
-                                    data-permission="108"
-                                    onclick="event.stopPropagation(); App.Features.SanadForm.delete(${s.parentSanadID})"
-                                    title="حذف" style="color:var(--danger);">🗑️</button>
-                        ` : ''}
+                    ${actionBtns}
                 </td>
             </tr>`;
         }).join('');
@@ -257,6 +295,7 @@ window.App.Features.Sanad = (function () {
                     <span class="bulk-count"><strong id="bulkCount">0</strong> سند انتخاب شده</span>
                     <div class="bulk-actions">
                         <button class="btn btn-sm btn-ghost" id="bulkExportBtn" title="خروجی CSV">📤 خروجی CSV</button>
+                        <button class="btn btn-sm btn-primary" id="bulkChangeVazeitBtn" title="تغییر وضعیت">🔄 تغییر وضعیت</button>
                         <button class="btn btn-sm btn-danger" id="bulkDeleteBtn" title="حذف گروهی">🗑️ حذف گروهی</button>
                         <button class="btn btn-sm btn-ghost" id="bulkClearBtn">✕ لغو انتخاب</button>
                     </div>
@@ -331,7 +370,9 @@ window.App.Features.Sanad = (function () {
 
         // ═══ دکمه‌های toolbar انتخاب گروهی ═══
         document.getElementById('bulkExportBtn')?.addEventListener('click', exportCsv);
+        document.getElementById('bulkChangeVazeitBtn')?.addEventListener('click', openBulkChangeVazeitDialog);
         document.getElementById('bulkDeleteBtn')?.addEventListener('click', bulkDelete);
+
         document.getElementById('bulkClearBtn')?.addEventListener('click', () => {
             _selected.clear();
             container.querySelectorAll('.sanad-cb').forEach(cb => { cb.checked = false; });
@@ -404,7 +445,9 @@ window.App.Features.Sanad = (function () {
 
             window.App.toast(`✅ ${_selected.size} سند خروجی گرفته شد`, 'success');
         } catch (err) {
-            window.App.toast('خطا: ' + err.message, 'error');
+            await window.App.alert.error(err.message || 'خطا در خروجی CSV', {
+                title: 'خطا در خروجی'
+            });
         }
     }
     // ═══════════════════════════════════════════
@@ -468,7 +511,9 @@ window.App.Features.Sanad = (function () {
         const forceNew = document.getElementById('importForceNew').checked;
 
         if (!fileInput.files || !fileInput.files[0]) {
-            window.App.toast('ابتدا فایل را انتخاب کنید', 'error');
+            await window.App.alert.warning('ابتدا فایل را انتخاب کنید', {
+                title: 'فایلی انتخاب نشده'
+            });
             return;
         }
 
@@ -516,7 +561,7 @@ window.App.Features.Sanad = (function () {
             </div>`;
     }
 
-    function renderPreviewSuccess(container, preview, csvContent, forceNew) {
+    async function renderPreviewSuccess(container, preview, csvContent, forceNew) {
         const warnings = (preview.warnings || []).slice(0, 10);
 
         container.innerHTML = `
@@ -580,7 +625,18 @@ window.App.Features.Sanad = (function () {
             </div>`;
 
         document.getElementById('importCommitBtn')?.addEventListener('click', async (e) => {
-            if (!confirm(`آیا از ثبت ${preview.sanadCount} سند مطمئن هستید؟`)) return;
+
+            const ok = await window.App.confirm(
+                `آیا از ثبت ${preview.sanadCount} سند (${preview.itemCount} ردیف) مطمئن هستید؟`,
+                {
+                    title: 'ثبت نهایی',
+                    type: 'warning',
+                    okText: 'بله، ثبت کن',
+                    cancelText: 'لغو'
+                }
+            );
+            if (!ok) return;
+
             e.target.disabled = true;
             e.target.textContent = '⏳ در حال ثبت...';
 
@@ -593,14 +649,13 @@ window.App.Features.Sanad = (function () {
                     })
                 });
 
-                window.App.toast(
+                await window.App.alert.success(
                     `✅ ${result.createdSanads} سند با ${result.createdItems} ردیف ثبت شد`,
-                    'success'
-                );
+                    { title: 'انجام شد' } );
                 window.App.closeModal();
                 loadList();
             } catch (err) {
-                window.App.toast('خطا: ' + err.message, 'error');
+                window.App.toast('خطا: ' + err.message, 'خطا');
                 e.target.disabled = false;
                 e.target.textContent = '✅ ثبت نهایی';
             }
@@ -614,25 +669,232 @@ window.App.Features.Sanad = (function () {
         if (_selected.size === 0) return;
 
         if (window.App.Permissions && !window.App.Permissions.can(108)) {
-            window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
+            await window.App.alert.warning('شما برای این عمل سطح دسترسی لازم را ندارید', {
+                title: 'عدم دسترسی'
+            });
             return;
         }
 
-        if (!confirm(`آیا از حذف ${_selected.size} سند مطمئن هستید؟\n(سند قطعی قابل حذف نیست)`)) return;
+        // ⭐⭐ چک: چند سند غیرپیش‌نویس انتخاب شده؟
+        const lockedItems = _currentItems.filter(x =>
+            _selected.has(x.parentSanadID) && x.vazeit !== 0
+        );
+
+        if (lockedItems.length > 0) {
+            const draftCount = _selected.size - lockedItems.length;
+            await window.App.alert.warning(
+                `از ${_selected.size} سند انتخاب‌شده، ${lockedItems.length} سند در وضعیت ` +
+                `«رسیدگی» یا «قطعی» قرار دارند و قابل حذف نیستند.\n\n` +
+                (draftCount > 0
+                    ? `فقط ${draftCount} سند پیش‌نویس قابل حذف هست.`
+                    : `هیچ سند پیش‌نویسی در انتخاب شما نیست.`),
+                { title: '🔒 برخی اسناد قفل شده‌اند' }
+            );
+            return;
+        }
+
+        const ok = await window.App.confirm(
+            `آیا از حذف ${_selected.size} سند مطمئن هستید؟\n\n` +
+            `⚠️ توجه: سند قطعی قابل حذف نیست.`,
+            {
+                title: '🗑️ حذف گروهی',
+                danger: true,
+                okText: `حذف ${_selected.size} سند`,
+                cancelText: 'لغو'
+            }
+        );
+        if (!ok) return;
+
 
         try {
             const result = await window.App.Http.api('/api/sanad/bulk-delete', {
                 method: 'POST',
                 body: JSON.stringify({ sanadIds: [..._selected] })
             });
-            window.App.toast(`✅ ${result.deleted} سند حذف شد`, 'success');
+            window.App.toast(`✅ ${result.deleted} سند حذف شد`, 'success', { title:'عملیات موفق' });
             _selected.clear();
             loadList();
         } catch (err) {
-            window.App.toast('خطا: ' + err.message, 'error');
+            await window.App.alert.error(err.message || 'خطا در حذف گروهی', {
+                title: 'خطای حذف'
+            });
         }
     }
 
+
+    // ═══════════════════════════════════════════
+    //  BULK CHANGE VAZEIT — تغییر وضعیت گروهی
+    // ═══════════════════════════════════════════
+    async function openBulkChangeVazeitDialog() {
+        if (_selected.size === 0) return;
+
+        // ⭐ محاسبه‌ی وضعیت‌های موجود در انتخاب
+        const selectedItems = _currentItems.filter(x => _selected.has(x.parentSanadID));
+        const vazeitCounts = { 0: 0, 1: 0, 2: 0 };
+        selectedItems.forEach(x => {
+            if (vazeitCounts[x.vazeit] !== undefined) vazeitCounts[x.vazeit]++;
+        });
+
+        // ⭐ چک دسترسی برای هر گروه
+        const P = window.App.Permissions;
+        const perms = {
+            can_102: P ? P.can(102) : true,
+            can_103: P ? P.can(103) : true,
+            can_104: P ? P.can(104) : true,
+            can_105: P ? P.can(105) : true
+        };
+
+        // ⭐ آیا کاربر می‌تونه هر گروه رو تغییر بده؟
+        const canChangeFrom0 = perms.can_102;
+        const canChangeFrom1 = perms.can_104 || perms.can_105;
+        const canChangeFrom2 = perms.can_103;
+
+        const body = `
+            <div class="bulk-vazeit-dialog">
+                <div class="bvd-info">
+                    <span class="bvd-count">${_selected.size} سند</span> انتخاب شده — 
+                    <span class="bvd-breakdown">
+                        ${vazeitCounts[0] > 0 ? `📝 ${vazeitCounts[0]} پیش‌نویس` : ''}
+                        ${vazeitCounts[1] > 0 ? ` • ⏳ ${vazeitCounts[1]} رسیدگی` : ''}
+                        ${vazeitCounts[2] > 0 ? ` • ✅ ${vazeitCounts[2]} قطعی` : ''}
+                    </span>
+                </div>
+
+                <div class="bvd-targets">
+                    <label class="bvd-radio ${!canChangeFrom0 && !canChangeFrom1 && !canChangeFrom2 ? 'disabled' : ''}">
+                        <input type="radio" name="bvdTarget" value="0">
+                        <div class="bvd-radio-content">
+                            <div class="bvd-radio-title">📝 پیش‌نویس</div>
+                            <div class="bvd-radio-desc">
+                                ${vazeitCounts[1] > 0 && !canChangeFrom1 ? `<span class="bvd-lock">🔒 رسیدگی نیاز به ۱۰۴</span><br>` : ''}
+                                ${vazeitCounts[2] > 0 && !canChangeFrom2 ? `<span class="bvd-lock">🔒 قطعی نیاز به ۱۰۳</span><br>` : ''}
+                                برگشت به حالت آزاد (قابل ویرایش)
+                            </div>
+                        </div>
+                    </label>
+
+                    <label class="bvd-radio ${!canChangeFrom0 && !canChangeFrom2 ? 'disabled' : ''}">
+                        <input type="radio" name="bvdTarget" value="1">
+                        <div class="bvd-radio-content">
+                            <div class="bvd-radio-title">⏳ رسیدگی</div>
+                            <div class="bvd-radio-desc">
+                                ${vazeitCounts[0] > 0 && !canChangeFrom0 ? `<span class="bvd-lock">🔒 پیش‌نویس نیاز به ۱۰۲</span><br>` : ''}
+                                ${vazeitCounts[2] > 0 && !canChangeFrom2 ? `<span class="bvd-lock">🔒 قطعی نیاز به ۱۰۳</span><br>` : ''}
+                                تأیید موقت (بدون تأیید نهایی)
+                            </div>
+                        </div>
+                    </label>
+
+                    <label class="bvd-radio ${!canChangeFrom0 && !canChangeFrom1 ? 'disabled' : ''}">
+                        <input type="radio" name="bvdTarget" value="2">
+                        <div class="bvd-radio-content">
+                            <div class="bvd-radio-title">✅ قطعی</div>
+                            <div class="bvd-radio-desc">
+                                ${vazeitCounts[0] > 0 && !canChangeFrom0 ? `<span class="bvd-lock">🔒 پیش‌نویس نیاز به ۱۰۲</span><br>` : ''}
+                                ${vazeitCounts[1] > 0 && !canChangeFrom1 ? `<span class="bvd-lock">🔒 رسیدگی نیاز به ۱۰۴</span><br>` : ''}
+                                تأیید نهایی — نیاز به تراز بودن سند
+                            </div>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="bvd-warning">
+                    ⚠️ اسناد نامعتبر (ناتراز یا کدینگ ناقص) رد می‌شوند و تغییر وضعیت آن‌ها انجام نمی‌شود.
+                </div>
+
+                <div class="copy-footer">
+                    <button class="btn btn-primary" id="bvdConfirmBtn">🔄 اعمال تغییر</button>
+                    <button class="btn btn-ghost" onclick="App.closeModal()">انصراف</button>
+                </div>
+            </div>`;
+
+        window.App.openModal('🔄 تغییر وضعیت گروهی', body);
+
+        // ⭐ Disable گزینه‌های غیرمجاز
+        const modalBody = document.getElementById('modalBody');
+        modalBody.querySelectorAll('.bvd-radio').forEach(radio => {
+            const input = radio.querySelector('input');
+            const targetV = parseInt(input.value);
+
+            // آیا می‌تونه از هر وضعیت مبدأ به این target بره؟
+            let canChange = true;
+            if (vazeitCounts[0] > 0 && !canChangeFrom0 && targetV !== 0) canChange = false;
+            if (vazeitCounts[1] > 0 && !canChangeFrom1 && targetV !== 1) canChange = false;
+            if (vazeitCounts[2] > 0 && !canChangeFrom2 && targetV !== 2) canChange = false;
+
+            if (!canChange) {
+                input.disabled = true;
+                radio.classList.add('disabled');
+            }
+        });
+
+        modalBody.querySelector('#bvdConfirmBtn')?.addEventListener('click', doBulkChangeVazeit);
+    }
+
+    async function doBulkChangeVazeit() {
+        const selected = document.querySelector('input[name="bvdTarget"]:checked');
+        if (!selected) {
+            await window.App.alert.warning('وضعیت مقصد را انتخاب کنید');
+            return;
+        }
+
+        const targetVazeit = parseInt(selected.value);
+        const targetLabels = { 0: 'پیش‌نویس', 1: 'رسیدگی', 2: 'قطعی' };
+
+        const ok = await window.App.confirm(
+            `آیا از تغییر وضعیت ${_selected.size} سند به «${targetLabels[targetVazeit]}» مطمئن هستید؟`,
+            {
+                title: '🔄 تغییر وضعیت گروهی',
+                type: targetVazeit === 2 ? 'warning' : 'question',
+                okText: 'بله، اعمال کن'
+            }
+        );
+        if (!ok) return;
+
+        const btn = document.getElementById('bvdConfirmBtn');
+        const orig = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳ در حال اعمال...';
+
+        try {
+            const result = await window.App.Http.api('/api/sanad/bulk-change-vazeit', {
+                method: 'POST',
+                body: JSON.stringify({
+                    sanadIds: [..._selected],
+                    targetVazeit: targetVazeit
+                })
+            });
+
+            // ⭐ پیام نتیجه
+            let msg = `✅ ${result.updatedCount} سند با موفقیت تغییر یافت.`;
+            if (result.skippedCount > 0) {
+                msg += `\n\n⚠️ ${result.skippedCount} سند رد شد:`;
+                if (result.errors && result.errors.length > 0) {
+                    msg += '\n' + result.errors.slice(0, 5).join('\n');
+                    if (result.errors.length > 5) {
+                        msg += `\n... و ${result.errors.length - 5} مورد دیگر`;
+                    }
+                }
+            }
+
+            if (result.updatedCount > 0) {
+                window.App.toast(`✅ ${result.updatedCount} سند تغییر یافت`, 'success');
+            }
+            if (result.skippedCount > 0 && result.errors.length > 0) {
+                await window.App.alert.warning(msg, { title: 'نتیجه‌ی تغییر وضعیت' });
+            }
+
+            window.App.closeModal();
+            _selected.clear();
+            loadList();
+        } catch (err) {
+            btn.disabled = false;
+            btn.textContent = orig;
+            await window.App.alert.error(err.message || 'خطا در تغییر وضعیت', {
+                title: 'خطا'
+            });
+        }
+    }
     // ═══════════════════════════════════════════
     //  KEYBOARD SHORTCUTS
     // ═══════════════════════════════════════════
@@ -1180,7 +1442,7 @@ window.App.Features.Sanad = (function () {
         }
     }
 
-    return { render, loadList, gotoPage, showDetail, buildUrl, sortBy };
+    return { render, loadList, gotoPage, showDetail, buildUrl, sortBy, openBulkChangeVazeitDialog };
 })();
 
 window.App.Features = window.App.Features || {};
