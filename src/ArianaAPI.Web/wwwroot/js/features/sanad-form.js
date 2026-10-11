@@ -10,6 +10,19 @@ window.App.Features.SanadForm = (function () {
     'use strict';
 
     const H = window.App.Helpers;
+    // ⭐ Clipboard در سطح App — بین اسناد و صفحات حفظ می‌شه
+    function getClipboard() {
+        if (!window.App.state) window.App.state = {};
+        if (!window.App.state.sanadClipboard) {
+            window.App.state.sanadClipboard = [];
+        }
+        return window.App.state.sanadClipboard;
+    }
+
+    function setClipboard(items) {
+        if (!window.App.state) window.App.state = {};
+        window.App.state.sanadClipboard = items;
+    }
     // ⭐ Helper امن برای Toast
     function _toast(message, type = 'info') {
         try {
@@ -41,10 +54,11 @@ window.App.Features.SanadForm = (function () {
         parentSanadId: null,
         items: [],
         focusedIdx: 0,
-        dirty: false
+        dirty: false,
+        selectedRows: new Set()
     };
     let _cache = { cols: [], moeins: [], tafzils: [], loaded: false };
-    let _clipboard = [];
+    
 
     // ═══ UTILS ═══
     function today() {
@@ -170,8 +184,16 @@ window.App.Features.SanadForm = (function () {
             window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
             return;
         }
-        _state = { isEdit: false, parentSanadId: null, items: [emptyRow()], focusedIdx: 0 };
-        _clipboard = [];
+        
+        _state = {
+            isEdit: false,
+            parentSanadId: null,
+            items: [emptyRow()],
+            focusedIdx: 0,
+            dirty: false,
+            selectedRows: new Set()
+        };
+        // ⭐ _clipboard رو دست نزن — بین اسناد حفظ می‌شه
         await ensureLookups();
         const body = buildFormHtml({
             noSanad: '', dateIn: today(), otherParentSharh: '', vazeit: 0, kindSanad: 0
@@ -197,7 +219,11 @@ window.App.Features.SanadForm = (function () {
                 window.App.Http.api(`/api/sanad/${id}/items`)
             ]);
             _state = {
-                isEdit: true, parentSanadId: id, focusedIdx: 0,
+                isEdit: true,
+                parentSanadId: id,
+                focusedIdx: 0,
+                dirty: false,
+                selectedRows: new Set(),
                 items: (items || []).map(it => ({
                     codeCol: it.code_Col || 0,
                     codeMoein: it.code_Moein || 0,
@@ -211,8 +237,9 @@ window.App.Features.SanadForm = (function () {
                     meghdar: Math.abs(it.meghdar || 0)
                 }))
             };
-            _clipboard = [];
+            // ⭐ _clipboard رو دست نزن — بین اسناد حفظ می‌شه
             if (_state.items.length === 0) _state.items = [emptyRow()];
+
             const body = buildFormHtml({
                 noSanad: detail?.noSanad || '',
                 dateIn: detail?.dateIn || '',
@@ -293,11 +320,63 @@ window.App.Features.SanadForm = (function () {
     function renderRows() {
         const wrap = document.getElementById('sfRowsWrap');
         if (!wrap) return;
-        wrap.innerHTML = _state.items.map((it, i) => buildRowHtml(it, i)).join('');
+
+        // ⭐ پاکسازی selectedRows اگه یه idx دیگه وجود نداشت
+        if (!_state.selectedRows) _state.selectedRows = new Set();
+        _state.selectedRows = new Set(
+            [..._state.selectedRows].filter(i => i < _state.items.length)
+        );
+
+        // ⭐ نوار ابزار بالای ردیف‌ها (چک‌باکس انتخاب همه)
+        const allSelected = _state.items.length > 0
+            && _state.selectedRows.size === _state.items.length;
+
+        const topBar = `
+            <div class="sf-rows-toolbar">
+                <label class="sf-select-all-label">
+                    <input type="checkbox" id="sfSelectAllRows" ${allSelected ? 'checked' : ''}>
+                    <span>انتخاب همه</span>
+                </label>
+                <span class="sf-selected-count ${_state.selectedRows.size > 0 ? 'has-selection' : ''}" id="sfSelectedCount">
+                    ${_state.selectedRows.size > 0 ? `${_state.selectedRows.size} ردیف انتخاب شده` : ''}
+                </span>
+                ${_state.selectedRows.size > 0
+                ? `<button type="button" class="sf-clear-sel" id="sfClearSelBtn">✕ لغو انتخاب</button>`
+                : ''}
+            </div>`;
+
+        wrap.innerHTML = topBar + _state.items.map((it, i) => buildRowHtml(it, i)).join('');
+
         recalcTotals();
-        updateRowCount();       // ⭐ یکسان‌سازی
+        updateRowCount();
         updateFocusedRow();
         updatePasteBtnState();
+
+        // ⭐ Bind چک‌باکس انتخاب همه
+        document.getElementById('sfSelectAllRows')?.addEventListener('change', function () {
+            if (this.checked) {
+                _state.items.forEach((_, i) => _state.selectedRows.add(i));
+            } else {
+                _state.selectedRows.clear();
+            }
+            renderRows();
+        });
+
+        document.getElementById('sfClearSelBtn')?.addEventListener('click', () => {
+            _state.selectedRows.clear();
+            renderRows();
+        });
+
+        // ⭐ Bind چک‌باکس هر ردیف
+        wrap.querySelectorAll('.sf-row-check').forEach(cb => {
+            cb.addEventListener('change', function (e) {
+                e.stopPropagation();
+                const idx = parseInt(this.dataset.idx);
+                if (this.checked) _state.selectedRows.add(idx);
+                else _state.selectedRows.delete(idx);
+                renderRows();
+            });
+        });
     }
 
     function buildRowHtml(item, idx) {
@@ -320,9 +399,11 @@ window.App.Features.SanadForm = (function () {
         const besStr = bes ? bes.toLocaleString('en-US') : '';
         const meghStr = megh ? parseFloat(Number(megh).toFixed(4)).toString() : '';
 
-        return `
-            <div class="sf-row ${idx === _state.focusedIdx ? 'sf-row-focused' : ''}" data-row-idx="${idx}">
-                <div class="sf-row-num">${idx + 1}</div>
+        return `<div class="sf-row ${idx === _state.focusedIdx ? 'sf-row-focused' : ''} ${_state.selectedRows?.has(idx) ? 'sf-row-selected' : ''}" data-row-idx="${idx}">
+                <div class="sf-row-num">
+                    <input type="checkbox" class="sf-row-check" data-idx="${idx}" ${_state.selectedRows?.has(idx) ? 'checked' : ''} title="انتخاب برای کپی (Ctrl+F9)">
+                    <span class="sf-row-num-text">${idx + 1}</span>
+                </div>
                 <div class="sf-row-body">
                     <div class="sf-line sf-line-codes">
                         <div class="sf-field">
@@ -507,12 +588,15 @@ window.App.Features.SanadForm = (function () {
         const rows = wrap.querySelectorAll(':scope > .sf-row');
         rows.forEach((row, i) => {
             row.dataset.rowIdx = i;
-            const num = row.querySelector('.sf-row-num');
-            if (num) num.textContent = i + 1;
-            row.querySelectorAll('[data-idx]').forEach(el => { el.dataset.idx = i; });
+            // ⭐ فقط شماره‌ی متنی رو تغییر بده، نه چک‌باکس رو
+            const numText = row.querySelector('.sf-row-num-text');
+            if (numText) numText.textContent = i + 1;
+            // ⭐ همه‌ی data-idx ها رو آپدیت کن (شامل چک‌باکس)
+            row.querySelectorAll('[data-idx]').forEach(el => {
+                el.dataset.idx = i;
+            });
         });
     }
-
     function swapBedBes(idx) {
         const it = _state.items[idx];
         if (!it) return;
@@ -608,9 +692,13 @@ window.App.Features.SanadForm = (function () {
     }
 
     function pasteRows() {
-        if (_clipboard.length === 0) { window.App.toast('بافر خالی است', 'warn'); return; }
+        const clip = getClipboard();
+        if (clip.length === 0) {
+            window.App.toast('بافر خالی است — ابتدا ردیفی کپی کنید (Ctrl+F9)', 'warn');
+            return;
+        }
         const idx = getFocusedRowIdx();
-        const newItems = _clipboard.map(cloneItem);
+        const newItems = clip.map(cloneItem);
 
         const wrap = document.getElementById('sfRowsWrap');
         const rows = [...wrap.querySelectorAll(':scope > .sf-row')];
@@ -635,6 +723,7 @@ window.App.Features.SanadForm = (function () {
         reindexRowsDOM();
         _state.focusedIdx = idx + newItems.length;
         _state.dirty = true;
+        _state.selectedRows.clear();   // ⭐ بعد از paste، پاک کن
         updateFocusedRow();
         updateRowCount();
 
@@ -654,12 +743,12 @@ window.App.Features.SanadForm = (function () {
 
     function updatePasteBtnState() {
         const btn = document.getElementById('sfPasteBtn');
-        if (btn) {
-            btn.disabled = _clipboard.length === 0;
-            btn.title = _clipboard.length > 0
-                ? `چسباندن ${_clipboard.length} ردیف (Ctrl+F10)`
-                : 'بافر خالی است';
-        }
+        if (!btn) return;
+        const n = getClipboard().length;
+        btn.disabled = n === 0;
+        btn.title = n > 0
+            ? `چسباندن ${n} ردیف (Ctrl+F10)`
+            : 'بافر خالی است — ابتدا Ctrl+F9';
     }
 
     function jumpToLastRow() {
@@ -692,14 +781,33 @@ window.App.Features.SanadForm = (function () {
 
     // ═══ COPY / PASTE ═══
     function copyRows() {
+        // ⭐ اگه چک‌باکس‌دار هستن، اون‌ها رو کپی کن
+        if (_state.selectedRows && _state.selectedRows.size > 0) {
+            const indices = [..._state.selectedRows].sort((a, b) => a - b);
+            const items = indices
+                .map(i => _state.items[i])
+                .filter(Boolean)
+                .map(cloneItem);
+
+            if (items.length === 0) {
+                window.App.toast('ردیفی برای کپی نیست', 'warn');
+                return;
+            }
+
+            setClipboard(items);   // ⭐ این خط جا افتاده بود
+            window.App.toast(`${items.length} ردیف کپی شد — در سند دیگه هم قابل استفاده‌ست`, 'success');
+            updatePasteBtnState();
+            return;
+        }
+
+        // ⭐ fallback: ردیف جاری (رفتار قبلی)
         const idx = getFocusedRowIdx();
         const it = _state.items[idx];
         if (!it) { window.App.toast('ردیفی برای کپی نیست', 'warn'); return; }
-        _clipboard = [cloneItem(it)];
+        setClipboard([cloneItem(it)]);
         window.App.toast('1 ردیف کپی شد', 'success');
         updatePasteBtnState();
     }
-
 
 
     // ═══ KEYBOARD ═══
@@ -825,15 +933,18 @@ async function handleGlobalKey(e) {
     document.getElementById('sfPasteBtn')?.addEventListener('click', pasteRows);
     document.getElementById('sfHelpBtn')?.addEventListener('click', toggleHelpPanel);
 
-    mb.addEventListener('change', onFieldChange);
-    mb.addEventListener('input', onFieldInput);
-    mb.addEventListener('click', onRowClick);
-    mb.addEventListener('focusin', onRowFocus);
+      mb.addEventListener('change', onFieldChange);
+      mb.addEventListener('input', onFieldInput);
+      mb.addEventListener('click', onRowClick);
+      mb.addEventListener('focusin', onRowFocus);
 
-    if (_keyHandler) document.removeEventListener('keydown', _keyHandler, true);
-    _keyHandler = handleGlobalKey;
-    document.addEventListener('keydown', _keyHandler, true);
-   }
+      if (_keyHandler) document.removeEventListener('keydown', _keyHandler, true);
+      _keyHandler = handleGlobalKey;
+      document.addEventListener('keydown', _keyHandler, true);
+
+      // ⭐ اگه بافر قبلی پر بود، دکمه paste فعال بمونه
+      updatePasteBtnState();
+  }
 
   function onRowFocus(e) {
         const t = e.target;

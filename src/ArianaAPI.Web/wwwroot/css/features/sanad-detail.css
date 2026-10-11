@@ -1327,3 +1327,101 @@ tr.row-selected {
     margin-bottom: 26px;
     line-height: 1.8;
 }
+/* ⭐ Checkbox در فرم سند — انتخاب چندتایی */
+.sf-row-num {
+    display: flex !important;
+    align-items: center;
+    gap: 6px;
+    min-width: 55px;
+}
+
+.sf-row-check {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: #4F46E5;
+    flex-shrink: 0;
+}
+
+.sf-row-num-text {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6B7280;
+}
+
+.sf-row.sf-row-selected {
+    background: #FEF3C7 !important;
+    box-shadow: inset 4px 0 0 #F59E0B !important;
+}
+
+/* ⭐ نوار ابزار بالای ردیف‌ها */
+.sf-rows-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 10px;
+    margin-bottom: 6px;
+    background: #F9FAFB;
+    border: 1px dashed #E5E7EB;
+    border-radius: 6px;
+    font-size: 12px;
+    flex-wrap: wrap;
+}
+
+.sf-select-all-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    color: #374151;
+    user-select: none;
+}
+
+    .sf-select-all-label input[type="checkbox"] {
+        width: 15px;
+        height: 15px;
+        cursor: pointer;
+        accent-color: #4F46E5;
+    }
+
+.sf-selected-count {
+    color: #6B7280;
+    transition: color .15s;
+}
+
+    .sf-selected-count.has-selection {
+        color: #F59E0B;
+        font-weight: 700;
+    }
+
+.sf-clear-sel {
+    background: #fff;
+    border: 1px solid #E5E7EB;
+    color: #6B7280;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all .12s;
+    font-family: 'Vazirmatn', Tahoma, sans-serif;
+}
+
+    .sf-clear-sel:hover {
+        background: #DC2626;
+        color: #fff;
+        border-color: #DC2626;
+    }
+
+/* ⭐ در موبایل چک‌باکس بزرگ‌تر */
+@media (max-width: 640px) {
+    .sf-row-check {
+        width: 18px;
+        height: 18px;
+    }
+
+    .sf-select-all-label input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+    }
+}
