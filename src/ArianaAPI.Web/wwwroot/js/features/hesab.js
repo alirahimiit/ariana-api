@@ -1,6 +1,6 @@
 ﻿/* ═══════════════════════════════════════════════════
-   Feature / Hesab (درخت حساب‌ها)
-   مسئولیت: نمایش درخت کل/معین + رنگ‌بندی مانده
+   Feature / Hesab (درخت حساب‌ها + مدیریت)
+   نسخه 2.0 — با تب درخت/مدیریت
    ═══════════════════════════════════════════════════ */
 
 window.App = window.App || {};
@@ -11,22 +11,59 @@ window.App.Features.Hesab = (function () {
 
     const H = window.App.Helpers;
 
+    let _activeTab = 'tree';   // tree | manage
+
     // ═══════════════════════════════════════════
     //  RENDER
     // ═══════════════════════════════════════════
     async function render() {
         const c = document.getElementById('content');
-        c.innerHTML = `<div class="loading"><div class="spinner"></div><p>در حال بارگذاری...</p></div>`;
+        c.innerHTML = `
+            <div class="hesab-page">
+                <div class="hesab-tabs">
+                    <button class="hesab-tab ${_activeTab === 'tree' ? 'active' : ''}" data-tab="tree">
+                        📊 درخت حساب‌ها
+                    </button>
+                    <button class="hesab-tab ${_activeTab === 'manage' ? 'active' : ''}" data-tab="manage">
+                        ⚙️ مدیریت
+                    </button>
+                </div>
+                <div id="hesabTabContent"></div>
+            </div>`;
+
+        c.querySelectorAll('.hesab-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const t = tab.dataset.tab;
+                if (t === _activeTab) return;
+                _activeTab = t;
+                render();
+            });
+        });
+
+        if (_activeTab === 'tree') {
+            await renderTree();
+        } else {
+            await renderManage();
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  TAB 1: Tree
+    // ═══════════════════════════════════════════
+    async function renderTree() {
+        const container = document.getElementById('hesabTabContent');
+        if (!container) return;
+
+        container.innerHTML = `<div class="loading"><div class="spinner"></div><p>در حال بارگذاری...</p></div>`;
 
         try {
             const items = await window.App.Http.api('/api/hesab/tree') || [];
 
             if (items.length === 0) {
-                c.innerHTML = `<div class="empty"><div class="empty-icon">🏦</div><p>حسابی یافت نشد</p></div>`;
+                container.innerHTML = `<div class="empty"><div class="empty-icon">🏦</div><p>حسابی یافت نشد</p></div>`;
                 return;
             }
 
-            // ─── ساختار درخت ───
             const cols = items.filter(x => x.level === 'col').sort((a, b) => a.codeCol - b.codeCol);
             const moeinMap = {};
             items.filter(x => x.level === 'moein').forEach(m => {
@@ -34,7 +71,7 @@ window.App.Features.Hesab = (function () {
                 moeinMap[m.codeCol].push(m);
             });
 
-            c.innerHTML = `
+            container.innerHTML = `
                 <div class="card">
                     <div class="card-title">
                         <span>🏦 درخت حساب‌ها</span>
@@ -49,20 +86,17 @@ window.App.Features.Hesab = (function () {
                     </div>
                 </div>`;
 
-            // ─── رویداد باز/بسته ───
             document.querySelectorAll('[data-toggle]').forEach(el => {
                 el.addEventListener('click', () => {
                     const targetId = el.dataset.toggle;
                     const target = document.getElementById(targetId);
                     if (!target) return;
-
                     const isOpen = target.classList.contains('open');
                     target.classList.toggle('open', !isOpen);
                     el.querySelector('.tree-toggle').textContent = isOpen ? '▶' : '▼';
                 });
             });
 
-            // ─── باز/بستن همه ───
             document.getElementById('hesabExpandAll').addEventListener('click', () => {
                 document.querySelectorAll('.tree-children').forEach(el => el.classList.add('open'));
                 document.querySelectorAll('.tree-toggle').forEach(el => el.textContent = '▼');
@@ -73,21 +107,39 @@ window.App.Features.Hesab = (function () {
                 document.querySelectorAll('.tree-toggle').forEach(el => el.textContent = '▶');
             });
 
-            // ─── دکمه‌های خروجی ───
-            Exporter.attach(c, {
+            Exporter.attach(container, {
                 title: 'درخت حساب‌ها',
                 subtitle: subtitle(),
                 filename: 'HesabTree',
                 customHtml: () => buildTreeHtml(cols, moeinMap)
             });
 
-            window.App.enhanceTables(c);
+            window.App.enhanceTables(container);
 
         } catch (err) {
-            c.innerHTML = `<div class="error-box">${H.esc(err.message)}</div>`;
+            container.innerHTML = `<div class="error-box">${H.esc(err.message)}</div>`;
         }
     }
 
+    // ═══════════════════════════════════════════
+    //  TAB 2: Manage
+    // ═══════════════════════════════════════════
+    async function renderManage() {
+        const container = document.getElementById('hesabTabContent');
+        if (!container) return;
+
+        if (!window.App.Features.HesabManage) {
+            container.innerHTML = `<div class="error-box">ماژول مدیریت بارگذاری نشده</div>`;
+            return;
+        }
+
+        // صدا زدن HesabManage با container مشخص
+        await window.App.Features.HesabManage.render(container);
+    }
+
+    // ═══════════════════════════════════════════
+    //  درخت — Render Col
+    // ═══════════════════════════════════════════
     function renderCol(col, moeins) {
         const colMandeh = mandehDisplay(col.mabMandeh, col.mahiat);
         const sorted = [...moeins].sort((a, b) => a.codeMoein - b.codeMoein);
@@ -144,7 +196,6 @@ window.App.Features.Hesab = (function () {
         cols.forEach(col => {
             const colM = mandehDisplay(col.mabMandeh, col.mahiat);
 
-            // ردیف کل
             rows.push(`
                 <tr style="background:#EEF2FF; font-weight:bold;">
                     <td class="num text-center">${col.codeCol}</td>
@@ -157,7 +208,6 @@ window.App.Features.Hesab = (function () {
                     </td>
                 </tr>`);
 
-            // معین‌ها
             const moeins = (moeinMap[col.codeCol] || [])
                 .sort((a, b) => a.codeMoein - b.codeMoein);
 
@@ -178,7 +228,6 @@ window.App.Features.Hesab = (function () {
                     </tr>`);
             });
 
-            // ردیف جمع
             if (moeins.length > 0) {
                 const totalBed = moeins.reduce((s, m) => s + (m.sumBed || 0), 0);
                 const totalBes = moeins.reduce((s, m) => s + (m.sumBes || 0), 0);
@@ -276,11 +325,7 @@ window.App.Features.Hesab = (function () {
         return (u.orgName || '') + ' - ' + (u.fyName || '');
     }
 
-    // ═══════════════════════════════════════════
-    //  API عمومی
-    // ═══════════════════════════════════════════
     return { render };
 })();
 
-// ⭐ alias
 window.App.renderHesab = window.App.Features.Hesab.render;

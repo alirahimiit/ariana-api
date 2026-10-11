@@ -173,7 +173,9 @@ window.App.UI.HesabPicker = (function () {
                     return;
                 }
                 if (e.key === 'Escape') {
-                    e.preventDefault(); e.stopPropagation();
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
                     finish(null);
                 } else if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault(); e.stopPropagation();

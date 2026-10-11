@@ -215,13 +215,14 @@ public class HesabRepository : IHesabRepository
             CONVERT(INT, ISNULL(IsCodeVahed, 0))      AS IsCodeVahed,
             CONVERT(INT, ISNULL(IsCodeMarkaz, 0))     AS IsCodeMarkaz,
             CONVERT(INT, ISNULL(IsCodeProjeh, 0))     AS IsCodeProjeh,
+            ISNULL(CONVERT(INT, H.GroupTypeCode), 0) AS GroupTypeCode,
             CASE 
                 WHEN CONVERT(INT, ISNULL(Code_Col, 0)) = -1 THEN 'tafzil'
                 WHEN CONVERT(INT, ISNULL(Code_Moein, 0)) > 0 THEN 'moein'
                 ELSE 'col'
             END AS Level,
             Kind
-        FROM Hesab
+        FROM Hesab H
         WHERE {where}";
 
         if (hasSearch)
@@ -273,13 +274,14 @@ public class HesabRepository : IHesabRepository
             CONVERT(INT, ISNULL(IsCodeVahed, 0))      AS IsCodeVahed,
             CONVERT(INT, ISNULL(IsCodeMarkaz, 0))     AS IsCodeMarkaz,
             CONVERT(INT, ISNULL(IsCodeProjeh, 0))     AS IsCodeProjeh,
+            ISNULL(CONVERT(INT, H.GroupTypeCode), 0) AS GroupTypeCode,
             CASE 
                 WHEN CONVERT(INT, ISNULL(Code_Col, 0)) = -1 THEN 'tafzil'
                 WHEN CONVERT(INT, ISNULL(Code_Moein, 0)) > 0 THEN 'moein'
                 ELSE 'col'
             END AS Level,
             Kind
-        FROM Hesab
+        FROM Hesab  H
         WHERE HesabID = @hesabId";
 
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
@@ -294,11 +296,12 @@ public class HesabRepository : IHesabRepository
         long orgId, long fyId, long hesabId, CancellationToken ct = default)
     {
         const string sqlGet = @"
-            SELECT 
-                ISNULL(Code_Col, 0)     AS CodeCol,
-                ISNULL(Code_Moein, 0)   AS CodeMoein,
-                ISNULL(Code_Tafzil, 0)  AS CodeTafzil
-            FROM Hesab WHERE HesabID = @hesabId";
+        SELECT 
+            ISNULL(Code_Group, 0)   AS CodeGroup,
+            ISNULL(Code_Col, 0)     AS CodeCol,
+            ISNULL(Code_Moein, 0)   AS CodeMoein,
+            ISNULL(Code_Tafzil, 0)  AS CodeTafzil
+        FROM Hesab WHERE HesabID = @hesabId";
 
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         var h = await conn.QueryFirstOrDefaultAsync<dynamic>(
@@ -307,58 +310,92 @@ public class HesabRepository : IHesabRepository
         if (h == null)
             return new HesabUsageDto { Message = "حساب یافت نشد" };
 
+        int codeGroup = (int)(h.CodeGroup ?? 0);
         int codeCol = (int)(h.CodeCol ?? 0);
         int codeMoein = (int)(h.CodeMoein ?? 0);
         int codeTafzil = (int)(h.CodeTafzil ?? 0);
 
         int sanadCount = 0;
         bool hasChildren = false;
+        string? childrenInfo = null;
 
-        // ─── شمارش استفاده در اسناد ───
-        if (codeCol == -1 && codeTafzil > 0)
+        // ─── ۱) گروه حساب ───
+        if (codeGroup > 0 && codeCol == 0 && codeMoein == 0 && codeTafzil == 0)
         {
-            // تفصیلی
-            sanadCount = await conn.ExecuteScalarAsync<int>(
+            var colCount = await conn.ExecuteScalarAsync<int>(
                 new CommandDefinition(
-                    "SELECT COUNT(*) FROM Sanad WHERE Code_Tafzil = @codeTafzil",
-                    new { codeTafzil }, cancellationToken: ct));
-        }
-        else if (codeMoein > 0)
-        {
-            // معین
-            sanadCount = await conn.ExecuteScalarAsync<int>(
-                new CommandDefinition(
-                    "SELECT COUNT(*) FROM Sanad WHERE Code_Col = @codeCol AND Code_Moein = @codeMoein",
-                    new { codeCol, codeMoein }, cancellationToken: ct));
+                    @"SELECT COUNT(*) FROM Hesab 
+                  WHERE Code_Group = @codeGroup 
+                    AND Code_Col > 0 AND Code_Moein = 0 AND Code_Tafzil = 0",
+                    new { codeGroup }, cancellationToken: ct));
 
-            // معین → تفصیلی دارد؟ (در Hesab کد تفصیلی مستقل است، پس فرزند ندارد)
-            hasChildren = false;
+            hasChildren = colCount > 0;
+            if (hasChildren) childrenInfo = $"{colCount} حساب کل";
         }
-        else if (codeCol > 0)
+        // ─── ۲) حساب کل ───
+        else if (codeCol > 0 && codeMoein == 0 && codeTafzil == 0)
         {
-            // کل
             sanadCount = await conn.ExecuteScalarAsync<int>(
                 new CommandDefinition(
                     "SELECT COUNT(*) FROM Sanad WHERE Code_Col = @codeCol",
                     new { codeCol }, cancellationToken: ct));
 
-            // کل → معین دارد؟
             var moeinCount = await conn.ExecuteScalarAsync<int>(
                 new CommandDefinition(
-                    "SELECT COUNT(*) FROM Hesab WHERE Code_Col = @codeCol AND Code_Moein > 0 AND Code_Tafzil = 0",
+                    @"SELECT COUNT(*) FROM Hesab 
+                  WHERE Code_Col = @codeCol AND Code_Moein > 0 AND Code_Tafzil = 0",
                     new { codeCol }, cancellationToken: ct));
-            hasChildren = moeinCount > 0;
-        }
 
-        var msg = sanadCount > 0
-            ? "این حساب در اسناد استفاده شده است"
-            : hasChildren ? "این حساب دارای زیرمجموعه است" : null;
+            hasChildren = moeinCount > 0;
+            if (hasChildren) childrenInfo = $"{moeinCount} حساب معین";
+        }
+        // ─── ۳) حساب معین ───
+        else if (codeCol > 0 && codeMoein > 0 && codeTafzil == 0)
+        {
+            sanadCount = await conn.ExecuteScalarAsync<int>(
+                new CommandDefinition(
+                    "SELECT COUNT(*) FROM Sanad WHERE Code_Col = @codeCol AND Code_Moein = @codeMoein",
+                    new { codeCol, codeMoein }, cancellationToken: ct));
+
+            // معین → تفضیلی ۲ دارد؟
+            var hasTafzili2Flag = await conn.ExecuteScalarAsync<int>(
+                new CommandDefinition(
+                    @"SELECT ISNULL(HasTafzili2, 0) FROM Hesab 
+                  WHERE Code_Col = @codeCol AND Code_Moein = @codeMoein AND Code_Tafzil = 0",
+                    new { codeCol, codeMoein }, cancellationToken: ct));
+
+            if (hasTafzili2Flag > 0)
+            {
+                hasChildren = true;
+                childrenInfo = "تفضیلی ۲ دارد";
+            }
+        }
+        // ─── ۴) تفصیلی ۱ (Code_Col = -1) ───
+        else if (codeCol == -1 && codeTafzil > 0)
+        {
+            sanadCount = await conn.ExecuteScalarAsync<int>(
+                new CommandDefinition(
+                    "SELECT COUNT(*) FROM Sanad WHERE Code_Tafzil = @codeTafzil",
+                    new { codeTafzil }, cancellationToken: ct));
+        }
+        // ─── ۵) تفصیلی ۲ — این حالت از جدول Hesab نمیاد ───
+        //      (چون تفضیلی ۲ توی جدول جداگانه است — بعداً اضافه می‌کنیم)
+
+        // ─── پیام نهایی ───
+        string? msg = null;
+        if (sanadCount > 0 && hasChildren)
+            msg = $"این حساب در {sanadCount} سند استفاده شده و دارای {childrenInfo} است";
+        else if (sanadCount > 0)
+            msg = $"این حساب در {sanadCount} سند استفاده شده است";
+        else if (hasChildren)
+            msg = $"این حساب دارای {childrenInfo} است";
 
         return new HesabUsageDto
         {
             UsedInSanad = sanadCount > 0,
             SanadCount = sanadCount,
             HasChildren = hasChildren,
+            ChildrenInfo = childrenInfo,
             Message = msg
         };
     }
@@ -368,6 +405,7 @@ public class HesabRepository : IHesabRepository
     {
         string sql = level switch
         {
+            "group" => "SELECT ISNULL(MAX(Code_Group), 0) + 1 FROM Hesab WHERE Code_Group > 0 AND ISNULL(Code_Col, 0) = 0 AND ISNULL(Code_Moein, 0) = 0 AND ISNULL(Code_Tafzil, 0) = 0",
             "col" => "SELECT ISNULL(MAX(Code_Col), 0) + 1 FROM Hesab WHERE Code_Col > 0 AND Code_Moein = 0 AND Code_Tafzil = 0",
             "moein" => "SELECT ISNULL(MAX(Code_Moein), 0) + 1 FROM Hesab WHERE Code_Col = @codeCol AND Code_Moein > 0 AND Code_Tafzil = 0",
             "tafzil" => "SELECT ISNULL(MAX(Code_Tafzil), 0) + 1 FROM Hesab WHERE Code_Col = -1 AND Code_Tafzil > 0",
@@ -390,11 +428,13 @@ public class HesabRepository : IHesabRepository
         int codeTafzil = dto.CodeTafzil ?? 0;
         int codeGroup = dto.CodeGroup ?? 0;
 
-        if (dto.Level == HesabLevel.Col && codeCol <= 0)
+        if (dto.Level == "group" && codeGroup <= 0)
+            codeGroup = await GetNextCodeAsync(orgId, fyId, "group", null, ct);
+        else if (dto.Level == "col" && codeCol <= 0)
             codeCol = await GetNextCodeAsync(orgId, fyId, "col", null, ct);
-        else if (dto.Level == HesabLevel.Moein && codeMoein <= 0)
+        else if (dto.Level == "moein" && codeMoein <= 0)
             codeMoein = await GetNextCodeAsync(orgId, fyId, "moein", codeCol, ct);
-        else if (dto.Level == HesabLevel.Tafzil && codeTafzil <= 0)
+        else if (dto.Level == "tafzil" && codeTafzil <= 0)
             codeTafzil = await GetNextCodeAsync(orgId, fyId, "tafzil", null, ct);
 
         // ─── برای تفصیلی: Code_Col = -1 ───
@@ -408,11 +448,15 @@ public class HesabRepository : IHesabRepository
             INSERT INTO Hesab 
                 (Code_Group, Code_Col, Code_Moein, Code_Tafzil, Name, Discript,
                  Mahiat, Vaziat, HasTafzili, HasTafzili2, IsStock,
-                 IsCodeVahed, IsCodeMarkaz, IsCodeProjeh, Kind, Code_Op, Date_Op, Time_Op)
+                 IsCodeVahed, IsCodeMarkaz, IsCodeProjeh, Kind,
+                 GroupTypeCode,
+                 Code_Op, Date_Op, Time_Op)
             VALUES 
                 (@codeGroup, @codeCol, @codeMoein, @codeTafzil, @name, @discript,
                  @mahiat, @vaziat, @hasTafzili, @hasTafzili2, @isStock,
-                 @isCodeVahed, @isCodeMarkaz, @isCodeProjeh, @kind, 0, @dateOp, @timeOp);
+                 @isCodeVahed, @isCodeMarkaz, @isCodeProjeh, @kind,
+                 @groupTypeCode,
+                 0, @dateOp, @timeOp);
             SELECT CAST(SCOPE_IDENTITY() AS BIGINT);";
 
         var id = await conn.ExecuteScalarAsync<long>(
@@ -433,6 +477,7 @@ public class HesabRepository : IHesabRepository
                 isCodeMarkaz = dto.IsCodeMarkaz,
                 isCodeProjeh = dto.IsCodeProjeh,
                 kind = dto.Kind ?? 0,
+                groupTypeCode = dto.GroupTypeCode ?? 0,
                 dateOp = PersianToday(),
                 timeOp = DateTime.Now.ToString("HH:mm:ss")
             }, cancellationToken: ct));
@@ -476,6 +521,7 @@ public class HesabRepository : IHesabRepository
                 IsCodeMarkaz= ISNULL(@isCodeMarkaz, IsCodeMarkaz),
                 IsCodeProjeh= ISNULL(@isCodeProjeh, IsCodeProjeh),
                 Kind        = ISNULL(@kind, Kind),
+                GroupTypeCode = ISNULL(@groupTypeCode, GroupTypeCode),
                 Date_Op     = @dateOp,
                 Time_Op     = @timeOp
             WHERE HesabID = @hesabId";
@@ -495,6 +541,7 @@ public class HesabRepository : IHesabRepository
                 isCodeMarkaz = dto.IsCodeMarkaz,
                 isCodeProjeh = dto.IsCodeProjeh,
                 kind = dto.Kind,
+                groupTypeCode = dto.GroupTypeCode,
                 dateOp = PersianToday(),
                 timeOp = DateTime.Now.ToString("HH:mm:ss")
             }, cancellationToken: ct));
@@ -544,13 +591,15 @@ public class HesabRepository : IHesabRepository
             CONVERT(INT, ISNULL(IsCodeVahed, 0))      AS IsCodeVahed,
             CONVERT(INT, ISNULL(IsCodeMarkaz, 0))     AS IsCodeMarkaz,
             CONVERT(INT, ISNULL(IsCodeProjeh, 0))     AS IsCodeProjeh,
+            ISNULL(CONVERT(INT, H.GroupTypeCode), 0) AS GroupTypeCode,
+
             CASE 
                 WHEN CONVERT(INT, ISNULL(Code_Col, 0)) = -1 THEN 'tafzil'
                 WHEN CONVERT(INT, ISNULL(Code_Moein, 0)) > 0 THEN 'moein'
                 ELSE 'col'
             END AS Level,
             Kind
-        FROM Hesab
+        FROM Hesab H
         WHERE {where}";
 
         if (codeCol.HasValue && codeCol.Value > 0 && level == HesabLevel.Moein)
@@ -593,6 +642,7 @@ public class HesabRepository : IHesabRepository
 
     private static string? WhereOfLevel(string level) => level switch
     {
+        "group" => "Code_Group > 0 AND ISNULL(Code_Col, 0) = 0 AND ISNULL(Code_Moein, 0) = 0 AND ISNULL(Code_Tafzil, 0) = 0",
         "col" => "Code_Col > 0 AND Code_Moein = 0 AND Code_Tafzil = 0",
         "moein" => "Code_Col > 0 AND Code_Moein > 0 AND Code_Tafzil = 0",
         "tafzil" => "Code_Col = -1 AND Code_Tafzil > 0",
@@ -609,6 +659,16 @@ public class HesabRepository : IHesabRepository
             _ => "-"
         };
         r.VaziatStr = r.Vaziat == 1 ? "فعال" : "غیرفعال";
+        r.GroupTypeName = r.GroupTypeCode switch
+        {
+            1 => "دارایی",
+            2 => "بدهی",
+            3 => "فروش",
+            4 => "خرید",
+            5 => "هزینه",
+            6 => "درآمد",
+            _ => null
+        };
     }
 
     private static string PersianToday()

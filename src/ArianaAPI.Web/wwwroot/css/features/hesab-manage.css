@@ -1,0 +1,538 @@
+﻿/* ═══════════════════════════════════════════════════════════
+   Hesab Page — Tab Layout
+   ═══════════════════════════════════════════════════════════ */
+/* ⭐ بج نوع گروه */
+.hm-badge-gtype {
+    background: #E0E7FF;
+    color: #3730A3;
+    font-weight: 600;
+}
+
+.hesab-page {
+    padding: 0;
+}
+
+.hesab-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    margin-bottom: 14px;
+    background: #F3F4F6;
+    border-radius: 10px;
+    width: fit-content;
+}
+
+.hesab-tab {
+    padding: 9px 22px;
+    border: none;
+    background: transparent;
+    border-radius: 7px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13.5px;
+    color: #6B7280;
+    transition: all .15s;
+    font-weight: 500;
+}
+
+    .hesab-tab:hover {
+        color: #374151;
+        background: rgba(255, 255, 255, .6);
+    }
+
+    .hesab-tab.active {
+        background: #fff;
+        color: #4F46E5;
+        font-weight: 600;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+    }
+
+/* (بقیه استایل‌های hm-* از قبل هست) */
+
+
+/* ═══════════════════════════════════════════════════════════
+   HesabManage — مدیریت حساب‌ها
+   ═══════════════════════════════════════════════════════════ */
+
+.hm-page {
+    padding: 0;
+}
+
+.hm-card {
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+    border: 1px solid #E5E7EB;
+}
+
+/* ─── Tabs ─── */
+.hm-tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 16px;
+    border-bottom: 1px solid #E5E7EB;
+    background: #F9FAFB;
+}
+
+.hm-tab {
+    padding: 12px 24px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    color: #6B7280;
+    border-bottom: 2px solid transparent;
+    transition: all .15s;
+}
+
+    .hm-tab:hover {
+        color: #374151;
+        background: rgba(0,0,0,.02);
+    }
+
+    .hm-tab.active {
+        color: #4F46E5;
+        border-bottom-color: #4F46E5;
+        font-weight: 600;
+        background: #fff;
+    }
+
+/* ─── Toolbar ─── */
+.hm-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #E5E7EB;
+    flex-wrap: wrap;
+}
+
+.hm-search {
+    position: relative;
+    flex: 1;
+    max-width: 380px;
+    min-width: 200px;
+}
+
+.hm-search-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    opacity: .5;
+    pointer-events: none;
+}
+
+.hm-search input {
+    width: 100%;
+    padding: 9px 36px 9px 12px;
+    border: 1.5px solid #E5E7EB;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    background: #F9FAFB;
+    transition: all .15s;
+}
+
+    .hm-search input:focus {
+        outline: none;
+        border-color: #4F46E5;
+        background: #fff;
+        box-shadow: 0 0 0 3px rgba(79,70,229,.1);
+    }
+
+.hm-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* ─── Table ─── */
+.hm-count {
+    padding: 10px 16px;
+    font-size: 12px;
+    color: #6B7280;
+    background: #F9FAFB;
+    border-bottom: 1px solid #E5E7EB;
+}
+
+.hm-table-wrap {
+    overflow-x: auto;
+}
+
+.hm-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+    .hm-table th {
+        padding: 10px 14px;
+        text-align: right;
+        font-weight: 600;
+        color: #6B7280;
+        font-size: 12px;
+        background: #F9FAFB;
+        border-bottom: 1px solid #E5E7EB;
+        white-space: nowrap;
+    }
+
+    .hm-table td {
+        padding: 11px 14px;
+        border-bottom: 1px solid #F3F4F6;
+        vertical-align: middle;
+    }
+
+    .hm-table tbody tr:hover {
+        background: #F9FAFB;
+    }
+
+    .hm-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+.hm-col-code code {
+    font-family: Consolas, Monaco, monospace;
+    font-size: 12.5px;
+    background: #F3F4F6;
+    color: #4F46E5;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-weight: 600;
+}
+
+.hm-col-name {
+    font-weight: 500;
+    color: #111827;
+}
+
+/* ─── Badges ─── */
+.hm-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 1px;
+    white-space: nowrap;
+}
+
+.hm-badge-tafzil {
+    background: #DBEAFE;
+    color: #1E40AF;
+}
+
+.hm-badge-stock {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+.hm-badge-vahed {
+    background: #E0E7FF;
+    color: #3730A3;
+}
+
+.hm-badge-markaz {
+    background: #FCE7F3;
+    color: #9D174D;
+}
+
+.hm-badge-projeh {
+    background: #DCFCE7;
+    color: #166534;
+}
+
+.hm-mahiat-bed {
+    background: #DCFCE7;
+    color: #166534;
+}
+
+.hm-mahiat-bes {
+    background: #FEE2E2;
+    color: #991B1B;
+}
+
+.hm-mahiat-neutral {
+    background: #F3F4F6;
+    color: #4B5563;
+}
+
+.hm-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+    .hm-dot.hm-active {
+        background: #10B981;
+        box-shadow: 0 0 0 3px rgba(16,185,129,.15);
+    }
+
+    .hm-dot.hm-inactive {
+        background: #9CA3AF;
+    }
+
+.hm-col-actions {
+    text-align: center;
+    white-space: nowrap;
+}
+
+    .hm-col-actions .btn {
+        padding: 4px 8px;
+    }
+
+/* ─── Empty / Loading ─── */
+.hm-empty {
+    padding: 60px 20px;
+    text-align: center;
+    color: #9CA3AF;
+}
+
+.hm-empty-icon {
+    font-size: 48px;
+    opacity: .4;
+    margin-bottom: 12px;
+}
+
+.hm-empty-text {
+    font-size: 14px;
+}
+
+/* ═══════════════════════════════════════════
+   Modal / Form
+   ═══════════════════════════════════════════ */
+.hm-modal {
+    max-width: 620px !important;
+}
+
+.hm-form {
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.hm-warn {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 12px 14px;
+    background: #FEF3C7;
+    border: 1px solid #FCD34D;
+    border-radius: 8px;
+    font-size: 12.5px;
+    color: #92400E;
+    line-height: 1.7;
+}
+
+.hm-warn-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.hm-form-row {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 12px;
+    align-items: center;
+}
+
+    .hm-form-row > label {
+        font-size: 13px;
+        color: #6B7280;
+        font-weight: 500;
+    }
+
+    .hm-form-row input[type=text],
+    .hm-form-row input[type=number],
+    .hm-form-row select {
+        width: 100%;
+        padding: 9px 12px;
+        border: 1.5px solid #E5E7EB;
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 13px;
+        background: #fff;
+        transition: all .15s;
+    }
+
+        .hm-form-row input:focus,
+        .hm-form-row select:focus {
+            outline: none;
+            border-color: #4F46E5;
+            box-shadow: 0 0 0 3px rgba(79,70,229,.1);
+        }
+
+    .hm-form-row input[readonly] {
+        background: #F9FAFB;
+        color: #6B7280;
+        cursor: not-allowed;
+    }
+
+.hm-form-row-inline {
+    align-items: center;
+}
+
+.hm-radio-group {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.hm-radio {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #374151;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1.5px solid #E5E7EB;
+    background: #fff;
+    transition: all .15s;
+}
+
+    .hm-radio:hover {
+        border-color: #A5B4FC;
+        background: #F5F3FF;
+    }
+
+    .hm-radio input[type=radio] {
+        display: none;
+    }
+
+    .hm-radio:has(input:checked) {
+        border-color: #4F46E5;
+        background: #EEF2FF;
+        color: #3730A3;
+        font-weight: 600;
+    }
+
+    .hm-radio input[type=radio]:disabled ~ span {
+        opacity: .5;
+    }
+
+    .hm-radio:has(input:disabled) {
+        opacity: .55;
+        cursor: not-allowed;
+        background: #F9FAFB;
+    }
+
+.hm-form-section {
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px solid #E5E7EB;
+    font-size: 11px;
+    color: #6B7280;
+    font-weight: 600;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+}
+
+.hm-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.hm-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    cursor: pointer;
+    font-size: 12.5px;
+    color: #374151;
+    transition: all .15s;
+}
+
+    .hm-check:hover {
+        background: #EEF2FF;
+        border-color: #A5B4FC;
+    }
+
+    .hm-check input[type=checkbox] {
+        accent-color: #4F46E5;
+    }
+
+.hm-form-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-start;
+    padding-top: 14px;
+    border-top: 1px solid #E5E7EB;
+    margin-top: 6px;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 640px) {
+    .hm-toolbar {
+        padding: 12px;
+    }
+
+    .hm-search {
+        max-width: 100%;
+    }
+
+    .hm-form-row {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+
+    .hm-tab {
+        padding: 10px 14px;
+        font-size: 13px;
+    }
+
+    .hm-radio-group {
+        gap: 8px;
+    }
+
+    .hm-radio {
+        padding: 5px 10px;
+        font-size: 12px;
+    }
+}
+/* ═══════════════════════════════════════════════════════════
+   Sortable Column Headers
+   ═══════════════════════════════════════════════════════════ */
+
+.sortable-th {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: background .12s;
+}
+
+    .sortable-th:hover {
+        background: #EEF2FF !important;
+        color: #4F46E5;
+    }
+
+    .sortable-th .sort-icon-idle {
+        opacity: .3;
+        font-size: 10px;
+        margin-right: 4px;
+    }
+
+    .sortable-th .sort-icon-active {
+        color: #4F46E5;
+        font-size: 10px;
+        margin-right: 4px;
+        font-weight: 700;
+    }
+
+    .sortable-th:hover .sort-icon-idle {
+        opacity: .6;
+    }

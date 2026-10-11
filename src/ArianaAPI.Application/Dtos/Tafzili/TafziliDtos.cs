@@ -4,8 +4,8 @@ public class TafziliRequestDto
 {
     public string? Code { get; set; }
     public string? Name { get; set; }
-    public long? TafziliGroupId { get; set; }   // ← گروه تفضیلی (مهم)
-    public int? Kind { get; set; }               // 0-4
+    public long? TafziliGroupId { get; set; }
+    public int? Kind { get; set; }
     public string? Phone { get; set; }
     public string? Mobile { get; set; }
     public string? MelliCode { get; set; }
@@ -14,6 +14,10 @@ public class TafziliRequestDto
 
     /// <summary>all | hasMandeh | noMandeh | hasBed | hasBes</summary>
     public string MandehFilter { get; set; } = "all";
+
+    // ⭐ سورت
+    public string? SortColumn { get; set; }
+    public string? SortDir { get; set; }   // asc | desc
 
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 50;

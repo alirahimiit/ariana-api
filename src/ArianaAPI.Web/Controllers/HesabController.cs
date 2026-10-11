@@ -76,7 +76,7 @@ public class HesabController : ControllerBase
 
     /// <summary>
     /// لیست حساب‌ها برای صفحه مدیریت
-    /// level: col | moein | tafzil
+    /// level: group | col | moein | tafzil
     /// </summary>
     [HttpGet("list")]
     public async Task<ActionResult<List<HesabListItemDto>>> GetList(
@@ -84,7 +84,7 @@ public class HesabController : ControllerBase
         [FromQuery] string? search = null,
         CancellationToken ct = default)
     {
-        if (level != "col" && level != "moein" && level != "tafzil")
+        if (level != "group" && level != "col" && level != "moein" && level != "tafzil")
             return BadRequest(new { error = "سطح نامعتبر" });
 
         var list = await _repo.GetListAsync(User.GetOrgId(), User.GetFyId(), level, search, ct);
@@ -125,7 +125,8 @@ public class HesabController : ControllerBase
         if (string.IsNullOrWhiteSpace(dto.Name))
             return BadRequest(new { error = "نام حساب الزامی است" });
 
-        if (dto.Level != "col" && dto.Level != "moein" && dto.Level != "tafzil")
+        if (dto.Level != "group" && dto.Level != "col"
+            && dto.Level != "moein" && dto.Level != "tafzil")
             return BadRequest(new { error = "سطح نامعتبر" });
 
         if (dto.Level == "moein" && (dto.CodeCol ?? 0) <= 0)
@@ -197,7 +198,7 @@ public class HesabController : ControllerBase
         [FromQuery] bool onlyWithTafzili = false,
         CancellationToken ct = default)
     {
-        if (level != "col" && level != "moein" && level != "tafzil")
+        if (level != "group" && level != "col" && level != "moein" && level != "tafzil")
             return BadRequest(new { error = "سطح نامعتبر" });
 
         var list = await _repo.SearchAsync(

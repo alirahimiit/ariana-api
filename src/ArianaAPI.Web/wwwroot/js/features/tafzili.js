@@ -15,6 +15,25 @@ window.App.Features.Tafzili = (function () {
     let _kind = '';
     let _mandeh = 'all';
     let _groupsCache = [];
+    let _sort = { col: 'codeTafzil', dir: 'asc' };   // ⭐ جدید
+
+    // ⭐ سورت server-side
+    function sortBy(col) {
+        if (_sort.col === col) {
+            _sort.dir = _sort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            _sort.col = col;
+            _sort.dir = 'asc';
+        }
+        runList(1);
+    }
+
+    function sortIcon(col) {
+        if (_sort.col !== col) return '<span class="sort-icon-idle">⇅</span>';
+        return _sort.dir === 'asc'
+            ? '<span class="sort-icon-active">▲</span>'
+            : '<span class="sort-icon-active">▼</span>';
+    }
 
     // ═══════════════════════════════════════════
     //  RENDER
@@ -170,11 +189,12 @@ window.App.Features.Tafzili = (function () {
             melliCode: document.getElementById('tafMelliCode')?.value || null,
             economicCode: document.getElementById('tafEconomicCode')?.value || null,
             mandehFilter: _mandeh || 'all',
+            sortColumn: _sort.col,       // ⭐
+            sortDir: _sort.dir,           // ⭐
             page: page,
             pageSize: pageSizeOverride || window.App.state.settings.pageSize
         };
     }
-
     function renderListResult(data) {
         const container = document.getElementById('tafResult');
         const items = data.items || [];
@@ -232,20 +252,40 @@ window.App.Features.Tafzili = (function () {
                         ➕ تفضیلی جدید
                     </button>
                 </div>
-                <div class="table-wrapper">
+                                <div class="table-wrapper">
                     <table>
                         <thead>
                             <tr>
-                                <th style="width:80px;">کد</th>
-                                <th>نام</th>
-                                <th style="width:130px;">گروه تفضیلی</th>
-                                <th style="width:100px;">نوع</th>
-                                <th style="width:110px;">موبایل</th>
-                                <th style="width:110px;">کد ملی</th>
-                                <th class="text-left" style="width:110px;">گردش بدهکار</th>
-                                <th class="text-left" style="width:110px;">گردش بستانکار</th>
-                                <th class="text-left" style="width:110px;">مانده بدهکار</th>
-                                <th class="text-left" style="width:110px;">مانده بستانکار</th>
+                                <th class="sortable-th" style="width:80px;" onclick="App.Features.Tafzili.sortBy('codeTafzil')">
+                                    کد ${sortIcon('codeTafzil')}
+                                </th>
+                                <th class="sortable-th" onclick="App.Features.Tafzili.sortBy('name')">
+                                    نام ${sortIcon('name')}
+                                </th>
+                                <th class="sortable-th" style="width:130px;" onclick="App.Features.Tafzili.sortBy('tafziliGroupName')">
+                                    گروه تفضیلی ${sortIcon('tafziliGroupName')}
+                                </th>
+                                <th class="sortable-th" style="width:100px;" onclick="App.Features.Tafzili.sortBy('kind')">
+                                    نوع ${sortIcon('kind')}
+                                </th>
+                                <th class="sortable-th" style="width:110px;" onclick="App.Features.Tafzili.sortBy('mobile')">
+                                    موبایل ${sortIcon('mobile')}
+                                </th>
+                                <th class="sortable-th" style="width:110px;" onclick="App.Features.Tafzili.sortBy('melliCode')">
+                                    کد ملی ${sortIcon('melliCode')}
+                                </th>
+                                <th class="sortable-th text-left" style="width:110px;" onclick="App.Features.Tafzili.sortBy('sumBed')">
+                                    گردش بدهکار ${sortIcon('sumBed')}
+                                </th>
+                                <th class="sortable-th text-left" style="width:110px;" onclick="App.Features.Tafzili.sortBy('sumBes')">
+                                    گردش بستانکار ${sortIcon('sumBes')}
+                                </th>
+                                <th class="sortable-th text-left" style="width:110px;" onclick="App.Features.Tafzili.sortBy('mabManBed')">
+                                    مانده بدهکار ${sortIcon('mabManBed')}
+                                </th>
+                                <th class="sortable-th text-left" style="width:110px;" onclick="App.Features.Tafzili.sortBy('mabManBes')">
+                                    مانده بستانکار ${sortIcon('mabManBes')}
+                                </th>
                                 <th style="width:90px;"></th>
                             </tr>
                         </thead>
@@ -563,7 +603,7 @@ window.App.Features.Tafzili = (function () {
     // ═══════════════════════════════════════════
     //  GROUP MANAGER (CRUD)
     // ═══════════════════════════════════════════
-    function openGroupManager() {
+    async function openGroupManager() {
         if (window.App.Permissions &&
             !window.App.Permissions.canAny([193, 194, 195])) {
             window.App.toast('شما به مدیریت گروه‌های تفضیلی دسترسی ندارید', 'error');
@@ -691,15 +731,29 @@ window.App.Features.Tafzili = (function () {
         });
     }
 
-    async function deleteGroup(id, name) {
-        if (!confirm(`آیا از حذف گروه «${name}» مطمئن هستید؟`)) return;
+    async function deleteGroup(id, name)
+    {
+        const ok = await window.App.confirm(
+            `آیا از حذف گروه «${name}» مطمئن هستید؟\n\n` +
+            `اگه تفضیلی‌ای از این گروه استفاده کند، حذف نمی‌شود.`,
+            {
+                title: '🗑️ حذف گروه تفضیلی',
+                danger: true,
+                okText: 'بله، حذف کن',
+                cancelText: 'لغو'
+            }
+        );
+        if (!ok) return;
 
         try {
             await window.App.Http.api(`/api/tafzili/groups/${id}`, { method: 'DELETE' });
             window.App.toast('گروه حذف شد', 'success');
             await loadGroupList();
         } catch (err) {
-            window.App.toast(err.message, 'error');
+            await window.App.alert.error(
+                err.message || 'خطا در حذف گروه',
+                { title: 'خطا در حذف' }
+            );
         }
     }
 
@@ -731,7 +785,9 @@ window.App.Features.Tafzili = (function () {
         render,
         runList,
         showDetail,
-        openGroupManager
+        openGroupManager,
+        sortBy,          // ⭐ جدید
+        sortIcon         // ⭐ جدید
     };
 })();
 

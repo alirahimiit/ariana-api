@@ -39,71 +39,87 @@ public class TafziliRepository : ITafziliRepository
             new CommandDefinition(sql, cancellationToken: ct));
     }
 
+
+    // ⭐ نگاشت ستون سورت به SQL
+    private static (string inner, string outer) BuildSortMap(string? col, string? dir)
+    {
+        var dirSql = (dir ?? "asc").ToLower() == "desc" ? "DESC" : "ASC";
+        var key = (col ?? "codetafzil").ToLower();
+
+        return key switch
+        {
+            "codetafzil" => ("H.Code_Tafzil", $"T.CodeTafzil {dirSql}"),
+            "name" => ("H.Name", $"T.Name {dirSql}"),
+            "tafziligroupname" => ("TG.Name", $"T.TafziliGroupName {dirSql}"),
+            "kind" => ("ISNULL(CAST(H.Kind AS INT), 0)", $"T.Kind {dirSql}"),
+            "mobile" => ("H.Mobile", $"T.Mobile {dirSql}"),
+            "mellicode" => ("H.MelliCode", $"T.MelliCode {dirSql}"),
+            "sumbed" => ("ISNULL(SA.SumBed, 0)", $"T.SumBed {dirSql}"),
+            "sumbes" => ("ISNULL(SA.SumBes, 0)", $"T.SumBes {dirSql}"),
+            "mabmanbed" => (
+                "(CASE WHEN ISNULL(SA.SumBed, 0) > ISNULL(SA.SumBes, 0) THEN ISNULL(SA.SumBed, 0) - ISNULL(SA.SumBes, 0) ELSE 0 END)",
+                $"T.MabManBed {dirSql}"),
+            "mabmanbes" => (
+                "(CASE WHEN ISNULL(SA.SumBes, 0) > ISNULL(SA.SumBed, 0) THEN ISNULL(SA.SumBes, 0) - ISNULL(SA.SumBed, 0) ELSE 0 END)",
+                $"T.MabManBes {dirSql}"),
+            _ => ("H.Code_Tafzil", $"T.CodeTafzil {dirSql}")
+        };
+    }
     // ═══════════════════════════════════════════
     //  لیست تفضیلی‌ها
     // ═══════════════════════════════════════════
     public async Task<TafziliListResultDto> GetListAsync(
-    long orgId, long fyId, TafziliRequestDto req, CancellationToken ct = default)
+        long orgId, long fyId, TafziliRequestDto req, CancellationToken ct = default)
     {
         var sb = new StringBuilder(" WHERE H.Code_Col = -1 ");
         var p = new DynamicParameters();
 
-        // ─── فیلترهای ساده (روی Hesab) ───
         if (!string.IsNullOrWhiteSpace(req.Code))
         {
             sb.Append(" AND CAST(H.Code_Tafzil AS VARCHAR(50)) LIKE @code ");
             p.Add("code", "%" + req.Code + "%");
         }
-
         if (!string.IsNullOrWhiteSpace(req.Name))
         {
             sb.Append(" AND H.Name LIKE @name ");
             p.Add("name", "%" + req.Name + "%");
         }
-
         if (req.TafziliGroupId is > 0)
         {
             sb.Append(" AND H.TafziliGroupCode = @tafziliGroupId ");
             p.Add("tafziliGroupId", req.TafziliGroupId.Value);
         }
-
         if (req.Kind.HasValue)
         {
             sb.Append(" AND ISNULL(CAST(H.Kind AS INT), 0) = @kind ");
             p.Add("kind", req.Kind.Value);
         }
-
         if (!string.IsNullOrWhiteSpace(req.Phone))
         {
             sb.Append(" AND H.Phone LIKE @phone ");
             p.Add("phone", "%" + req.Phone + "%");
         }
-
         if (!string.IsNullOrWhiteSpace(req.Mobile))
         {
             sb.Append(" AND H.Mobile LIKE @mobile ");
             p.Add("mobile", "%" + req.Mobile + "%");
         }
-
         if (!string.IsNullOrWhiteSpace(req.MelliCode))
         {
             sb.Append(" AND H.MelliCode LIKE @melliCode ");
             p.Add("melliCode", "%" + req.MelliCode + "%");
         }
-
         if (!string.IsNullOrWhiteSpace(req.EconomicCode))
         {
             sb.Append(" AND H.EconomicCode LIKE @economicCode ");
             p.Add("economicCode", "%" + req.EconomicCode + "%");
         }
-
         if (!string.IsNullOrWhiteSpace(req.Address))
         {
             sb.Append(" AND H.Address LIKE @address ");
             p.Add("address", "%" + req.Address + "%");
         }
 
-        // ⭐ فیلتر مانده — روی مقادیر aggregate از Sanad
         switch ((req.MandehFilter ?? "all").ToLower())
         {
             case "hasmandeh":
@@ -126,7 +142,9 @@ public class TafziliRepository : ITafziliRepository
 
         var offset = (req.Page - 1) * req.PageSize;
 
-        // ⭐ Subquery aggregation روی Sanad
+        // ⭐ سورت
+        var (orderInner, orderOuter) = BuildSortMap(req.SortColumn, req.SortDir);
+
         const string sanadAggSql = @"
         SELECT 
             S.Code_Tafzil,
@@ -140,7 +158,6 @@ public class TafziliRepository : ITafziliRepository
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         await conn.OpenAsync(ct);
 
-        // ⭐ شمارش با همان JOIN ها
         var countSql = $@"
         SELECT COUNT(*) 
         FROM Hesab H
@@ -192,14 +209,14 @@ public class TafziliRepository : ITafziliRepository
 
                 ISNULL(H.Mab_Mandeh, 0)         AS MabMandeh,
 
-                ROW_NUMBER() OVER (ORDER BY H.Code_Tafzil) AS RowNum
+                ROW_NUMBER() OVER (ORDER BY {orderInner}) AS RowNum
             FROM Hesab H
             LEFT JOIN TafziliGroup TG ON TG.ID = H.TafziliGroupCode
             LEFT JOIN ({sanadAggSql}) SA ON SA.Code_Tafzil = H.Code_Tafzil
             {sb}
         ) AS T
         WHERE T.RowNum BETWEEN @startRow AND @endRow
-        ORDER BY T.RowNum";
+        ORDER BY {orderOuter}";
 
         _logger.LogDebug("Tafzili list SQL:\n{Sql}", sql);
 

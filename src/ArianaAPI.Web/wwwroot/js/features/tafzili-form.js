@@ -253,7 +253,18 @@ window.App.Features.TafziliForm = (function () {
             if (_keyHandler) document.removeEventListener('keydown', _keyHandler);
             _keyHandler = null;
             window.App.closeModal();
-            window.App.Features.Tafzili.runList(1);
+            // ⭐ رفرش صفحه‌ی مناسب
+            try {
+                if (window.App.state.currentPage === 'tafzili') {
+                    window.App.Features.Tafzili.runList(1);
+                } else if (window.App.state.currentPage === 'hesab') {
+                    if (window.App.Features.HesabManage?.reload) {
+                        window.App.Features.HesabManage.reload();
+                    }
+                }
+            } catch (e) {
+                console.error('[TafziliForm] refresh error:', e);
+            }
         } catch (err) {
             window.App.toast('خطا: ' + err.message, 'error');
         } finally {
@@ -269,14 +280,64 @@ window.App.Features.TafziliForm = (function () {
             return;
         }
 
-        if (!confirm('آیا از حذف این تفضیلی مطمئن هستید؟')) return;
+        // ⭐ ۱. اول چک استفاده (بدون هیچ confirm)
+        let usage = null;
+        try {
+            usage = await window.App.Http.api(`/api/hesab/${id}/usage`);
+        } catch (e) {
+            console.warn('[deleteTafzili] usage check failed:', e);
+        }
 
+        // ⭐ ۲. اگه استفاده شده → فقط Alert (بدون confirm)
+        if (usage?.usedInSanad) {
+            await window.App.alert.warning(
+                `این تفضیلی در ${H.fmt(usage.sanadCount)} سند استفاده شده و قابل حذف نیست.\n\n` +
+                `برای حذف، ابتدا باید تمام اسناد مرتبط حذف یا اصلاح شوند.`,
+                { title: '🔒 قابل حذف نیست' }
+            );
+            return;
+        }
+
+        // ⭐ ۳. اگه زیرمجموعه دارد
+        if (usage?.hasChildren) {
+            await window.App.alert.warning(
+                `این تفضیلی دارای ${usage.childrenInfo || 'زیرمجموعه'} است.\n\n` +
+                `ابتدا زیرمجموعه‌ها را حذف کنید.`,
+                { title: '🔒 دارای زیرمجموعه' }
+            );
+            return;
+        }
+
+        // ⭐ ۴. تأیید با UI خودمان (نه confirm بومی)
+        const ok = await window.App.confirm(
+            'آیا از حذف این تفضیلی مطمئن هستید؟\n\nاین عملیات قابل بازگشت نیست.',
+            {
+                title: '🗑️ حذف تفضیلی',
+                danger: true,
+                okText: 'بله، حذف کن',
+                cancelText: 'لغو'
+            }
+        );
+        if (!ok) return;
+
+        // ⭐ ۵. حذف
         try {
             await window.App.Http.api('/api/tafzili/' + id, { method: 'DELETE' });
             window.App.toast('تفضیلی حذف شد', 'success');
-            window.App.Features.Tafzili.runList(1);
+            try {
+                if (window.App.state.currentPage === 'tafzili') {
+                    window.App.Features.Tafzili.runList(1);
+                } else if (window.App.state.currentPage === 'hesab') {
+                    if (window.App.Features.HesabManage?.reload) {
+                        window.App.Features.HesabManage.reload();
+                    }
+                }
+            } catch (e) { console.error(e); }
         } catch (err) {
-            window.App.toast('خطا: ' + err.message, 'error');
+            await window.App.alert.error(
+                err.message || 'خطا در حذف تفضیلی',
+                { title: 'خطا در حذف' }
+            );
         }
     }
 

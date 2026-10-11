@@ -879,8 +879,12 @@ window.App.Features.SanadForm = (function () {
 
     // ═══ KEYBOARD ═══
     let _keyHandler = null;
+    let _pickerKeyHandler = null;
 
-async function handleGlobalKey(e) {
+ async function handleGlobalKey(e) {
+        // ⭐ اگه Picker بازه، هیچ کاری نکن
+    if (document.querySelector('.hp-overlay')) return;
+
     const active = document.activeElement;
     const isOnInput = active && (
         active.tagName === 'INPUT' ||
@@ -1009,8 +1013,35 @@ async function handleGlobalKey(e) {
       _keyHandler = handleGlobalKey;
       document.addEventListener('keydown', _keyHandler, true);
 
+      // ⭐ F3 / F4 → باز کردن Picker معین (جلوگیری از search فایرفاکس)
+      if (_pickerKeyHandler) {
+          document.removeEventListener('keydown', _pickerKeyHandler, true);
+      }
+      _pickerKeyHandler = (e) => {
+          if (document.querySelector('.hp-overlay')) return;
+          // فقط F3 یا F4
+          if (e.key !== 'F3' && e.key !== 'F4') return;
+          if (e.ctrlKey || e.altKey || e.shiftKey) return;
+
+          // فقط وقتی مودال سند بازه
+          const mb = document.getElementById('modalBody');
+          if (!mb || !mb.querySelector('.sf-row')) return;
+
+          // ⭐ جلوگیری از search فایرفاکس
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+
+          // باز کردن Picker معین روی ردیف جاری
+          const idx = getFocusedRowIdx();
+          openMoeinPicker(idx);
+          return false;
+      };
+      document.addEventListener('keydown', _pickerKeyHandler, true);
+
       // ⭐ اگه بافر قبلی پر بود، دکمه paste فعال بمونه
       updatePasteBtnState();
+  
   }
 
   function onRowFocus(e) {
@@ -1444,6 +1475,10 @@ async function handleGlobalKey(e) {
                 document.removeEventListener('keydown', _keyHandler, true);
                 _keyHandler = null;
             }
+            if (_pickerKeyHandler) {                                // ⭐ جدید
+                document.removeEventListener('keydown', _pickerKeyHandler, true);
+                _pickerKeyHandler = null;
+            }
             window.App.closeModal();
 
             const currentPage = window.App.state.currentPage;
@@ -1586,29 +1621,36 @@ async function handleGlobalKey(e) {
     }
     // ⭐ فعال/غیرفعال کردن دکمه چسباندن
  
-  async function handleClose() {
-    if (!_state.dirty) {
-        if (_keyHandler) {
-            document.removeEventListener('keydown', _keyHandler, true);
-            _keyHandler = null;
+    async function handleClose() {
+        if (!_state.dirty) {
+            if (_keyHandler) {
+                document.removeEventListener('keydown', _keyHandler, true);
+                _keyHandler = null;
+            }
+            if (_pickerKeyHandler) {                                    // ⭐ جدید
+                document.removeEventListener('keydown', _pickerKeyHandler, true);
+                _pickerKeyHandler = null;
+            }
+            window.App.closeModal();
+            return;
         }
-        window.App.closeModal();
-        return;
-    }
 
-    const action = await showCloseConfirm();
+        const action = await showCloseConfirm();
 
-    if (action === 'save') {
-        save();   // save خودش می‌بنده
-    } else if (action === 'discard') {
-        if (_keyHandler) {
-            document.removeEventListener('keydown', _keyHandler, true);
-            _keyHandler = null;
+        if (action === 'save') {
+            save();
+        } else if (action === 'discard') {
+            if (_keyHandler) {
+                document.removeEventListener('keydown', _keyHandler, true);
+                _keyHandler = null;
+            }
+            if (_pickerKeyHandler) {                                    // ⭐ جدید
+                document.removeEventListener('keydown', _pickerKeyHandler, true);
+                _pickerKeyHandler = null;
+            }
+            window.App.closeModal();
         }
-        window.App.closeModal();
     }
-    // cancel → هیچ کاری نکن
-   }
 
     return { openCreate, openEdit, delete: deleteSanad };
 })();

@@ -33,6 +33,9 @@ public class HesabListItemDto
     public string Level { get; set; } = "";         // col|moein|tafzil
     public string? ParentName { get; set; }         // نام کل (برای معین)
     public string? Kind { get; set; }                  // نوع تفصیلی (0=عادی...4=بازاریاب)
+
+    public int? GroupTypeCode { get; set; }        // ⭐ جدید
+    public string? GroupTypeName { get; set; }     // ⭐ جدید
 }
 
 /// <summary>درخواست ایجاد حساب جدید</summary>
@@ -54,6 +57,7 @@ public class HesabCreateDto
     public int IsCodeMarkaz { get; set; } = 0;
     public int IsCodeProjeh { get; set; } = 0;
     public int? Kind { get; set; } = 0;
+    public int? GroupTypeCode { get; set; }
 }
 
 /// <summary>درخواست ویرایش (null = تغییر نده)</summary>
@@ -70,6 +74,7 @@ public class HesabUpdateDto
     public int? IsCodeMarkaz { get; set; }
     public int? IsCodeProjeh { get; set; }
     public int? Kind { get; set; }
+    public int? GroupTypeCode { get; set; }
 }
 
 /// <summary>وضعیت استفاده‌ی حساب در اسناد</summary>
@@ -78,5 +83,6 @@ public class HesabUsageDto
     public bool UsedInSanad { get; set; }
     public int SanadCount { get; set; }
     public bool HasChildren { get; set; }             // معین دارد؟ تفصیلی دارد؟
+    public string? ChildrenInfo { get; set; }
     public string? Message { get; set; }
 }
