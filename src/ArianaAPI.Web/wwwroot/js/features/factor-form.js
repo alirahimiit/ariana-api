@@ -12,6 +12,33 @@ window.App.Features.FactorForm = (function () {
     const H = window.App.Helpers;
 
     // ═══════════════════════════════════════════════════
+    //  ⭐ Helper امن برای Toast
+    // ═══════════════════════════════════════════════════
+    function _toast(message, type = 'info') {
+        try {
+            if (window.App && typeof window.App.toast === 'function') {
+                window.App.toast(message, type);
+                return;
+            }
+        } catch (e) {
+            console.error('[Toast Error]', e, message);
+        }
+        console.log('[' + type.toUpperCase() + ']', message);
+    }
+
+    // ⭐⭐ Fallback هوشمند برای confirm
+    async function _askConfirm(message, options) {
+        try {
+            if (window.App && typeof window.App.confirm === 'function') {
+                return await window.App.confirm(message, options);
+            }
+        } catch (err) {
+            console.warn('[Confirm] UI جدید خطا داد، از native استفاده می‌شود:', err);
+        }
+        return window.confirm(message);
+    }
+
+    // ═══════════════════════════════════════════════════
     //  STATE
     // ═══════════════════════════════════════════════════
     let _state = {
@@ -152,6 +179,7 @@ window.App.Features.FactorForm = (function () {
 
     // ═══════════════════════════════════════════════════
     //  OPEN — DELETE
+    //  ⭐ تغییر: confirm ساده ← _askConfirm جدید (Danger)
     // ═══════════════════════════════════════════════════
     async function deleteFactor(factorId) {
         if (window.App.Permissions && !window.App.Permissions.can(202)) {
@@ -159,7 +187,16 @@ window.App.Features.FactorForm = (function () {
             return;
         }
 
-        if (!confirm('آیا از حذف این فاکتور مطمئن هستید؟')) return;
+        const ok = await _askConfirm(
+            'آیا از حذف این فاکتور مطمئن هستید؟ این عملیات قابل بازگشت نیست.',
+            {
+                title: 'حذف فاکتور',
+                danger: true,
+                okText: 'بله، حذف کن',
+                cancelText: 'لغو'
+            }
+        );
+        if (!ok) return;
 
         try {
             await window.App.Http.api('/api/factor/' + factorId, { method: 'DELETE' });
@@ -218,30 +255,30 @@ window.App.Features.FactorForm = (function () {
 
         return '' +
             '<div class="ff-section ff-section-top">' +
-              '<div class="ff-section-title">🧾 مشخصات فاکتور</div>' +
-              '<div class="ff-grid ff-grid-4">' +
+            '<div class="ff-section-title">🧾 مشخصات فاکتور</div>' +
+            '<div class="ff-grid ff-grid-4">' +
 
-                '<div class="ff-field">' +
-                  '<label>شماره فاکتور <span class="req">*</span></label>' +
-                  '<input type="text" id="ffNoFactor" value="' + H.esc(h.noFactor || '') + '" class="num-input" dir="ltr">' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>شماره فاکتور <span class="req">*</span></label>' +
+            '<input type="text" id="ffNoFactor" value="' + H.esc(h.noFactor || '') + '" class="num-input" dir="ltr">' +
+            '</div>' +
 
-                '<div class="ff-field">' +
-                  '<label>تاریخ <span class="req">*</span></label>' +
-                  '<input type="text" id="ffDateIn" value="' + H.esc(h.dateIn || '') + '" placeholder="1404/09/26" class="num-input" dir="ltr">' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>تاریخ <span class="req">*</span></label>' +
+            '<input type="text" id="ffDateIn" value="' + H.esc(h.dateIn || '') + '" placeholder="1404/09/26" class="num-input" dir="ltr">' +
+            '</div>' +
 
-                '<div class="ff-field">' +
-                  '<label>نوع فاکتور</label>' +
-                  '<input type="text" value="' + H.esc(getKindTitle(_state.factorKind)) + '" readonly class="ff-readonly">' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>نوع فاکتور</label>' +
+            '<input type="text" value="' + H.esc(getKindTitle(_state.factorKind)) + '" readonly class="ff-readonly">' +
+            '</div>' +
 
-                '<div class="ff-field">' +
-                  '<label>وضعیت</label>' +
-                  '<input type="text" value="' + (isEdit ? 'ویرایش' : 'جدید') + '" readonly class="ff-readonly">' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>وضعیت</label>' +
+            '<input type="text" value="' + (isEdit ? 'ویرایش' : 'جدید') + '" readonly class="ff-readonly">' +
+            '</div>' +
 
-              '</div>' +
+            '</div>' +
             '</div>';
     }
 
@@ -253,59 +290,59 @@ window.App.Features.FactorForm = (function () {
 
         return '' +
             '<div class="ff-section ff-section-customer">' +
-              '<div class="ff-section-title">🧑 اطلاعات ' + label + ' (تفضیلی ۱)</div>' +
+            '<div class="ff-section-title">🧑 اطلاعات ' + label + ' (تفضیلی ۱)</div>' +
 
-              '<div class="ff-grid ff-grid-3">' +
+            '<div class="ff-grid ff-grid-3">' +
 
-                '<div class="ff-field">' +
-                  '<label>کد ' + label + ' <span class="req">*</span></label>' +
-                  '<div class="ff-input-with-btn">' +
+            '<div class="ff-field">' +
+            '<label>کد ' + label + ' <span class="req">*</span></label>' +
+            '<div class="ff-input-with-btn">' +
             '<input type="text" id="ffCodeTafzil" value="' + (c.codeTafzil || '') + '" class="num-input" dir="ltr" placeholder="کد را وارد کنید...">' +
-                    '<button type="button" class="ff-pick-btn" id="ffPickCustomerBtn" title="انتخاب ' + label + '">🔍</button>' +
-                  '</div>' +
-                '</div>' +
+            '<button type="button" class="ff-pick-btn" id="ffPickCustomerBtn" title="انتخاب ' + label + '">🔍</button>' +
+            '</div>' +
+            '</div>' +
 
-                '<div class="ff-field ff-col-2">' +
-                  '<label>نام</label>' +
-                  '<input type="text" id="ffCustomerName" value="' + H.esc(c.name || '') + '" readonly class="ff-readonly">' +
-                '</div>' +
+            '<div class="ff-field ff-col-2">' +
+            '<label>نام</label>' +
+            '<input type="text" id="ffCustomerName" value="' + H.esc(c.name || '') + '" readonly class="ff-readonly">' +
+            '</div>' +
 
-                '<div class="ff-field">' +
-                  '<label>مانده حساب</label>' +
-                  '<input type="text" id="ffMandehHesab" value="' + H.fmt(c.mandeh || 0) + '" readonly class="ff-readonly num-input" dir="ltr">' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>مانده حساب</label>' +
+            '<input type="text" id="ffMandehHesab" value="' + H.fmt(c.mandeh || 0) + '" readonly class="ff-readonly num-input" dir="ltr">' +
+            '</div>' +
 
-                '<div class="ff-field">' +
-                  '<label>تلفن</label>' +
-                  '<input type="text" id="ffCustomerPhone" value="' + H.esc(c.phone || '') + '" readonly class="ff-readonly num-input" dir="ltr">' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>تلفن</label>' +
+            '<input type="text" id="ffCustomerPhone" value="' + H.esc(c.phone || '') + '" readonly class="ff-readonly num-input" dir="ltr">' +
+            '</div>' +
 
-                '<div class="ff-field">' +
-                  '<label>موبایل</label>' +
-                  '<input type="text" id="ffCustomerMobile" value="' + H.esc(c.mobile || '') + '" readonly class="ff-readonly num-input" dir="ltr">' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>موبایل</label>' +
+            '<input type="text" id="ffCustomerMobile" value="' + H.esc(c.mobile || '') + '" readonly class="ff-readonly num-input" dir="ltr">' +
+            '</div>' +
 
-                '<div class="ff-field">' +
-                  '<label>کد ملی</label>' +
-                  '<input type="text" id="ffCustomerNationalCode" value="' + H.esc(c.nationalCode || '') + '" readonly class="ff-readonly num-input" dir="ltr">' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>کد ملی</label>' +
+            '<input type="text" id="ffCustomerNationalCode" value="' + H.esc(c.nationalCode || '') + '" readonly class="ff-readonly num-input" dir="ltr">' +
+            '</div>' +
 
-                '<div class="ff-field">' +
-                  '<label>کد اقتصادی</label>' +
-                  '<input type="text" id="ffCustomerEconomicCode" value="' + H.esc(c.economicCode || '') + '" readonly class="ff-readonly num-input" dir="ltr">' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>کد اقتصادی</label>' +
+            '<input type="text" id="ffCustomerEconomicCode" value="' + H.esc(c.economicCode || '') + '" readonly class="ff-readonly num-input" dir="ltr">' +
+            '</div>' +
 
-                '<div class="ff-field">' +
-                  '<label>استان / شهر</label>' +
-                  '<input type="text" id="ffCustomerState" value="' + H.esc((c.stateName || '') + ' / ' + (c.cityName1 || '')) + '" readonly class="ff-readonly">' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>استان / شهر</label>' +
+            '<input type="text" id="ffCustomerState" value="' + H.esc((c.stateName || '') + ' / ' + (c.cityName1 || '')) + '" readonly class="ff-readonly">' +
+            '</div>' +
 
-              '</div>' +
+            '</div>' +
 
-              '<div class="ff-field ff-col-full" style="margin-top:8px;">' +
-                '<label>آدرس</label>' +
-                '<input type="text" id="ffCustomerAddress" value="' + H.esc(c.address || '') + '" readonly class="ff-readonly">' +
-              '</div>' +
+            '<div class="ff-field ff-col-full" style="margin-top:8px;">' +
+            '<label>آدرس</label>' +
+            '<input type="text" id="ffCustomerAddress" value="' + H.esc(c.address || '') + '" readonly class="ff-readonly">' +
+            '</div>' +
 
             '</div>';
     }
@@ -316,25 +353,25 @@ window.App.Features.FactorForm = (function () {
 
         return '' +
             '<div class="ff-section ff-section-marketer">' +
-              '<div class="ff-section-title">📞 بازاریاب (اختیاری)</div>' +
+            '<div class="ff-section-title">📞 بازاریاب (اختیاری)</div>' +
 
-              '<div class="ff-grid ff-grid-3">' +
+            '<div class="ff-grid ff-grid-3">' +
 
-                '<div class="ff-field">' +
-                  '<label>کد بازاریاب</label>' +
-                  '<div class="ff-input-with-btn">' +
-                    '<input type="text" id="ffCodeMarketer" value="' + (m.codeTafzil || '') + '" class="num-input" dir="ltr" readonly>' +
-                    '<button type="button" class="ff-pick-btn" id="ffPickMarketerBtn" title="انتخاب بازاریاب">🔍</button>' +
-                    '<button type="button" class="ff-pick-btn" id="ffClearMarketerBtn" title="حذف">✕</button>' +
-                  '</div>' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>کد بازاریاب</label>' +
+            '<div class="ff-input-with-btn">' +
+            '<input type="text" id="ffCodeMarketer" value="' + (m.codeTafzil || '') + '" class="num-input" dir="ltr" readonly>' +
+            '<button type="button" class="ff-pick-btn" id="ffPickMarketerBtn" title="انتخاب بازاریاب">🔍</button>' +
+            '<button type="button" class="ff-pick-btn" id="ffClearMarketerBtn" title="حذف">✕</button>' +
+            '</div>' +
+            '</div>' +
 
-                '<div class="ff-field ff-col-2">' +
-                  '<label>نام بازاریاب</label>' +
-                  '<input type="text" id="ffMarketerName" value="' + H.esc(m.name || '') + '" readonly class="ff-readonly">' +
-                '</div>' +
+            '<div class="ff-field ff-col-2">' +
+            '<label>نام بازاریاب</label>' +
+            '<input type="text" id="ffMarketerName" value="' + H.esc(m.name || '') + '" readonly class="ff-readonly">' +
+            '</div>' +
 
-              '</div>' +
+            '</div>' +
             '</div>';
     }
 
@@ -344,29 +381,29 @@ window.App.Features.FactorForm = (function () {
 
         return '' +
             '<div class="ff-section">' +
-              '<div class="ff-section-title">💳 نحوه پرداخت و توضیحات</div>' +
+            '<div class="ff-section-title">💳 نحوه پرداخت و توضیحات</div>' +
 
-              '<div class="ff-grid ff-grid-4">' +
+            '<div class="ff-grid ff-grid-4">' +
 
-                '<div class="ff-field">' +
-                  '<label>نحوه فروش</label>' +
-                  '<select id="ffIsCash" class="ff-select">' +
-                    '<option value="1"' + (h.isCash === 1 ? ' selected' : '') + '>نقدی</option>' +
-                    '<option value="2"' + (h.isCash === 2 ? ' selected' : '') + '>غیرنقدی</option>' +
-                  '</select>' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>نحوه فروش</label>' +
+            '<select id="ffIsCash" class="ff-select">' +
+            '<option value="1"' + (h.isCash === 1 ? ' selected' : '') + '>نقدی</option>' +
+            '<option value="2"' + (h.isCash === 2 ? ' selected' : '') + '>غیرنقدی</option>' +
+            '</select>' +
+            '</div>' +
 
-                '<div class="ff-field">' +
-                  '<label>شماره ماشین</label>' +
-                  '<input type="text" id="ffCarInfo" value="' + H.esc(h.carInfo || '') + '" maxlength="20">' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>شماره ماشین</label>' +
+            '<input type="text" id="ffCarInfo" value="' + H.esc(h.carInfo || '') + '" maxlength="20">' +
+            '</div>' +
 
-                '<div class="ff-field ff-col-2">' +
-                  '<label>توضیحات</label>' +
-                  '<input type="text" id="ffDescript" value="' + H.esc(h.descript || '') + '" maxlength="200">' +
-                '</div>' +
+            '<div class="ff-field ff-col-2">' +
+            '<label>توضیحات</label>' +
+            '<input type="text" id="ffDescript" value="' + H.esc(h.descript || '') + '" maxlength="200">' +
+            '</div>' +
 
-              '</div>' +
+            '</div>' +
             '</div>';
     }
 
@@ -417,13 +454,13 @@ window.App.Features.FactorForm = (function () {
     function buildItemsSection() {
         return '' +
             '<div class="ff-section">' +
-              '<div class="ff-section-header">' +
-                '<div class="ff-section-title">📋 اقلام فاکتور</div>' +
-                '<button type="button" class="btn btn-sm btn-primary" id="ffAddItemBtn">➕ افزودن کالا</button>' +
-              '</div>' +
-              '<div id="ffItemsGridWrap" class="ff-grid-wrap">' +
-                '<div class="ff-grid-empty">هنوز کالایی اضافه نشده — برای شروع «افزودن کالا» را بزنید</div>' +
-              '</div>' +
+            '<div class="ff-section-header">' +
+            '<div class="ff-section-title">📋 اقلام فاکتور</div>' +
+            '<button type="button" class="btn btn-sm btn-primary" id="ffAddItemBtn">➕ افزودن کالا</button>' +
+            '</div>' +
+            '<div id="ffItemsGridWrap" class="ff-grid-wrap">' +
+            '<div class="ff-grid-empty">هنوز کالایی اضافه نشده — برای شروع «افزودن کالا» را بزنید</div>' +
+            '</div>' +
             '</div>';
     }
 
@@ -431,31 +468,31 @@ window.App.Features.FactorForm = (function () {
     function buildBulkSection() {
         return '' +
             '<div class="ff-section ff-section-bulk">' +
-              '<div class="ff-grid ff-grid-3">' +
+            '<div class="ff-grid ff-grid-3">' +
 
-                '<div class="ff-field">' +
-                  '<label>تخفیف گروهی (%)</label>' +
-                  '<div class="ff-input-with-btn">' +
-                    '<input type="text" id="ffBulkDiscountPer" class="num-input" dir="ltr" placeholder="0">' +
-                    '<button type="button" class="btn btn-sm btn-ghost" id="ffApplyBulkDiscount">اعمال</button>' +
-                  '</div>' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>تخفیف گروهی (%)</label>' +
+            '<div class="ff-input-with-btn">' +
+            '<input type="text" id="ffBulkDiscountPer" class="num-input" dir="ltr" placeholder="0">' +
+            '<button type="button" class="btn btn-sm btn-ghost" id="ffApplyBulkDiscount">اعمال</button>' +
+            '</div>' +
+            '</div>' +
 
-                '<div class="ff-field">' +
-                  '<label>هزینه حمل</label>' +
-                  '<input type="text" id="ffTransCost" value="' + H.fmt(_state.header.transCost || 0) + '" class="num-input" dir="ltr">' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>هزینه حمل</label>' +
+            '<input type="text" id="ffTransCost" value="' + H.fmt(_state.header.transCost || 0) + '" class="num-input" dir="ltr">' +
+            '</div>' +
 
-                '<div class="ff-field">' +
-                  '<label>تسهیم حمل</label>' +
-                  '<div class="ff-radio-inline">' +
-                    '<label><input type="radio" name="ffTransMode" value="0" checked> مقدار</label>' +
-                    '<label><input type="radio" name="ffTransMode" value="1"> ارزش</label>' +
-                    '<button type="button" class="btn btn-sm btn-ghost" id="ffApplyTransCost">اعمال</button>' +
-                  '</div>' +
-                '</div>' +
+            '<div class="ff-field">' +
+            '<label>تسهیم حمل</label>' +
+            '<div class="ff-radio-inline">' +
+            '<label><input type="radio" name="ffTransMode" value="0" checked> مقدار</label>' +
+            '<label><input type="radio" name="ffTransMode" value="1"> ارزش</label>' +
+            '<button type="button" class="btn btn-sm btn-ghost" id="ffApplyTransCost">اعمال</button>' +
+            '</div>' +
+            '</div>' +
 
-              '</div>' +
+            '</div>' +
             '</div>';
     }
 
@@ -463,21 +500,21 @@ window.App.Features.FactorForm = (function () {
     function buildTotalsSection() {
         return '' +
             '<div class="ff-totals" id="ffTotals">' +
-              '<div class="ff-total-item">' +
-                '<span>جمع اقلام:</span><strong id="ffTotalCostItem">0</strong>' +
-              '</div>' +
-              '<div class="ff-total-item">' +
-                '<span>جمع تخفیف:</span><strong id="ffTotalDiscount">0</strong>' +
-              '</div>' +
-              '<div class="ff-total-item">' +
-                '<span>جمع مالیات:</span><strong id="ffTotalTax">0</strong>' +
-              '</div>' +
-              '<div class="ff-total-item">' +
-                '<span>جمع حمل:</span><strong id="ffTotalTrans">0</strong>' +
-              '</div>' +
-              '<div class="ff-total-item ff-total-final">' +
-                '<span>مبلغ نهایی:</span><strong id="ffTotalFinall">0</strong>' +
-              '</div>' +
+            '<div class="ff-total-item">' +
+            '<span>جمع اقلام:</span><strong id="ffTotalCostItem">0</strong>' +
+            '</div>' +
+            '<div class="ff-total-item">' +
+            '<span>جمع تخفیف:</span><strong id="ffTotalDiscount">0</strong>' +
+            '</div>' +
+            '<div class="ff-total-item">' +
+            '<span>جمع مالیات:</span><strong id="ffTotalTax">0</strong>' +
+            '</div>' +
+            '<div class="ff-total-item">' +
+            '<span>جمع حمل:</span><strong id="ffTotalTrans">0</strong>' +
+            '</div>' +
+            '<div class="ff-total-item ff-total-final">' +
+            '<span>مبلغ نهایی:</span><strong id="ffTotalFinall">0</strong>' +
+            '</div>' +
             '</div>';
     }
 
@@ -715,16 +752,16 @@ window.App.Features.FactorForm = (function () {
         picker.className = 'ff-picker-overlay';
         picker.innerHTML =
             '<div class="ff-picker-box">' +
-              '<div class="ff-picker-header">' +
-                '<span>' + H.esc(opts.title) + '</span>' +
-                '<button type="button" class="ff-picker-close">✕</button>' +
-              '</div>' +
-              '<div class="ff-picker-search">' +
-                '<input type="text" id="ffPickerSearch" placeholder="جستجو (کد یا نام)...">' +
-              '</div>' +
-              '<div class="ff-picker-list" id="ffPickerList">' +
-                '<div class="ff-picker-empty">در حال بارگذاری...</div>' +
-              '</div>' +
+            '<div class="ff-picker-header">' +
+            '<span>' + H.esc(opts.title) + '</span>' +
+            '<button type="button" class="ff-picker-close">✕</button>' +
+            '</div>' +
+            '<div class="ff-picker-search">' +
+            '<input type="text" id="ffPickerSearch" placeholder="جستجو (کد یا نام)...">' +
+            '</div>' +
+            '<div class="ff-picker-list" id="ffPickerList">' +
+            '<div class="ff-picker-empty">در حال بارگذاری...</div>' +
+            '</div>' +
             '</div>';
         mb.appendChild(picker);
 
@@ -759,7 +796,7 @@ window.App.Features.FactorForm = (function () {
             if (f) {
                 filtered = _allItems.filter(function (x) {
                     return String(x.codeTafzil).indexOf(f) !== -1 ||
-                           (x.name || '').toLowerCase().indexOf(f) !== -1;
+                        (x.name || '').toLowerCase().indexOf(f) !== -1;
                 });
             }
             if (filtered.length === 0) {
@@ -770,12 +807,12 @@ window.App.Features.FactorForm = (function () {
             let html = '';
             filtered.slice(0, 300).forEach(function (x) {
                 html += '<div class="ff-picker-item" data-code="' + x.codeTafzil + '">' +
-                          '<span class="ff-picker-code">' + x.codeTafzil + '</span>' +
-                          '<div class="ff-picker-name-wrap">' +
-                            '<div class="ff-picker-name">' + H.esc(x.name || '') + '</div>' +
-                            '<div class="ff-picker-sub">' + H.esc(x.phone || x.mobile || '') + '</div>' +
-                          '</div>' +
-                        '</div>';
+                    '<span class="ff-picker-code">' + x.codeTafzil + '</span>' +
+                    '<div class="ff-picker-name-wrap">' +
+                    '<div class="ff-picker-name">' + H.esc(x.name || '') + '</div>' +
+                    '<div class="ff-picker-sub">' + H.esc(x.phone || x.mobile || '') + '</div>' +
+                    '</div>' +
+                    '</div>';
             });
             listWrap.innerHTML = html;
         }
@@ -850,8 +887,15 @@ window.App.Features.FactorForm = (function () {
         });
     }
 
-    function removeItem(index) {
-        if (!confirm('این ردیف حذف بشود؟')) return;
+    // ⭐ تغییر: async + _askConfirm (Danger)
+    async function removeItem(index) {
+        const ok = await _askConfirm('این ردیف حذف بشود؟', {
+            title: 'حذف ردیف کالا',
+            danger: true,
+            okText: 'حذف کن',
+            cancelText: 'لغو'
+        });
+        if (!ok) return;
         _state.items.splice(index, 1);
         renderItemsGrid();
         updateTotals();
@@ -869,20 +913,20 @@ window.App.Features.FactorForm = (function () {
 
         let html = '<table class="ff-items-table">' +
             '<thead>' +
-              '<tr>' +
-                '<th style="width:35px;">#</th>' +
-                '<th style="width:80px;">کد کالا</th>' +
-                '<th>نام کالا</th>' +
-                '<th style="width:60px;">واحد</th>' +
-                '<th class="num-col" style="width:70px;">تعداد</th>' +
-                '<th class="num-col" style="width:90px;">قیمت واحد</th>' +
-                '<th class="num-col" style="width:110px;">مبلغ کل</th>' +
-                '<th class="num-col" style="width:100px;">تخفیف</th>' +
-                '<th class="num-col" style="width:90px;">مالیات</th>' +
-                '<th class="num-col" style="width:80px;">حمل</th>' +
-                '<th class="num-col" style="width:110px;">جمع نهایی</th>' +
-                '<th style="width:60px;"></th>' +
-              '</tr>' +
+            '<tr>' +
+            '<th style="width:35px;">#</th>' +
+            '<th style="width:80px;">کد کالا</th>' +
+            '<th>نام کالا</th>' +
+            '<th style="width:60px;">واحد</th>' +
+            '<th class="num-col" style="width:70px;">تعداد</th>' +
+            '<th class="num-col" style="width:90px;">قیمت واحد</th>' +
+            '<th class="num-col" style="width:110px;">مبلغ کل</th>' +
+            '<th class="num-col" style="width:100px;">تخفیف</th>' +
+            '<th class="num-col" style="width:90px;">مالیات</th>' +
+            '<th class="num-col" style="width:80px;">حمل</th>' +
+            '<th class="num-col" style="width:110px;">جمع نهایی</th>' +
+            '<th style="width:60px;"></th>' +
+            '</tr>' +
             '</thead>' +
             '<tbody>';
 
@@ -900,9 +944,9 @@ window.App.Features.FactorForm = (function () {
                 '<td class="num text-left">' + H.fmt(it.transCost) + '</td>' +
                 '<td class="num text-left" style="font-weight:600;">' + H.fmt(it.finallCost) + '</td>' +
                 '<td class="text-center">' +
-                  '<button type="button" class="ff-row-del" data-remove="' + idx + '" title="حذف">🗑️</button>' +
+                '<button type="button" class="ff-row-del" data-remove="' + idx + '" title="حذف">🗑️</button>' +
                 '</td>' +
-              '</tr>';
+                '</tr>';
         });
 
         html += '</tbody></table>';
@@ -1202,14 +1246,76 @@ window.App.Features.FactorForm = (function () {
     }
 
     // ═══════════════════════════════════════════════════
-    //  CANCEL
+    //  ⭐ دیالوگ ۳ گزینه‌ای برای خروج با تغییرات
+    //  (مشابه sanad-form.js)
     // ═══════════════════════════════════════════════════
-    function cancel() {
-        if (_state.items.length > 0) {
-            if (!confirm('تغییرات ذخیره نشده — از فرم خارج بشوید؟')) return;
+    function showCloseConfirm() {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'sf-confirm-overlay';
+            overlay.innerHTML = `
+                <div class="sf-confirm-box">
+                    <div class="sf-confirm-icon">⚠️</div>
+                    <div class="sf-confirm-title">تغییرات ذخیره نشده است</div>
+                    <div class="sf-confirm-msg">آیا می‌خواهید قبل از خروج، تغییرات را ذخیره کنید؟</div>
+                    <div class="sf-confirm-btns">
+                        <button class="btn btn-primary" data-action="save">💾 ذخیره و بستن</button>
+                        <button class="btn btn-danger" data-action="discard">🗑️ بستن بدون ذخیره</button>
+                        <button class="btn btn-ghost" data-action="cancel">لغو</button>
+                    </div>
+                </div>`;
+
+            document.body.appendChild(overlay);
+
+            const cleanup = () => {
+                document.removeEventListener('keydown', escHandler, true);
+                overlay.remove();
+            };
+
+            const escHandler = (e) => {
+                if (e.key === 'Escape') {
+                    e.stopPropagation();
+                    cleanup();
+                    resolve('cancel');
+                }
+            };
+
+            overlay.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    cleanup();
+                    resolve(btn.dataset.action);
+                });
+            });
+
+            document.addEventListener('keydown', escHandler, true);
+        });
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  CANCEL — خروج از فرم
+    //  ⭐ تغییر: با showCloseConfirm (۳ گزینه)
+    // ═══════════════════════════════════════════════════
+    async function cancel() {
+        const hasChanges = _state.items.length > 0
+            || _state.customer != null
+            || _state.marketer != null;
+
+        if (!hasChanges) {
+            // بدون تغییر → مستقیم ببند
+            unbindKeyboard();
+            window.App.closeModal();
+            return;
         }
-        unbindKeyboard();
-        window.App.closeModal();
+
+        const action = await showCloseConfirm();
+
+        if (action === 'save') {
+            save();
+        } else if (action === 'discard') {
+            unbindKeyboard();
+            window.App.closeModal();
+        }
+        // 'cancel' → هیچ کاری نکن (برگشت به فرم)
     }
 
     // ═══════════════════════════════════════════════════

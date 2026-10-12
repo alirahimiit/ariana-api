@@ -813,8 +813,18 @@ window.App.Features.Factor = (function () {
             return;
         }
 
-        if (!confirm('آیا از حذف سند مرتبط با این فاکتور مطمئن هستید؟\n' +
-            '(سند فقط در صورت غیرقطعی بودن حذف می‌شود)')) return;
+        const ok = await window.App.confirm(
+            'آیا از حذف سند مرتبط با این فاکتور مطمئن هستید؟\n\n' +
+            '(سند فقط در صورت غیرقطعی بودن حذف می‌شود)',
+            {
+                title: 'حذف سند حسابداری',
+                danger: true,
+                okText: 'بله، حذف کن',
+                cancelText: 'لغو'
+            }
+        );
+        if (!ok) return;
+
 
         try {
             await window.App.Http.api('/api/factor/' + factorId + '/sanad', {

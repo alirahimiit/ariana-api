@@ -10,6 +10,7 @@ window.App.Features.SanadForm = (function () {
     'use strict';
 
     const H = window.App.Helpers;
+
     // ⭐ Clipboard در سطح App — بین اسناد و صفحات حفظ می‌شه
     function getClipboard() {
         if (!window.App.state) window.App.state = {};
