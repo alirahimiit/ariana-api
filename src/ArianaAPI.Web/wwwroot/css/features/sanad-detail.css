@@ -1556,3 +1556,67 @@ tr.row-selected {
         font-size: 11px;
     }
 }
+/* ═══════════════════════════════════════════════════
+   TikRow — علامت‌گذاری ردیف
+   ═══════════════════════════════════════════════════ */
+.sf-row.sf-row-tik {
+    background: #FFFBEB !important;
+    border-left: 4px solid #F59E0B !important;
+    box-shadow: inset 4px 0 0 #F59E0B, 0 0 0 1px rgba(245, 158, 11, 0.15);
+    position: relative;
+}
+
+    .sf-row.sf-row-tik::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        background: linear-gradient(90deg, rgba(245, 158, 11, 0.05) 0%, transparent 30%);
+        pointer-events: none;
+        border-radius: 6px;
+    }
+
+.sf-row-num {
+    position: relative;
+}
+
+.sf-row-tik-badge {
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    width: 16px;
+    height: 16px;
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);
+    animation: tikPulse 2s ease-in-out infinite;
+    z-index: 2;
+}
+
+@keyframes tikPulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.12);
+    }
+}
+
+.sf-row-tool.sf-tool-tik-active {
+    background: #F59E0B !important;
+    color: #fff !important;
+    border-color: #D97706 !important;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+}
+
+    .sf-row-tool.sf-tool-tik-active:hover {
+        background: #D97706 !important;
+    }

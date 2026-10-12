@@ -39,4 +39,8 @@ public class SanadItemInputDto
 
     [JsonPropertyName("meghdar")]
     public decimal? Meghdar { get; set; }
+    
+    [JsonPropertyName("tikRow")]
+    public int? TikRow { get; set; }    // ⭐ جدید
+
 }

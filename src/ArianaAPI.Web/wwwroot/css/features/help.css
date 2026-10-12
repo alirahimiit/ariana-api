@@ -1,0 +1,417 @@
+﻿/* ═══════════════════════════════════════════════════
+   Help System — FAB + Slide Panel (RTL)
+   ═══════════════════════════════════════════════════ */
+
+/* ═══ FAB ═══
+   نکته: اگر FAB پشتیبانی جای دیگه‌ایه،
+   فقط مقدار left رو تغییر بده.
+   الان ۸۸px یعنی «۸px بعد از FAB پشتیبانی فرضی» */
+.help-fab {
+    position: fixed;
+    bottom: 88px; /* ⭐ رفت بالای FAB پشتیبانی */
+    left: 24px; /* ⭐ هم‌تراز با FAB پشتیبانی، کنار لبه */
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    color: #fff;
+    border: none;
+    font-size: 26px;
+    font-weight: 700;
+    font-family: 'Vazirmatn', system-ui, sans-serif;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9998;
+    transition: transform .2s ease, box-shadow .2s ease;
+    line-height: 1;
+    padding: 0;
+}
+
+    .help-fab:hover {
+        transform: scale(1.08);
+        box-shadow: 0 8px 24px rgba(99,102,241,.55);
+    }
+
+    .help-fab:active {
+        transform: scale(.96);
+    }
+
+    .help-fab[hidden] {
+        display: none !important;
+    }
+
+/* ═══ Overlay ═══ */
+.help-panel-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease;
+    z-index: 99998;
+}
+
+    .help-panel-overlay.open {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+/* ═══ Panel ═══ */
+.help-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 420px;
+    max-width: 100vw;
+    background: #fff;
+    box-shadow: -8px 0 32px rgba(15, 23, 42, 0.15);
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform .3s cubic-bezier(.4, 0, .2, 1);
+    direction: rtl;
+}
+
+    .help-panel.open {
+        transform: translateX(0);
+    }
+
+/* ═══ Header ═══ */
+.help-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid #E5E7EB;
+    background: linear-gradient(135deg, #EEF2FF, #F5F3FF);
+    flex-shrink: 0;
+}
+
+.help-panel-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.help-panel-title-wrap {
+    flex: 1;
+    min-width: 0;
+}
+
+.help-panel-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1F2937;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.help-panel-subtitle {
+    font-size: 12px;
+    color: #6B7280;
+    margin-top: 2px;
+}
+
+.help-panel-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: #6B7280;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background .15s ease;
+    flex-shrink: 0;
+}
+
+    .help-panel-close:hover {
+        background: rgba(0,0,0,.06);
+        color: #1F2937;
+    }
+
+/* ═══ Body ═══ */
+.help-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    scrollbar-width: thin;
+}
+
+    .help-panel-body::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .help-panel-body::-webkit-scrollbar-thumb {
+        background: #D1D5DB;
+        border-radius: 4px;
+    }
+
+/* ═══ Sections ═══ */
+.help-section {
+    margin-bottom: 28px;
+}
+
+    .help-section:last-child {
+        margin-bottom: 0;
+    }
+
+.help-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #F3F4F6;
+}
+
+.help-section-icon {
+    font-size: 16px;
+}
+
+.help-text {
+    font-size: 13.5px;
+    line-height: 2;
+    color: #4B5563;
+}
+
+    .help-text p {
+        margin: 0 0 10px;
+    }
+
+        .help-text p:last-child {
+            margin-bottom: 0;
+        }
+
+    .help-text ul {
+        margin: 8px 0;
+        padding-right: 20px;
+    }
+
+    .help-text li {
+        margin-bottom: 6px;
+    }
+
+/* ═══ Keys ═══ */
+.help-keys {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.help-key-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: #F9FAFB;
+    border-radius: 10px;
+    border: 1px solid #F3F4F6;
+    transition: background .15s ease;
+}
+
+    .help-key-row:hover {
+        background: #F3F4F6;
+    }
+
+.help-key-badge {
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #4338CA;
+    background: #E0E7FF;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid #C7D2FE;
+    border-bottom-width: 2px;
+    white-space: nowrap;
+    min-width: 60px;
+    text-align: center;
+    direction: ltr;
+}
+
+.help-key-desc {
+    flex: 1;
+    font-size: 13px;
+    color: #4B5563;
+}
+
+/* ═══ Steps ═══ */
+.help-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.help-step {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.help-step-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.help-step-text {
+    flex: 1;
+    font-size: 13.5px;
+    line-height: 1.8;
+    color: #4B5563;
+    padding-top: 3px;
+}
+
+/* ═══ Tip ═══ */
+.help-tip {
+    display: flex;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.8;
+    margin-bottom: 10px;
+}
+
+    .help-tip.info {
+        background: #DBEAFE;
+        border: 1px solid #BFDBFE;
+        color: #1E40AF;
+    }
+
+    .help-tip.warn {
+        background: #FEF3C7;
+        border: 1px solid #FDE68A;
+        color: #78350F;
+    }
+
+    .help-tip.danger {
+        background: #FEE2E2;
+        border: 1px solid #FECACA;
+        color: #991B1B;
+    }
+
+    .help-tip.success {
+        background: #D1FAE5;
+        border: 1px solid #A7F3D0;
+        color: #065F46;
+    }
+
+.help-tip-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+/* ═══ Empty ═══ */
+.help-empty {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.help-empty-icon {
+    font-size: 56px;
+    opacity: .25;
+    margin-bottom: 16px;
+}
+
+.help-empty-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 6px;
+}
+
+.help-empty-text {
+    font-size: 13px;
+    color: #6B7280;
+    line-height: 1.8;
+}
+
+/* ═══ Footer ═══ */
+.help-panel-footer {
+    flex-shrink: 0;
+    padding: 12px 20px;
+    border-top: 1px solid #E5E7EB;
+    background: #F9FAFB;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11.5px;
+    color: #6B7280;
+}
+
+.help-shortcut-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+    .help-shortcut-hint kbd {
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        font-size: 11px;
+        padding: 3px 7px;
+        background: #fff;
+        border: 1px solid #D1D5DB;
+        border-bottom-width: 2px;
+        border-radius: 5px;
+        color: #4338CA;
+        direction: ltr;
+    }
+
+/* ═══ Mobile ═══ */
+@media (max-width: 768px) {
+    .help-fab {
+        bottom: 160px; /* ⭐ در موبایل FAB پشتیبانی پایین‌تره */
+        left: 20px;
+        width: 48px;
+        height: 48px;
+        font-size: 22px;
+    }
+
+    .help-panel {
+        width: 100vw;
+        max-width: 100vw;
+    }
+
+    .help-panel-body {
+        padding: 16px;
+    }
+}
+
+.help-loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6B7280;
+    font-size: 13px;
+}

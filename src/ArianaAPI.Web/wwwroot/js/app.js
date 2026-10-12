@@ -125,6 +125,7 @@ window.App = Object.assign(window.App || {}, {
         }
 
         window.App.Features.Messaging?.initFab();
+        window.HelpUI?.init();
         this._setupTabSync();
     },
 

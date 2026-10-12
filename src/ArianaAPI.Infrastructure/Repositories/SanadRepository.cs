@@ -418,7 +418,7 @@ public class SanadRepository : ISanadRepository
                      @codeCol, @codeMoein, @codeTafzil, @codeTafzili2, @tafzili2Id,
                      @codeSharh, @otherSharh,
                      @mabBed, @mabBes, @meghdar,
-                     0, 0, -1,
+                     @tikRow, 0, -1,
                      @userCode, @dateOp, @timeOp)";
 
             var rowNum = 1;
@@ -440,6 +440,7 @@ public class SanadRepository : ISanadRepository
                         mabBed = item.MabBed,
                         mabBes = item.MabBes,
                         meghdar = item.Meghdar ?? 0m,
+                        tikRow = item.TikRow ?? 0,
                         userCode = userCode,
                         dateOp = GetTodayPersian(),
                         timeOp = GetCurrentTime()
@@ -544,7 +545,7 @@ public class SanadRepository : ISanadRepository
                      @codeCol, @codeMoein, @codeTafzil, @codeTafzili2, @tafzili2Id,
                      @codeSharh, @otherSharh,
                      @mabBed, @mabBes, @meghdar,
-                     0, 0, -1,
+                     @tikRow, 0, -1,
                      @userCode, @dateOp, @timeOp)";
 
             var rowNum = 1;
@@ -566,6 +567,7 @@ public class SanadRepository : ISanadRepository
                         mabBed = item.MabBed,
                         mabBes = item.MabBes,
                         meghdar = item.Meghdar ?? 0m,
+                        tikRow = item.TikRow ?? 0,
                         userCode = userCode,
                         dateOp = GetTodayPersian(),
                         timeOp = GetCurrentTime()

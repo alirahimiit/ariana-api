@@ -77,7 +77,8 @@ window.App.Features.SanadForm = (function () {
     function emptyRow() {
         return {
             codeCol: 0, codeMoein: 0, codeTafzil: 0, codeTafzili2: 0,
-            tafzili2Id: 0, codeSharh: 0, otherSharh: '', mabBed: 0, mabBes: 0, meghdar: 0
+            tafzili2Id: 0, codeSharh: 0, otherSharh: '', mabBed: 0, mabBes: 0, meghdar: 0,
+            tikRow: 0
         };
     }
 
@@ -263,7 +264,8 @@ window.App.Features.SanadForm = (function () {
                     otherSharh: it.otherSharh || '',
                     mabBed: it.mabBed || 0,
                     mabBes: it.mabBes || 0,
-                    meghdar: Math.abs(it.meghdar || 0)
+                    meghdar: Math.abs(it.meghdar || 0),
+                    tikRow: it.tikRow || it.TikRow || 0
                 }))
             };
             // ⭐ _clipboard رو دست نزن — بین اسناد حفظ می‌شه
@@ -336,7 +338,7 @@ window.App.Features.SanadForm = (function () {
         ].map(o => `<option value="${o.v}" ${h.kindSanad === o.v ? 'selected' : ''}>${o.t}</option>`).join('');
 
         return `
-            <div class="sanad-form">
+            <div class="sanad-form" data-help="sanad-form">
                 <div class="sanad-form-header">
                     <div class="sf-field">
                         <label>شماره سند</label>
@@ -464,11 +466,14 @@ window.App.Features.SanadForm = (function () {
         const bedStr = bed ? bed.toLocaleString('en-US') : '';
         const besStr = bes ? bes.toLocaleString('en-US') : '';
         const meghStr = megh ? parseFloat(Number(megh).toFixed(4)).toString() : '';
+        const isTik = (item.tikRow || 0) === 1;
 
         return `<div class="sf-row ${idx === _state.focusedIdx ? 'sf-row-focused' : ''} ${_state.selectedRows?.has(idx) ? 'sf-row-selected' : ''}" data-row-idx="${idx}">
                 <div class="sf-row-num">
-                    <input type="checkbox" class="sf-row-check" data-idx="${idx}" ${_state.selectedRows?.has(idx) ? 'checked' : ''} title="انتخاب برای کپی (Ctrl+F9)">
+                    <input type="checkbox" class="sf-row-check" data-idx="${idx}"
+                    ${_state.selectedRows?.has(idx) ? 'checked' : ''} title="انتخاب برای کپی (Ctrl+F9)">
                     <span class="sf-row-num-text">${idx + 1}</span>
+                  ${isTik ? '<span class="sf-row-tik-badge" title="ردیف علامت‌گذاری‌شده (F8)">✓</span>' : ''}
                 </div>
                 <div class="sf-row-body">
                     <div class="sf-line sf-line-codes">
@@ -531,6 +536,7 @@ window.App.Features.SanadForm = (function () {
                             <button type="button" class="sf-row-tool" data-idx="${idx}" data-action="up" title="بالا (F6)">▲</button>
                             <button type="button" class="sf-row-tool" data-idx="${idx}" data-action="down" title="پایین (Ctrl+F6)">▼</button>
                             <button type="button" class="sf-row-tool" data-idx="${idx}" data-action="swap" title="جابجایی (F7)">⇅</button>
+                            <button type="button" class="sf-row-tool ${isTik ? 'sf-tool-tik-active' : ''}" data-idx="${idx}" data-action="tik" title="علامت‌گذاری (F8)">✓</button>
                             <button type="button" class="sf-row-tool" data-idx="${idx}" data-action="dup" title="تکثیر">⧉</button>
                             <button type="button" class="sf-row-tool sf-row-del" data-idx="${idx}" data-action="del" title="حذف (Ctrl+Del)">🗑️</button>
                         </div>
@@ -876,6 +882,49 @@ window.App.Features.SanadForm = (function () {
         updatePasteBtnState();
     }
 
+    // ⭐⭐ تغییر وضعیت TikRow ردیف
+    function toggleTikRow(idx) {
+        const it = _state.items[idx];
+        if (!it) return;
+
+        // ⭐ toggle
+        it.tikRow = (it.tikRow || 0) === 1 ? 0 : 1;
+        _state.dirty = true;
+
+        // ⭐ آپدیت DOM بدون re-render
+        const wrap = document.getElementById('sfRowsWrap');
+        const row = wrap?.querySelector(`.sf-row[data-row-idx="${idx}"]`);
+        if (row) {
+            row.classList.toggle('sf-row-tik', it.tikRow === 1);
+
+            // آپدیت badge در شماره ردیف
+            const numWrap = row.querySelector('.sf-row-num');
+            if (numWrap) {
+                let badge = numWrap.querySelector('.sf-row-tik-badge');
+                if (it.tikRow === 1 && !badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'sf-row-tik-badge';
+                    badge.title = 'ردیف علامت‌گذاری‌شده (F8)';
+                    badge.textContent = '✓';
+                    numWrap.appendChild(badge);
+                } else if (it.tikRow !== 1 && badge) {
+                    badge.remove();
+                }
+            }
+
+            // آپدیت دکمه ابزار
+            const tikBtn = row.querySelector('.sf-row-tool[data-action="tik"]');
+            if (tikBtn) {
+                tikBtn.classList.toggle('sf-tool-tik-active', it.tikRow === 1);
+            }
+        }
+
+        window.App.toast(
+            it.tikRow === 1 ? 'ردیف علامت‌گذاری شد ✓' : 'علامت‌گذاری برداشته شد',
+            'success',
+            { duration: 1500 }
+        );
+    }
 
     // ═══ KEYBOARD ═══
     let _keyHandler = null;
@@ -955,6 +1004,12 @@ window.App.Features.SanadForm = (function () {
         swapBedBes(getFocusedRowIdx());
         return;
     }
+     // ⭐ F8 → toggle TikRow
+     if (e.key === 'F8' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+         e.preventDefault(); e.stopPropagation();
+         toggleTikRow(getFocusedRowIdx());
+         return;
+     }
     // Ctrl+F9 → کپی
     if (e.key === 'F9' && e.ctrlKey && !e.shiftKey) {
         e.preventDefault(); copyRows(); return;
@@ -1008,6 +1063,7 @@ window.App.Features.SanadForm = (function () {
       mb.addEventListener('input', onFieldInput);
       mb.addEventListener('click', onRowClick);
       mb.addEventListener('focusin', onRowFocus);
+      mb.addEventListener('keydown', onMoneyAddZerosKey);
 
       if (_keyHandler) document.removeEventListener('keydown', _keyHandler, true);
       _keyHandler = handleGlobalKey;
@@ -1043,7 +1099,58 @@ window.App.Features.SanadForm = (function () {
       updatePasteBtnState();
   
   }
+    // ⭐⭐ کلید + : افزودن 000 به bed/bes
+    function onMoneyAddZerosKey(e) {
+        const t = e.target;
 
+        // فقط روی bed یا bes
+        if (!t.classList.contains('sf-bed') && !t.classList.contains('sf-bes')) return;
+
+        // تشخیص کلید + (main keyboard یا numpad)
+        const isPlus =
+            e.key === '+' ||
+            e.code === 'NumpadAdd' ||
+            (e.shiftKey && e.key === '=');
+
+        if (!isPlus) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const idx = parseInt(t.dataset.idx);
+        if (isNaN(idx)) return;
+
+        // ⭐ مقدار فعلی (نرمال‌سازی‌شده)
+        const rawVal = (t.value || '').trim();
+        const numVal = parseNum(rawVal);
+
+        // اگه خالی یا صفر → کاری نکن
+        if (!rawVal || numVal === 0) {
+            window.App.toast('ابتدا یک عدد وارد کنید', 'info', { duration: 1500 });
+            return;
+        }
+
+        // ⭐ ضرب در ۱۰۰۰ (یعنی افزودن 000)
+        const newVal = numVal * 1000;
+        const formatted = newVal.toLocaleString('en-US');
+
+        t.value = formatted;
+
+        // کرسر رو ببر به آخر
+        try { t.setSelectionRange(formatted.length, formatted.length); } catch { }
+
+        // ⭐ آپدیت state
+        if (t.classList.contains('sf-bed')) {
+            _state.items[idx].mabBed = newVal;
+        } else {
+            _state.items[idx].mabBes = newVal;
+        }
+
+        _state.dirty = true;
+        recalcTotals();
+
+        window.App.toast(`×۱۰۰۰ → ${formatted}`, 'success', { duration: 1200 });
+    }
   function onRowFocus(e) {
         const t = e.target;
         if (t && t.dataset && t.dataset.idx !== undefined) {
@@ -1149,6 +1256,7 @@ window.App.Features.SanadForm = (function () {
             if (action === 'up') moveRowUp(idx);
             else if (action === 'down') moveRowDown(idx);
             else if (action === 'swap') swapBedBes(idx);
+            else if (action === 'tik') toggleTikRow(idx); 
             else if (action === 'dup') duplicateRow(idx);
             else if (action === 'del') {
                 const ok = await _askConfirm('این ردیف حذف شود؟', {
@@ -1457,7 +1565,7 @@ window.App.Features.SanadForm = (function () {
                 codeTafzil: it.codeTafzil, codeTafzili2: it.codeTafzili2,
                 tafzili2Id: it.tafzili2Id, codeSharh: it.codeSharh,
                 otherSharh: it.otherSharh, mabBed: it.mabBed, mabBes: it.mabBes,
-                meghdar: Math.abs(it.meghdar || 0)
+                meghdar: Math.abs(it.meghdar || 0), tikRow: it.tikRow || 0
             }))
         };
 
@@ -1559,6 +1667,8 @@ window.App.Features.SanadForm = (function () {
                 <div class="sf-hi-item"><kbd>F6</kbd><span>انتقال ردیف به بالا</span></div>
                 <div class="sf-hi-item"><kbd>Ctrl</kbd>+<kbd>F6</kbd><span>انتقال ردیف به پایین</span></div>
                 <div class="sf-hi-item"><kbd>F7</kbd><span>جابجایی بدهکار ↔ بستانکار</span></div>
+                <div class="sf-hi-item"><kbd>F8</kbd><span>علامت‌گذاری ردیف (تیک)</span></div>
+                <div class="sf-hi-item"><kbd>+</kbd><span>پاک کردن bed/bes (اگه غیرصفر باشه)</span></div>
                 <div class="sf-hi-item"><kbd>Insert</kbd><span>افزودن ردیف</span></div>
                 <div class="sf-hi-item"><kbd>Ctrl</kbd>+<kbd>Del</kbd><span>حذف ردیف</span></div>
                 <div class="sf-hi-item"><kbd>Ctrl</kbd>+<kbd>F9</kbd><span>کپی ردیف</span></div>
