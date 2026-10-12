@@ -79,6 +79,10 @@ window.App = Object.assign(window.App || {}, {
         // ⭐ رصد خودکار جدول‌های جدید
         this._initTableObserver();
 
+        // ⭐ انتخاب ردیف با کلیک
+        this._initRowSelect();
+
+
 
         // ⭐ تشخیص دستگاه
         this.detectDevice();
@@ -240,6 +244,43 @@ window.App = Object.assign(window.App || {}, {
             subtree: true
         });
     },
+    // ═══════════════════════════════════════════
+    //  ROW SELECT — انتخاب ردیف با کلیک
+    //  کلیک = تک‌انتخاب | Ctrl+کلیک = چندتایی
+    // ═══════════════════════════════════════════
+    _initRowSelect() {
+        if (this._rowSelectInitialized) return;
+        this._rowSelectInitialized = true;
+
+        document.addEventListener('click', (e) => {
+            // روی دکمه/لینک/input کلیک شده؟ بی‌خیال
+            if (e.target.closest('button, a, input, select, textarea, label, .no-row-select')) return;
+
+            const tr = e.target.closest('tbody tr');
+            if (!tr) return;
+
+            const table = tr.closest('table');
+            if (!table) return;
+            if (table.hasAttribute('data-no-row-select')) return;
+
+            // ⭐ جدول‌هایی که با mobile-card-view تبدیل شدن → نادیده بگیر
+            if (table.classList.contains('mobile-card-view') && window.matchMedia('(max-width: 768px)').matches) return;
+
+            if (e.ctrlKey || e.metaKey) {
+                // چندتایی
+                tr.classList.toggle('row-selected');
+            } else {
+                // تک‌انتخاب
+                table.querySelectorAll('tbody tr.row-selected').forEach(r => {
+                    if (r !== tr) r.classList.remove('row-selected');
+                });
+                tr.classList.toggle('row-selected');
+            }
+        });
+
+        console.log('[RowSelect] ✓ فعال — کلیک/Ctrl+کلیک');
+    },
+
 
     openSidebar() {
         document.getElementById('appSidebar')?.classList.add('open');
@@ -844,6 +885,29 @@ window.App = Object.assign(window.App || {}, {
             window.App.UI.PermissionGuard.apply(c);
         }
     },
+    // ⭐ دریافت ردیف‌های انتخاب‌شده
+    getSelectedRows(tableSelector) {
+        const tbl = tableSelector
+            ? document.querySelector(tableSelector)
+            : document.querySelector('table');
+        if (!tbl) return [];
+        return Array.from(tbl.querySelectorAll('tbody tr.row-selected'));
+    },
+
+    // ⭐ پاک کردن انتخاب
+    clearRowSelection(tableSelector) {
+        const tbl = tableSelector
+            ? document.querySelector(tableSelector)
+            : document.querySelectorAll('table');
+        if (!tbl) return;
+        if (tbl.length && !tbl.querySelectorAll) {
+            // single element
+            tbl.querySelectorAll('tbody tr.row-selected').forEach(r => r.classList.remove('row-selected'));
+        } else {
+            // NodeList
+            tbl.forEach(t => t.querySelectorAll('tbody tr.row-selected').forEach(r => r.classList.remove('row-selected')));
+        }
+    },
 
     // ═══════════════════════════════════════════
     //  تغییر رمز
@@ -1101,6 +1165,7 @@ window.App = Object.assign(window.App || {}, {
             location.reload();
         });
     },
+
 
 });
 

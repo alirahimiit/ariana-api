@@ -1,13 +1,4 @@
 ﻿/* ═══════════════════════════════════════════════════
-   Feature / ArticleForm — فرم ویرایش کالا
-   ═══════════════════════════════════════════════════
-   وابستگی‌ها:
-     - window.App.Helpers (fmt, esc)
-     - window.App.Http (api)
-     - window.App.openModal / closeModal / toast
-     - window.App.Features.Article.loadList (برای ریفرش)
-   ═══════════════════════════════════════════════════ */
-/* ═══════════════════════════════════════════════════
    Feature / ArticleForm — ویرایش + درج کالا (v4)
    ═══════════════════════════════════════════════════ */
 
@@ -49,7 +40,15 @@ window.App.Features.ArticleForm = (function () {
             _cache.units = artLookups && artLookups.units ? artLookups.units : [];
             _cache.stockTypes = artLookups && artLookups.stockTypes ? artLookups.stockTypes : [];
             _cache.cols = (tree || []).filter(x => x.level === 'col').sort((a, b) => a.codeCol - b.codeCol);
-            _cache.moeins = (tree || []).filter(x => x.level === 'moein').sort((a, b) => a.codeCol - b.codeCol || a.codeMoein - b.codeMoein);
+            _cache.moeins = (tree || [])
+                .filter(x => x.level === 'moein')
+                .map(m => ({
+                    codeCol: parseInt(m.codeCol),
+                    codeMoein: parseInt(m.codeMoein),
+                    name: m.name,
+                    hasTafzili: m.hasTafzili === true || m.hasTafzili === 1
+                }))
+                .sort((a, b) => a.codeCol - b.codeCol || a.codeMoein - b.codeMoein);
             _cache.tafzils = (tafziliResp && tafziliResp.items ? tafziliResp.items : []).map(t => ({
                 code: parseInt(t.codeTafzil),
                 name: t.name
@@ -65,7 +64,6 @@ window.App.Features.ArticleForm = (function () {
     //  OPEN CREATE
     // ═══════════════════════════════════════
     async function openCreate() {
-        // ⭐ گارد دسترسی
         if (window.App.Permissions && !window.App.Permissions.can(190)) {
             window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
             return;
@@ -84,7 +82,6 @@ window.App.Features.ArticleForm = (function () {
     //  OPEN EDIT
     // ═══════════════════════════════════════
     async function openEdit(articleId) {
-        // ⭐ گارد دسترسی
         if (window.App.Permissions && !window.App.Permissions.can(191)) {
             window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
             return;
@@ -118,6 +115,7 @@ window.App.Features.ArticleForm = (function () {
         html += sectionCoding('فروش', 'sale', d.codeCol, d.codeMoein, d.codeTafzil, '💵');
         html += sectionCoding('برگشت خرید', 'rebuy', d.codeColReBuy, d.codeMoeinReBuy, d.codeTafzilReBuy, '↩️');
         html += sectionCoding('برگشت فروش', 'resale', d.codeColReSale, d.codeMoeinReSale, d.codeTafzilReSale, '↪️');
+        html += sectionStats(d);
         html += sectionPrices(d);
         html += sectionSettings(d);
         html += '<div class="af-footer">';
@@ -136,16 +134,32 @@ window.App.Features.ArticleForm = (function () {
     // ═══════════════════════════════════════
     function sectionStockGroup(d, isEdit) {
         if (isEdit) {
+            // ⭐ در ویرایش: select های قفل‌شده با مقادیر فعلی
+            let stockOpts = '';
+            _cache.stockTypes.forEach(s => {
+                const sel = String(s.id) === String(d.stockTypeId) ? 'selected' : '';
+                stockOpts += '<option value="' + s.id + '" ' + sel + '>' + H.esc(s.name || '') + '</option>';
+            });
+
+            let groupOpts = '';
+            const groupsForStock = _cache.groups.filter(g => String(g.stockTypeId) === String(d.stockTypeId));
+            groupsForStock.forEach(g => {
+                const sel = String(g.id) === String(d.articleGroupId) ? 'selected' : '';
+                groupOpts += '<option value="' + g.id + '" ' + sel + '>' + H.esc(g.name || '') + '</option>';
+            });
+
             return '<div class="af-section af-section-top">' +
-                '<div class="af-section-title">📦 انبار و گروه کالا</div>' +
+                '<div class="af-section-title">📦 انبار و گروه کالا ' +
+                '<button type="button" class="af-unlock-btn" id="afUnlockStockBtn" title="ویرایش دستی">🔓</button>' +
+                '</div>' +
                 '<div class="af-grid af-grid-3">' +
                 '<div class="af-field">' +
                 '<label>انبار</label>' +
-                '<input type="text" value="' + H.esc(d.stockTypeName || '') + '" readonly class="af-readonly">' +
+                '<select id="afStockTypeId" disabled>' + stockOpts + '</select>' +
                 '</div>' +
                 '<div class="af-field">' +
                 '<label>گروه کالا</label>' +
-                '<input type="text" value="' + H.esc(d.articleGroupName || '') + '" readonly class="af-readonly">' +
+                '<select id="afGroupId" disabled>' + groupOpts + '</select>' +
                 '</div>' +
                 '<div class="af-field">' +
                 '<label>کد کالا (کدینگ) <button type="button" class="af-unlock-btn" id="afUnlockCodeBtn" title="ویرایش دستی">🔓</button></label>' +
@@ -155,6 +169,7 @@ window.App.Features.ArticleForm = (function () {
                 '</div>';
         }
 
+        // create mode — بدون تغییر
         let stockOpts = '<option value="0">-- انتخاب انبار --</option>';
         _cache.stockTypes.forEach(s => {
             stockOpts += '<option value="' + s.id + '">' + H.esc(s.name || '') + ' (کد ' + (s.code || '') + ')</option>';
@@ -178,7 +193,6 @@ window.App.Features.ArticleForm = (function () {
             '</div>' +
             '</div>';
     }
-
     // ═══════════════════════════════════════
     //  Section: اطلاعات پایه
     // ═══════════════════════════════════════
@@ -238,16 +252,13 @@ window.App.Features.ArticleForm = (function () {
             '<div class="af-field">' +
             '<label>وضعیت کالا</label>' +
             '<select id="afStatus">' +
-            '<option value="0"' + (d.status === 0 ? ' selected' : '') + '>غیرفعال</option>' +
-            '<option value="1"' + (d.status === 1 || d.status === undefined ? ' selected' : '') + '>فعال</option>' +
-            '<option value="2"' + (d.status === 2 ? ' selected' : '') + '>انباری</option>' +
-            '<option value="3"' + (d.status === 3 ? ' selected' : '') + '>اموالی</option>' +
+            '<option value="0"' + (d.status === 0 || d.status === 2 ? ' selected' : '') + '>مشاهده در انبار</option>' +
+            '<option value="1"' + (d.status === 1 || d.status === 3 || d.status === undefined ? ' selected' : '') + '>مشاهده در اموال</option>' +
             '</select>' +
             '</div>' +
             '</div>' +
             '</div>';
     }
-
     // ═══════════════════════════════════════
     //  Section: کدینگ
     // ═══════════════════════════════════════
@@ -301,6 +312,32 @@ window.App.Features.ArticleForm = (function () {
             '</div>';
     }
 
+    // ═══════════════════════════════════════
+    //  Section: آمار حرکات (فقط در ویرایش)
+    // ═══════════════════════════════════════
+    function sectionStats(d) {
+        if (_state.mode !== 'edit') return '';
+
+        return '<div class="af-section">' +
+            '<div class="af-section-title">📊 آمار حرکات (فقط خواندنی)</div>' +
+            '<div class="af-grid af-grid-4">' +
+            '<div class="af-field"><label>خرید (تعداد)</label>' +
+            '<input type="text" value="' + H.fmtT(d.inVal1) + '" readonly class="af-readonly num-input"></div>' +
+            '<div class="af-field"><label>خرید (ریالی)</label>' +
+            '<input type="text" value="' + H.fmtT(d.inAmount1) + '" readonly class="af-readonly num-input"></div>' +
+            '<div class="af-field"><label>فروش (تعداد)</label>' +
+            '<input type="text" value="' + H.fmtT(d.outVal1) + '" readonly class="af-readonly num-input"></div>' +
+            '<div class="af-field"><label>فروش (ریالی)</label>' +
+            '<input type="text" value="' + H.fmtT(d.outAmount1) + '" readonly class="af-readonly num-input"></div>' +
+            '<div class="af-field"><label>برگشت (تعداد)</label>' +
+            '<input type="text" value="' + H.fmtT(d.backVal1) + '" readonly class="af-readonly num-input"></div>' +
+            '<div class="af-field"><label>برگشت (ریالی)</label>' +
+            '<input type="text" value="' + H.fmtT(d.backAmount1) + '" readonly class="af-readonly num-input"></div>' +
+            '<div class="af-field"><label>قیمت فروش</label>' +
+            '<input type="text" value="' + H.fmtT(d.amountSale) + '" readonly class="af-readonly num-input"></div>' +
+            '</div>' +
+            '</div>';
+    }
     // ═══════════════════════════════════════
     //  Section: تنظیمات
     // ═══════════════════════════════════════
@@ -429,31 +466,37 @@ window.App.Features.ArticleForm = (function () {
         if (saveBtn) saveBtn.addEventListener('click', save);
         if (cancelBtn) cancelBtn.addEventListener('click', function () { window.App.closeModal(); });
 
-        // درج جدید: انبار و گروه
-        if (_state.mode === 'create') {
-            const stockSel = document.getElementById('afStockTypeId');
-            const groupSel = document.getElementById('afGroupId');
-            if (stockSel) stockSel.addEventListener('change', updateGroupOptions);
-            if (groupSel) groupSel.addEventListener('change', refreshNextCode);
-        }
-
-        // Pickers
-        document.querySelectorAll('.af-pick-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                const section = btn.dataset.section;
-                if (btn.dataset.pick === 'moein') openMoeinPicker(section);
-                else openTafzilPicker(section);
+        // ⭐ Cascade انبار → گروه (هم create هم edit)
+        const stockSel = document.getElementById('afStockTypeId');
+        const groupSel = document.getElementById('afGroupId');
+        if (stockSel && groupSel) {
+            stockSel.addEventListener('change', function () {
+                const stockId = parseInt(stockSel.value) || 0;
+                const groups = _cache.groups.filter(g => String(g.stockTypeId) === String(stockId));
+                let html = '<option value="0">-- انتخاب گروه --</option>';
+                groups.forEach(g => {
+                    html += '<option value="' + g.id + '">' + H.esc(g.name || '') + ' (' + (g.code || '') + ')</option>';
+                });
+                groupSel.innerHTML = html;
+                if (_state.mode === 'create') refreshNextCode();
             });
-        });
+            if (_state.mode === 'create') {
+                groupSel.addEventListener('change', refreshNextCode);
+            }
+        }
 
         // 🔓 ویرایش دستی کد
         const unlockBtn = document.getElementById('afUnlockCodeBtn');
         const codeInput = document.getElementById('afFullCode');
         if (unlockBtn && codeInput) {
-            unlockBtn.addEventListener('click', function () {
+            unlockBtn.addEventListener('click', async function () {
                 const isReadonly = codeInput.hasAttribute('readonly');
                 if (isReadonly) {
-                    if (!confirm('توجه: تغییر کد کالا ممکن است باعث ناسازگاری شود.\nمطمئن هستید؟')) return;
+                    const ok = await window.App.confirm(
+                        'توجه: تغییر کد کالا ممکن است باعث ناسازگاری شود.\nمطمئن هستید؟',
+                        { title: 'هشدار', okText: 'بله، مطمئنم', danger: true }
+                    );
+                    if (!ok) return;
                     codeInput.removeAttribute('readonly');
                     codeInput.classList.remove('af-readonly');
                     codeInput.classList.add('af-code-editing');
@@ -469,6 +512,76 @@ window.App.Features.ArticleForm = (function () {
             });
         }
 
+        // 🔓 ویرایش دستی انبار و گروه (فقط edit)
+        const unlockStockBtn = document.getElementById('afUnlockStockBtn');
+        if (unlockStockBtn && stockSel && groupSel) {
+            unlockStockBtn.addEventListener('click', async function () {
+                const isDisabled = stockSel.disabled;
+                if (isDisabled) {
+                    const ok = await window.App.confirm(
+                        'با تغییر انبار یا گروه، بهتر است کد کالا هم اصلاح شود.\nمطمئن هستید؟',
+                        { title: 'هشدار', okText: 'بله، مطمئنم', danger: true }
+                    );
+                    if (!ok) return;
+                    stockSel.disabled = false;
+                    groupSel.disabled = false;
+                    unlockStockBtn.textContent = '🔒';
+                } else {
+                    stockSel.disabled = true;
+                    groupSel.disabled = true;
+                    unlockStockBtn.textContent = '🔓';
+                }
+            });
+        }
+
+        // Pickers
+        // Pickers — استفاده از HesabPicker مشترک
+        document.querySelectorAll('.af-pick-btn').forEach(function (btn) {
+            btn.addEventListener('click', async function () {
+                const section = btn.dataset.section;
+                const pickType = btn.dataset.pick;
+
+                if (pickType === 'moein') {
+                    const result = await window.App.UI.HesabPicker.open({
+                        mode: 'moein',
+                        codeCol: 0,
+                        title: '🔍 انتخاب کد معین'
+                    });
+                    if (!result) return;
+
+                    const colEl = document.getElementById('afCodeCol_' + section);
+                    const moeinEl = document.getElementById('afCodeMoein_' + section);
+                    const tafzilEl = document.getElementById('afCodeTafzil_' + section);
+
+                    if (colEl) colEl.value = result.codeCol || '';
+                    if (moeinEl) moeinEl.value = result.codeMoein || '';
+                    if (tafzilEl) tafzilEl.value = '';
+
+                    refreshNames(section);
+                    updateTafzilState(section);
+
+                    // ⚠️ هشدار: معین از نوع انباری نیست
+                    if (result.isStock === false) {
+                        window.App.toast('این معین از نوع انباری نیست', 'warning', {
+                            title: 'هشدار'
+                        });
+                    }
+                } else {
+                    const result = await window.App.UI.HesabPicker.open({
+                        mode: 'tafzil',
+                        codeCol: 0,
+                        title: '🔍 انتخاب کد تفصیلی'
+                    });
+                    if (!result) return;
+
+                    const tafzilEl = document.getElementById('afCodeTafzil_' + section);
+                    if (tafzilEl) tafzilEl.value = result.codeTafzil || '';
+
+                    refreshNames(section);
+                }
+            });
+        });
+
         // F2 / Esc
         if (_keyHandler) document.removeEventListener('keydown', _keyHandler);
         _keyHandler = function (e) {
@@ -482,165 +595,56 @@ window.App.Features.ArticleForm = (function () {
         };
         document.addEventListener('keydown', _keyHandler);
     }
+    function updateTafzilState(section) {
+        const colEl = document.getElementById('afCodeCol_' + section);
+        const moeinEl = document.getElementById('afCodeMoein_' + section);
+        const tafzilEl = document.getElementById('afCodeTafzil_' + section);
+        const pickBtn = document.querySelector('.af-pick-btn[data-pick="tafzil"][data-section="' + section + '"]');
 
-    // ═══════════════════════════════════════
-    //  PICKER معین
-    // ═══════════════════════════════════════
-    function openMoeinPicker(section) {
-        const mb = document.getElementById('modalBody');
-        const pickerId = 'afMoeinPicker';
-        const existing = document.getElementById(pickerId);
-        if (existing) existing.remove();
+        if (!tafzilEl || !pickBtn) return;
 
-        const colMap = {};
-        _cache.cols.forEach(function (c) { colMap[c.codeCol] = c.name; });
+        const colCode = colEl ? parseInt(colEl.value) || 0 : 0;
+        const moeinCode = moeinEl ? parseInt(moeinEl.value) || 0 : 0;
 
-        const picker = document.createElement('div');
-        picker.id = pickerId;
-        picker.className = 'af-picker-overlay';
-        picker.innerHTML =
-            '<div class="af-picker-box">' +
-            '<div class="af-picker-header">' +
-            '<span>🔍 انتخاب کد معین</span>' +
-            '<button type="button" class="af-picker-close">✕</button>' +
-            '</div>' +
-            '<div class="af-picker-search">' +
-            '<input type="text" id="afMoeinSearch" placeholder="جستجو (نام یا کد)...">' +
-            '</div>' +
-            '<div class="af-picker-list" id="afMoeinList"></div>' +
-            '</div>';
-        mb.appendChild(picker);
-
-        const searchInput = picker.querySelector('#afMoeinSearch');
-        const listWrap = picker.querySelector('#afMoeinList');
-
-        function renderList(filter) {
-            const f = (filter || '').trim().toLowerCase();
-            let filtered = _cache.moeins;
-            if (f) {
-                filtered = filtered.filter(function (m) {
-                    return String(m.codeMoein).indexOf(f) !== -1 ||
-                        String(m.codeCol).indexOf(f) !== -1 ||
-                        (m.name || '').toLowerCase().indexOf(f) !== -1;
-                });
-            }
-            if (filtered.length === 0) {
-                listWrap.innerHTML = '<div class="af-picker-empty">موردی یافت نشد</div>';
-                return;
-            }
-
-            let html = '';
-            filtered.slice(0, 300).forEach(function (m) {
-                const colName = colMap[m.codeCol] || '';
-                html += '<div class="af-picker-item" data-col="' + m.codeCol + '" data-moein="' + m.codeMoein + '">';
-                html += '<span class="af-picker-code">' + m.codeCol + ' - ' + m.codeMoein + '</span>';
-                html += '<div class="af-picker-name">';
-                html += '<div>' + H.esc(m.name || '') + '</div>';
-                if (colName) html += '<div class="af-picker-parent">' + H.esc(colName) + '</div>';
-                html += '</div></div>';
-            });
-            listWrap.innerHTML = html;
+        // معین انتخاب نشده → قفل
+        if (!colCode || !moeinCode) {
+            lockTafzil(tafzilEl, pickBtn);
+            return;
         }
-        renderList('');
-        setTimeout(function () { searchInput.focus(); }, 50);
-        searchInput.addEventListener('input', function () { renderList(searchInput.value); });
 
-        picker.querySelector('.af-picker-close').addEventListener('click', function () { picker.remove(); });
+        const moein = _cache.moeins.find(x =>
+            x.codeCol === colCode && x.codeMoein === moeinCode);
 
-        picker.addEventListener('click', function (e) {
-            if (e.target === picker) { picker.remove(); return; }
-            const item = e.target.closest('.af-picker-item');
-            if (!item) return;
-            document.getElementById('afCodeCol_' + section).value = item.dataset.col;
-            document.getElementById('afCodeMoein_' + section).value = item.dataset.moein;
-            document.getElementById('afCodeTafzil_' + section).value = '';
-            refreshNames(section);
-            picker.remove();
-        });
+        // معین پیدا نشد → قفل (احتیاط)
+        if (!moein) {
+            lockTafzil(tafzilEl, pickBtn);
+            return;
+        }
 
-        searchInput.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') picker.remove();
-            if (e.key === 'Enter') {
-                const first = listWrap.querySelector('.af-picker-item');
-                if (first) first.click();
-            }
-        });
+        // معین تفضیلی داره → باز، وگرنه قفل
+        if (moein.hasTafzili) {
+            unlockTafzil(tafzilEl, pickBtn);
+        } else {
+            tafzilEl.value = '';
+            lockTafzil(tafzilEl, pickBtn);
+        }
     }
 
-    // ═══════════════════════════════════════
-    //  PICKER تفصیلی
-    // ═══════════════════════════════════════
-    function openTafzilPicker(section) {
-        const mb = document.getElementById('modalBody');
-        const pickerId = 'afTafzilPicker';
-        const existing = document.getElementById(pickerId);
-        if (existing) existing.remove();
-
-        const picker = document.createElement('div');
-        picker.id = pickerId;
-        picker.className = 'af-picker-overlay';
-        picker.innerHTML =
-            '<div class="af-picker-box">' +
-            '<div class="af-picker-header">' +
-            '<span>🔍 انتخاب کد تفصیلی ۱</span>' +
-            '<button type="button" class="af-picker-close">✕</button>' +
-            '</div>' +
-            '<div class="af-picker-search">' +
-            '<input type="text" id="afTafzilSearch" placeholder="جستجو...">' +
-            '</div>' +
-            '<div class="af-picker-list" id="afTafzilList"></div>' +
-            '</div>';
-        mb.appendChild(picker);
-
-        const searchInput = picker.querySelector('#afTafzilSearch');
-        const listWrap = picker.querySelector('#afTafzilList');
-        const list = _cache.tafzils || [];
-
-        function renderList(filter) {
-            const f = (filter || '').trim().toLowerCase();
-            let filtered = list;
-            if (f) {
-                filtered = list.filter(function (x) {
-                    return String(x.code).indexOf(f) !== -1 || (x.name || '').toLowerCase().indexOf(f) !== -1;
-                });
-            }
-            if (filtered.length === 0) {
-                listWrap.innerHTML = '<div class="af-picker-empty">موردی یافت نشد</div>';
-                return;
-            }
-            let html = '';
-            filtered.slice(0, 200).forEach(function (x) {
-                html += '<div class="af-picker-item" data-code="' + x.code + '">';
-                html += '<span class="af-picker-code">' + x.code + '</span>';
-                html += '<span class="af-picker-name">' + H.esc(x.name || '') + '</span>';
-                html += '</div>';
-            });
-            listWrap.innerHTML = html;
-        }
-        renderList('');
-        setTimeout(function () { searchInput.focus(); }, 50);
-        searchInput.addEventListener('input', function () { renderList(searchInput.value); });
-
-        picker.querySelector('.af-picker-close').addEventListener('click', function () { picker.remove(); });
-
-        picker.addEventListener('click', function (e) {
-            if (e.target === picker) { picker.remove(); return; }
-            const item = e.target.closest('.af-picker-item');
-            if (!item) return;
-            document.getElementById('afCodeTafzil_' + section).value = parseInt(item.dataset.code);
-            refreshNames(section);
-            picker.remove();
-        });
-
-        searchInput.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') picker.remove();
-            if (e.key === 'Enter') {
-                const first = listWrap.querySelector('.af-picker-item');
-                if (first) first.click();
-            }
-        });
+    function lockTafzil(input, btn) {
+        input.setAttribute('readonly', 'readonly');
+        input.classList.add('af-readonly');
+        btn.disabled = true;
+        btn.style.opacity = '0.4';
+        btn.style.cursor = 'not-allowed';
     }
 
+    function unlockTafzil(input, btn) {
+        input.removeAttribute('readonly');
+        input.classList.remove('af-readonly');
+        btn.disabled = false;
+        btn.style.opacity = '';
+        btn.style.cursor = '';
+    }
     // ═══════════════════════════════════════
     //  SAVE
     // ═══════════════════════════════════════
@@ -721,6 +725,17 @@ window.App.Features.ArticleForm = (function () {
             payload.stockTypeId = stockId;
         }
 
+        if (_state.mode === 'edit') {
+            const stockEl = document.getElementById('afStockTypeId');
+            const groupEl = document.getElementById('afGroupId');
+            if (stockEl && !stockEl.disabled) {
+                payload.stockTypeId = parseInt(stockEl.value) || null;
+            }
+            if (groupEl && !groupEl.disabled) {
+                payload.articleGroupId = parseInt(groupEl.value) || null;
+            }
+        }
+
         try {
             btn.disabled = true;
             btn.textContent = '⏳ در حال ذخیره...';
@@ -765,7 +780,27 @@ window.App.Features.ArticleForm = (function () {
             return;
         }
 
-        if (!confirm('آیا از حذف این کالا مطمئن هستید؟')) return;
+        try {
+            const check = await window.App.Http.api('/api/article/' + articleId + '/can-delete');
+            if (!check.canDelete) {
+                window.App.alert(check.reason, {
+                    title: 'امکان حذف نیست',
+                    type: 'warning',
+                    okText: 'متوجه شدم'
+                });
+                return;
+            }
+        } catch (err) {
+            window.App.toast('خطا در بررسی: ' + err.message, 'error');
+            return;
+        }
+
+        if (!await window.App.confirm('آیا از حذف این کالا مطمئن هستید؟', {
+            title: 'حذف کالا',
+            okText: 'بله، حذف کن',
+            cancelText: 'انصراف',
+            danger: true
+        })) return;
 
         try {
             await window.App.Http.api('/api/article/' + articleId, { method: 'DELETE' });
@@ -775,6 +810,7 @@ window.App.Features.ArticleForm = (function () {
             window.App.toast('خطا: ' + err.message, 'error');
         }
     }
+
     return {
         openEdit: openEdit,
         openCreate: openCreate,

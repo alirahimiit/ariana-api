@@ -15,6 +15,8 @@ public class ArticleRequestDto
     public string StockFilter { get; set; } = "all";
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 50;
+    public string? SortBy { get; set; }
+    public string? SortDir { get; set; }
 }
 
 // ═══════════════════════════════════════════
@@ -27,42 +29,61 @@ public class ArticleListDto
     public string? Name { get; set; }
     public long? TaxId { get; set; }
 
-    // ⭐ گروه و انبار
     public long? ArticleGroupId { get; set; }
     public string? ArticleGroupName { get; set; }
-    public decimal? ArticleGroupCode { get; set; }      // ← جدید
+    public decimal? ArticleGroupCode { get; set; }
 
     public long? StockTypeId { get; set; }
     public string? StockTypeName { get; set; }
-    public decimal? StockTypeCode { get; set; }         // ← جدید
+    public decimal? StockTypeCode { get; set; }
 
-    // ⭐ واحد
     public long? ArticleUnitId { get; set; }
     public string? ArticleUnitName { get; set; }
 
-    // ⭐ قیمت و موجودی
+    public string? ArticleUnitName2 { get; set; }
+    public string? ArticleUnitName3 { get; set; }
+    public string? DepreciationTypeName { get; set; }
+    public decimal? Depreciation { get; set; }
+
     public decimal? AmountSale { get; set; }
     public decimal? MarketerPercent { get; set; }
     public string? ArticleCoding { get; set; }
     public decimal? FinallExistence { get; set; }
 
-    // ⭐ آمار حرکات (از ArticleNew)
-    public decimal? AmountFirst { get; set; }       // موجودی اولیه مقدار
-    public double? CostFirst { get; set; }          // موجودی اولیه ریالی
-    public decimal? InAmount1 { get; set; }         // خرید مقدار
-    public decimal? InVal1 { get; set; }            // خرید ریالی
-    public decimal? OutAmount1 { get; set; }        // فروش مقدار
-    public decimal? OutVal1 { get; set; }           // فروش ریالی
-    public decimal? BackAmount1 { get; set; }       // برگشت مقدار
-    public decimal? BackVal1 { get; set; }          // برگشت ریالی
-    public decimal? FinalAmount1 { get; set; }      // موجودی فعلی مقدار
-    public decimal? FinalVal1 { get; set; }         // موجودی فعلی ریالی
+    public decimal? AmountFirst { get; set; }
+    public double? CostFirst { get; set; }
+    public decimal? InAmount1 { get; set; }
+    public decimal? InVal1 { get; set; }
+    public decimal? OutAmount1 { get; set; }
+    public decimal? OutVal1 { get; set; }
+    public decimal? BackAmount1 { get; set; }
+    public decimal? BackVal1 { get; set; }
+    public decimal? FinalAmount1 { get; set; }
+    public decimal? FinalVal1 { get; set; }
 
-    // ⭐ وضعیت
     public int? Status { get; set; }
     public string? StatusName { get; set; }
-}
 
+    // ⭐ کدینگ فروش
+    public decimal? CodeCol { get; set; }
+    public decimal? CodeMoein { get; set; }
+    public decimal? CodeTafzil { get; set; }
+
+    // ⭐ کدینگ خرید
+    public decimal? CodeColBuy { get; set; }
+    public decimal? CodeMoeinBuy { get; set; }
+    public decimal? CodeTafzilBuy { get; set; }
+
+    // ⭐ کدینگ برگشت خرید
+    public decimal? CodeColReBuy { get; set; }
+    public decimal? CodeMoeinReBuy { get; set; }
+    public decimal? CodeTafzilReBuy { get; set; }
+
+    // ⭐ کدینگ برگشت فروش
+    public decimal? CodeColReSale { get; set; }
+    public decimal? CodeMoeinReSale { get; set; }
+    public decimal? CodeTafzilReSale { get; set; }
+}
 public class ArticleListResultDto
 {
     public List<ArticleListDto> Items { get; set; } = new();
@@ -155,12 +176,12 @@ public class ArticleDetailDto
     public double? CostFirst { get; set; }          // ارزش اولیه (ریالی)
     public decimal? InAmount1 { get; set; }         // خرید (مقدار)
     public decimal? InVal1 { get; set; }            // خرید (ریالی)
-    public decimal? OutAmount1 { get; set; }        // فروش (مقدار)
-    public decimal? OutVal1 { get; set; }           // فروش (ریالی)
-    public decimal? BackAmount1 { get; set; }       // برگشت (مقدار)
-    public decimal? BackVal1 { get; set; }          // برگشت (ریالی)
-    public decimal? FinalAmount1 { get; set; }      // موجودی فعلی (مقدار)
-    public decimal? FinalVal1 { get; set; }         // موجودی فعلی (ریالی)
+    public decimal? OutAmount1 { get; set; }       // فروش (ریالی)
+    public decimal? OutVal1 { get; set; }           // فروش (مقدار)
+    public decimal? BackAmount1 { get; set; }       //برگشت مقداری
+    public decimal? BackVal1 { get; set; }          // برگشت (مقدار)
+    public decimal? FinalAmount1 { get; set; }      // موجودی فعلی ریالی
+    public decimal? FinalVal1 { get; set; }         // موجودی فعلی (مقدار)
 }
 
 // ═══════════════════════════════════════════
@@ -207,6 +228,8 @@ public class ArticleUpdateDto
     public int? DepreciationType { get; set; }
 
     public int? Status { get; set; }
+
+    public long? StockTypeId { get; set; }
 }
 
 // ═══════════════════════════════════════════
@@ -301,4 +324,13 @@ public class StockTypeLookupDto
     public long Id { get; set; }
     public decimal? Code { get; set; }
     public string? Name { get; set; }
+}
+
+public class ArticleUsageDto
+{
+    public bool CanDelete { get; set; }
+    public string? Reason { get; set; }
+    public int SanadCount { get; set; }
+    public int AssetCount { get; set; }
+    public int FactorCount { get; set; }
 }

@@ -24,4 +24,7 @@ public interface IArticleRepository
 
     Task DeleteAsync(
     long orgId, long fyId, long articleId, CancellationToken ct = default);
+
+    Task<ArticleUsageDto> CheckUsageAsync(
+    long orgId, long fyId, long articleId, CancellationToken ct = default);
 }

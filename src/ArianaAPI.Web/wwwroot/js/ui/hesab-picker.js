@@ -195,7 +195,7 @@ window.App.UI.HesabPicker = (function () {
                     rows[idx].classList.add('focused');
                     rows[idx].scrollIntoView({ block: 'nearest' });
                     state.selected = JSON.parse(rows[idx].dataset.item);
-                    renderList0nlyUpdate(row);
+                    renderList0nlyUpdate(rows[idx]);
                 }
             };
             modal.__keyHandler = onKeyDown;
@@ -270,7 +270,7 @@ window.App.UI.HesabPicker = (function () {
         else codeDisplay = item.codeTafzil;
 
         return `
-            <div class="hp-row ${isSel ? 'selected' : ''}" data-item='${JSON.stringify({ level: item.level, codeCol: item.codeCol, codeMoein: item.codeMoein, codeTafzil: item.codeTafzil, name: item.name })}'>
+            <div class="hp-row ${isSel ? 'selected' : ''}" data-item='${JSON.stringify({ level: item.level, codeCol: item.codeCol, codeMoein: item.codeMoein, codeTafzil: item.codeTafzil, name: item.name, isStock: item.isStock || false, hasTafzili: item.hasTafzili || false })}'>
                 <span class="hp-code">${codeDisplay}</span>
                 <div class="hp-name">
                     <div>${H.esc(item.name || '')}</div>

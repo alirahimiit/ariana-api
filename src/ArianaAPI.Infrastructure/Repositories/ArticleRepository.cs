@@ -30,58 +30,48 @@ public class ArticleRepository : IArticleRepository
         var sb = new StringBuilder(" WHERE 1=1 ");
         var p = new DynamicParameters();
 
-        // ─── کد کالا ───
         if (!string.IsNullOrWhiteSpace(req.Code))
         {
             sb.Append(" AND CAST(AN.Code AS VARCHAR(50)) LIKE @code ");
             p.Add("code", "%" + req.Code + "%");
         }
 
-        // ─── نام کالا ───
         if (!string.IsNullOrWhiteSpace(req.Name))
         {
             sb.Append(" AND AN.Name LIKE @name ");
             p.Add("name", "%" + req.Name + "%");
         }
 
-        // ─── شناسه مالیاتی ───
         if (!string.IsNullOrWhiteSpace(req.TaxId))
         {
             sb.Append(" AND CAST(AN.tax_id AS VARCHAR(50)) LIKE @taxId ");
             p.Add("taxId", "%" + req.TaxId + "%");
         }
 
-        // ─── گروه ───
         if (req.GroupId is > 0)
         {
             sb.Append(" AND AN.ArticleGroupID = @groupId ");
             p.Add("groupId", req.GroupId.Value);
         }
 
-        // ─── انبار ───
         if (req.StockTypeId is > 0)
         {
             sb.Append(" AND AN.StockTypeID = @stockTypeId ");
             p.Add("stockTypeId", req.StockTypeId.Value);
         }
 
-        // ─── واحد ───
         if (req.UnitId is > 0)
         {
             sb.Append(" AND AN.ArticleUnitID = @unitId ");
             p.Add("unitId", req.UnitId.Value);
         }
 
-        // ─── وضعیت ───
         if (req.Status.HasValue)
         {
             sb.Append(" AND AN.Status = @status ");
             p.Add("status", req.Status.Value);
         }
 
-        // ─── فیلتر موجودی ───
-        // ⚠️ این فیلتر روی مقدار Sum(FinallExistence) از Article_View اعمال می‌شه
-        // چون باید در WHERE باشه، از زیرکوئری استفاده می‌کنیم
         switch ((req.StockFilter ?? "all").ToLower())
         {
             case "hasstock":
@@ -107,23 +97,42 @@ public class ArticleRepository : IArticleRepository
 
         var offset = (req.Page - 1) * req.PageSize;
 
-        _logger.LogDebug("Article list - where: {Where}", sb.ToString());
-
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         await conn.OpenAsync(ct);
 
-        // ⭐ اول شمارش کل
         var countSql = $@"SELECT COUNT(*) FROM ArticleNew_VIEW AN {sb}";
         var total = await conn.ExecuteScalarAsync<int>(
             new CommandDefinition(countSql, p, cancellationToken: ct));
 
-        // ⭐ پارامترهای صفحه
+        // ⭐ سورت داینامیک
+        var orderCol = (req.SortBy ?? "code").ToLower() switch
+        {
+            "code" => "AN.Code",
+            "name" => "AN.Name",
+            "stocktypecode" => "AN.StockTypeCode",
+            "groupcode" => "AN.ArticleGroupCode",
+            "unitname" => "AN.ArticleUnitName",
+            "amountfirst" => "AN.AmountFirst",
+            "costfirst" => "AN.CostFirst",
+            "inval1" => "AN.inVal1",
+            "inamount1" => "AN.inAmount1",
+            "outval1" => "AN.OutVal1",
+            "outamount1" => "AN.OutAmount1",
+            "backval1" => "AN.BackVal1",
+            "backamount1" => "AN.BackAmount1",
+            "amountsale" => "AN.AmountSale",
+            "statusname" => "AN.StatusName",
+            _ => "AN.Code"
+        };
+        var orderDir = (req.SortDir ?? "asc").ToLower() == "desc" ? "DESC" : "ASC";
+        var orderClause = $"ORDER BY {orderCol} {orderDir}";
+
         p.Add("startRow", offset + 1);
         p.Add("endRow", offset + req.PageSize);
 
         var sql = $@"
             SELECT * FROM (
-                                SELECT 
+                SELECT 
                     AN.ID                       AS Id,
                     AN.Code                     AS Code,
                     AN.Name                     AS Name,
@@ -136,6 +145,10 @@ public class ArticleRepository : IArticleRepository
                     AN.StockTypeCode            AS StockTypeCode,
                     AN.ArticleUnitID            AS ArticleUnitId,
                     AN.ArticleUnitName          AS ArticleUnitName,
+                    AN.ArticleUnitName2         AS ArticleUnitName2,
+                    AN.ArticleUnitName3         AS ArticleUnitName3,
+                    AN.DepreciationTypeName     AS DepreciationTypeName,
+                    AN.Depreciation             AS Depreciation,
                     AN.AmountSale               AS AmountSale,
                     AN.MarketerPercent          AS MarketerPercent,
                     AN.ArticleCoding            AS ArticleCoding,
@@ -151,17 +164,27 @@ public class ArticleRepository : IArticleRepository
                     AN.BackVal1                 AS BackVal1,
                     AN.FinalAmount1             AS FinalAmount1,
                     AN.FinalVal1                AS FinalVal1,
+                    AN.Code_Col                 AS CodeCol,
+                    AN.Code_Moein               AS CodeMoein,
+                    AN.Code_Tafzil              AS CodeTafzil,
+                    AN.Code_Col_Buy             AS CodeColBuy,
+                    AN.Code_Moein_Buy           AS CodeMoeinBuy,
+                    AN.Code_Tafzil_Buy          AS CodeTafzilBuy,
+                    AN.Code_Col_ReBuy           AS CodeColReBuy,
+                    AN.Code_Moein_ReBuy         AS CodeMoeinReBuy,
+                    AN.Code_Tafzil_ReBuy        AS CodeTafzilReBuy,
+                    AN.Code_Col_ReSale          AS CodeColReSale,
+                    AN.Code_Moein_ReSale        AS CodeMoeinReSale,
+                    AN.Code_Tafzil_ReSale       AS CodeTafzilReSale,
                     (SELECT SUM(A.FinallExistence) 
                      FROM Article_View A 
                      WHERE A.ArticleID = AN.ID) AS FinallExistence,
-                    ROW_NUMBER() OVER (ORDER BY AN.Code) AS RowNum
+                    ROW_NUMBER() OVER ({orderClause}) AS RowNum
                 FROM ArticleNew_VIEW AN
                 {sb}
             ) AS T
             WHERE T.RowNum BETWEEN @startRow AND @endRow
             ORDER BY T.RowNum";
-
-        _logger.LogDebug("Article list SQL:\n{Sql}", sql);
 
         var items = (await conn.QueryAsync<ArticleListDto>(
             new CommandDefinition(sql, p, cancellationToken: ct))).ToList();
@@ -177,7 +200,6 @@ public class ArticleRepository : IArticleRepository
             TotalPages = totalPages
         };
     }
-
     // ═══════════════════════════════════════════
     //  جزئیات کالا
     // ═══════════════════════════════════════════
@@ -188,6 +210,34 @@ public class ArticleRepository : IArticleRepository
         await conn.OpenAsync(ct);
 
         const string sql = @"
+            ;WITH Moves AS (
+                SELECT 
+                    FD.ArticleID,
+                    FP.FactorKind,
+                    SUM(ISNULL(FD.ArticleCount, 0)) AS Qty,
+                    SUM(ISNULL(FD.CostItem, 0))     AS Val
+                FROM FactorDetail_VIEW FD
+                INNER JOIN FactorParent_View FP ON FP.ID = FD.FactorID
+                WHERE FP.FactorKind IN (0,1,2,3,9)
+                  AND FD.ArticleID = @articleId
+                GROUP BY FD.ArticleID, FP.FactorKind
+            ),
+            Pivoted AS (
+                SELECT 
+                    ArticleID,
+                    SUM(CASE WHEN FactorKind = 0 THEN Qty ELSE 0 END) AS BuyQty,
+                    SUM(CASE WHEN FactorKind = 0 THEN Val ELSE 0 END) AS BuyVal,
+                    SUM(CASE WHEN FactorKind = 1 THEN Qty ELSE 0 END) AS SellQty,
+                    SUM(CASE WHEN FactorKind = 1 THEN Val ELSE 0 END) AS SellVal,
+                    SUM(CASE WHEN FactorKind = 2 THEN Qty ELSE 0 END) AS BuyBackQty,
+                    SUM(CASE WHEN FactorKind = 2 THEN Val ELSE 0 END) AS BuyBackVal,
+                    SUM(CASE WHEN FactorKind = 3 THEN Qty ELSE 0 END) AS SellBackQty,
+                    SUM(CASE WHEN FactorKind = 3 THEN Val ELSE 0 END) AS SellBackVal,
+                    SUM(CASE WHEN FactorKind = 9 THEN Qty ELSE 0 END) AS ScrapQty,
+                    SUM(CASE WHEN FactorKind = 9 THEN Val ELSE 0 END) AS ScrapVal
+                FROM Moves
+                GROUP BY ArticleID
+            )
             SELECT 
                 AN.ID                       AS Id,
                 AN.Code                     AS Code,
@@ -232,9 +282,9 @@ public class ArticleRepository : IArticleRepository
                 AN.Code_Moein_ReSale        AS CodeMoeinReSale,
                 AN.Code_Tafzil_ReSale       AS CodeTafzilReSale,
 
-                AN.AmountFirst              AS AmountFirst,
-                AN.CostFirst                AS CostFirst,
-                AN.AmountSale               AS AmountSale,
+                ISNULL(AN.AmountFirst, 0)   AS AmountFirst,
+                ISNULL(AN.CostFirst, 0)     AS CostFirst,
+                ISNULL(AN.AmountSale, 0)    AS AmountSale,
 
                 AN.MarketerPercent          AS MarketerPercent,
                 AN.MaxCostOrderBy           AS MaxCostOrderBy,
@@ -257,16 +307,16 @@ public class ArticleRepository : IArticleRepository
                 AN.Kind                     AS Kind,
                 AN.For_EST                  AS ForEst,
 
-                AN.AmountFirst              AS AmountFirst,
-                AN.CostFirst                AS CostFirst,
-                AN.inAmount1                AS InAmount1,
-                AN.inVal1                   AS InVal1,
-                AN.OutAmount1               AS OutAmount1,
-                AN.OutVal1                  AS OutVal1,
-                AN.BackAmount1              AS BackAmount1,
-                AN.BackVal1                 AS BackVal1,
-                AN.FinalAmount1             AS FinalAmount1,
-                AN.FinalVal1                AS FinalVal1,
+                ISNULL(P.BuyQty, 0)         AS InVal1,
+                ISNULL(P.BuyVal, 0)         AS InAmount1,
+                ISNULL(P.SellQty, 0)        AS OutVal1,
+                ISNULL(P.SellVal, 0)        AS OutAmount1,
+                ISNULL(P.BuyBackQty, 0)     AS BackVal1,
+                ISNULL(P.BuyBackVal, 0)     AS BackAmount1,
+                ISNULL(AN.AmountFirst, 0) + ISNULL(P.BuyQty, 0) + ISNULL(P.SellBackQty, 0) 
+                    - ISNULL(P.SellQty, 0) - ISNULL(P.BuyBackQty, 0) - ISNULL(P.ScrapQty, 0) AS FinalVal1,
+                ISNULL(AN.CostFirst, 0) + ISNULL(P.BuyVal, 0) + ISNULL(P.SellBackVal, 0) 
+                    - ISNULL(P.SellVal, 0) - ISNULL(P.BuyBackVal, 0) - ISNULL(P.ScrapVal, 0) AS FinalAmount1,
 
                 (SELECT SUM(A.FirstExistence)   FROM Article_View A WHERE A.ArticleID = AN.ID) AS FirstExistence,
                 (SELECT SUM(A.Inputed)          FROM Article_View A WHERE A.ArticleID = AN.ID) AS Inputed,
@@ -275,15 +325,52 @@ public class ArticleRepository : IArticleRepository
                 (SELECT SUM(A.Loss2)            FROM Article_View A WHERE A.ArticleID = AN.ID) AS Loss2,
                 (SELECT SUM(A.FinallExistence)  FROM Article_View A WHERE A.ArticleID = AN.ID) AS FinallExistence
             FROM ArticleNew_VIEW AN
+            LEFT JOIN Pivoted P ON P.ArticleID = AN.ID
             WHERE AN.ID = @articleId";
 
         return await conn.QueryFirstOrDefaultAsync<ArticleDetailDto>(
             new CommandDefinition(sql, new { articleId }, cancellationToken: ct));
     }
+
+    public async Task<ArticleUsageDto> CheckUsageAsync(
+    long orgId, long fyId, long articleId, CancellationToken ct = default)
+    {
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        await conn.OpenAsync(ct);
+
+        var sanadCount = await conn.ExecuteScalarAsync<int>(
+            new CommandDefinition("SELECT COUNT(*) FROM Sanad WHERE ArticleID = @id",
+                new { id = articleId }, cancellationToken: ct));
+        var assetCount = await conn.ExecuteScalarAsync<int>(
+            new CommandDefinition("SELECT COUNT(*) FROM Asset WHERE ArticleID = @id",
+                new { id = articleId }, cancellationToken: ct));
+        var factorCount = await conn.ExecuteScalarAsync<int>(
+            new CommandDefinition("SELECT COUNT(*) FROM FactorDetail WHERE ArticleID = @id",
+                new { id = articleId }, cancellationToken: ct));
+
+        var result = new ArticleUsageDto
+        {
+            SanadCount = sanadCount,
+            AssetCount = assetCount,
+            FactorCount = factorCount,
+            CanDelete = (sanadCount + assetCount + factorCount) == 0
+        };
+
+        if (!result.CanDelete)
+        {
+            var parts = new List<string>();
+            if (sanadCount > 0) parts.Add($"سند حسابداری ({sanadCount} مورد)");
+            if (assetCount > 0) parts.Add($"دارایی/اموال ({assetCount} مورد)");
+            if (factorCount > 0) parts.Add($"فاکتور ({factorCount} مورد)");
+            result.Reason = "این کالا در موارد زیر استفاده شده و قابل حذف نیست:\n" +
+                            string.Join("\n", parts);
+        }
+
+        return result;
+    }
     // ═══════════════════════════════════════════
     //  ویرایش کالا
     // ═══════════════════════════════════════════
-
     public async Task UpdateAsync(
         long orgId, long fyId, long articleId, ArticleUpdateDto dto, CancellationToken ct = default)
     {
@@ -296,96 +383,125 @@ public class ArticleRepository : IArticleRepository
         if (exists == 0)
             throw new InvalidOperationException("کالا یافت نشد");
 
-        const string sql = @"
-            UPDATE ArticleNew SET
-                Name                  = @name,
-                tax_id                = @taxId,
-                CodingStore           = @codingStore,
-                CodingGroupStore      = @codingGroupStore,
-                ArticleCoding         = ISNULL(@articleCoding, ArticleCoding),
+        using var tx = conn.BeginTransaction();
+        try
+        {
+            const string sql = @"
+                UPDATE ArticleNew SET
+                    Name                  = @name,
+                    tax_id                = @taxId,
+                    CodingStore           = @codingStore,
+                    CodingGroupStore      = @codingGroupStore,
+                    ArticleCoding         = ISNULL(@articleCoding, ArticleCoding),
 
-                ArticleGroupID        = @articleGroupId,
-                ArticleUnitID         = @articleUnitId,
-                ArticleUnitID2        = @articleUnitId2,
-                ArticleUnitID3        = @articleUnitId3,
-                HasUnit2              = CASE WHEN @articleUnitId2 > 0 THEN 1 ELSE 0 END,
+                    ArticleGroupID        = @articleGroupId,
+                    ArticleUnitID         = @articleUnitId,
+                    ArticleUnitID2        = @articleUnitId2,
+                    ArticleUnitID3        = @articleUnitId3,
+                    HasUnit2              = CASE WHEN @articleUnitId2 > 0 THEN 1 ELSE 0 END,
 
-                Code_Col              = @codeCol,
-                Code_Moein            = @codeMoein,
-                Code_Tafzil           = @codeTafzil,
+                    Code_Col              = @codeCol,
+                    Code_Moein            = @codeMoein,
+                    Code_Tafzil           = @codeTafzil,
 
-                Code_Col_Buy          = @codeColBuy,
-                Code_Moein_Buy        = @codeMoeinBuy,
-                Code_Tafzil_Buy       = @codeTafzilBuy,
+                    Code_Col_Buy          = @codeColBuy,
+                    Code_Moein_Buy        = @codeMoeinBuy,
+                    Code_Tafzil_Buy       = @codeTafzilBuy,
 
-                Code_Col_ReBuy        = @codeColReBuy,
-                Code_Moein_ReBuy      = @codeMoeinReBuy,
-                Code_Tafzil_ReBuy     = @codeTafzilReBuy,
+                    Code_Col_ReBuy        = @codeColReBuy,
+                    Code_Moein_ReBuy      = @codeMoeinReBuy,
+                    Code_Tafzil_ReBuy     = @codeTafzilReBuy,
 
-                Code_Col_ReSale       = @codeColReSale,
-                Code_Moein_ReSale     = @codeMoeinReSale,
-                Code_Tafzil_ReSale    = @codeTafzilReSale,
+                    Code_Col_ReSale       = @codeColReSale,
+                    Code_Moein_ReSale     = @codeMoeinReSale,
+                    Code_Tafzil_ReSale    = @codeTafzilReSale,
 
-                AmountFirst           = @amountFirst,
-                CostFirst             = @costFirst,
-                AmountSale            = @amountSale,
-                MarketerPercent       = @marketerPercent,
+                    AmountFirst           = @amountFirst,
+                    CostFirst             = @costFirst,
+                    AmountSale            = @amountSale,
+                    MarketerPercent       = @marketerPercent,
 
-                MaxCostOrderBy        = @maxCostOrderBy,
-                MinCostOrderBy        = @minCostOrderBy,
+                    MaxCostOrderBy        = @maxCostOrderBy,
+                    MinCostOrderBy        = @minCostOrderBy,
 
-                Depreciation          = @depreciation,
-                DepreciationType      = @depreciationType,
+                    Depreciation          = @depreciation,
+                    DepreciationType      = @depreciationType,
 
-                Status                = @status
-            WHERE ID = @id";
+                    Status                = @status
+                WHERE ID = @id";
 
-        await conn.ExecuteAsync(
-            new CommandDefinition(sql, new
+            await conn.ExecuteAsync(
+                new CommandDefinition(sql, new
+                {
+                    id = articleId,
+                    name = dto.Name ?? "",
+                    taxId = dto.TaxId,
+                    codingStore = dto.CodingStore,
+                    codingGroupStore = dto.CodingGroupStore,
+                    articleCoding = dto.ArticleCoding,
+
+                    articleGroupId = dto.ArticleGroupId ?? 0,
+                    articleUnitId = dto.ArticleUnitId ?? 0,
+                    articleUnitId2 = dto.ArticleUnitId2 ?? 0,
+                    articleUnitId3 = dto.ArticleUnitId3 ?? 0,
+                    codeCol = dto.CodeCol ?? 0,
+                    codeMoein = dto.CodeMoein ?? 0,
+                    codeTafzil = dto.CodeTafzil ?? 0,
+
+                    codeColBuy = dto.CodeColBuy ?? 0,
+                    codeMoeinBuy = dto.CodeMoeinBuy ?? 0,
+                    codeTafzilBuy = dto.CodeTafzilBuy ?? 0,
+
+                    codeColReBuy = dto.CodeColReBuy ?? 0,
+                    codeMoeinReBuy = dto.CodeMoeinReBuy ?? 0,
+                    codeTafzilReBuy = dto.CodeTafzilReBuy ?? 0,
+
+                    codeColReSale = dto.CodeColReSale ?? 0,
+                    codeMoeinReSale = dto.CodeMoeinReSale ?? 0,
+                    codeTafzilReSale = dto.CodeTafzilReSale ?? 0,
+
+                    amountFirst = dto.AmountFirst ?? 0,
+                    costFirst = dto.CostFirst ?? 0,
+                    amountSale = dto.AmountSale ?? 0,
+                    marketerPercent = dto.MarketerPercent ?? 0,
+
+                    maxCostOrderBy = dto.MaxCostOrderBy ?? 0,
+                    minCostOrderBy = dto.MinCostOrderBy ?? 0,
+
+                    depreciation = dto.Depreciation ?? 0,
+                    depreciationType = dto.DepreciationType ?? 0,
+
+                    status = dto.Status ?? 1
+                }, transaction: tx, cancellationToken: ct));
+
+            // ⭐ اگه StockTypeId اومده بود، ArticleStock رو آپدیت کن
+            if (dto.StockTypeId.HasValue && dto.StockTypeId.Value > 0)
             {
-                id = articleId,
-                name = dto.Name ?? "",
-                taxId = dto.TaxId,
-                codingStore = dto.CodingStore,
-                codingGroupStore = dto.CodingGroupStore,
-                articleCoding = dto.ArticleCoding,
+                var updated = await conn.ExecuteAsync(new CommandDefinition(
+                    @"UPDATE ArticleStock SET StockTypeID = @stockTypeId 
+                      WHERE ArticleID = @articleId",
+                    new { articleId, stockTypeId = dto.StockTypeId.Value },
+                    transaction: tx, cancellationToken: ct));
 
+                // اگه رکوردی نبود، INSERT کن
+                if (updated == 0)
+                {
+                    await conn.ExecuteAsync(new CommandDefinition(
+                        @"INSERT INTO ArticleStock (ArticleID, StockTypeID) 
+                          VALUES (@articleId, @stockTypeId)",
+                        new { articleId, stockTypeId = dto.StockTypeId.Value },
+                        transaction: tx, cancellationToken: ct));
+                }
+            }
 
-                articleGroupId = dto.ArticleGroupId ?? 0,
-                articleUnitId = dto.ArticleUnitId ?? 0,
-                articleUnitId2 = dto.ArticleUnitId2 ?? 0,
-                articleUnitId3 = dto.ArticleUnitId3 ?? 0,
-                codeCol = dto.CodeCol ?? 0,
-                codeMoein = dto.CodeMoein ?? 0,
-                codeTafzil = dto.CodeTafzil ?? 0,
-
-                codeColBuy = dto.CodeColBuy ?? 0,
-                codeMoeinBuy = dto.CodeMoeinBuy ?? 0,
-                codeTafzilBuy = dto.CodeTafzilBuy ?? 0,
-
-                codeColReBuy = dto.CodeColReBuy ?? 0,
-                codeMoeinReBuy = dto.CodeMoeinReBuy ?? 0,
-                codeTafzilReBuy = dto.CodeTafzilReBuy ?? 0,
-
-                codeColReSale = dto.CodeColReSale ?? 0,
-                codeMoeinReSale = dto.CodeMoeinReSale ?? 0,
-                codeTafzilReSale = dto.CodeTafzilReSale ?? 0,
-
-                amountFirst = dto.AmountFirst ?? 0,
-                costFirst = dto.CostFirst ?? 0,
-                amountSale = dto.AmountSale ?? 0,
-                marketerPercent = dto.MarketerPercent ?? 0,
-
-                maxCostOrderBy = dto.MaxCostOrderBy ?? 0,
-                minCostOrderBy = dto.MinCostOrderBy ?? 0,
-
-                depreciation = dto.Depreciation ?? 0,
-                depreciationType = dto.DepreciationType ?? 0,
-
-                status = dto.Status ?? 1
-            }, cancellationToken: ct));
+            tx.Commit();
+        }
+        catch
+        {
+            try { tx.Rollback(); } catch { }
+            throw;
+        }
     }
-
     // ═══════════════════════════════════════════
     //  Lookups
     // ═══════════════════════════════════════════
@@ -453,12 +569,10 @@ public class ArticleRepository : IArticleRepository
         var padStock = ((long)stockCode.Value).ToString().PadLeft(3, '0');
         var padGroup = ((long)groupCode.Value).ToString().PadLeft(3, '0');
 
-        // prefix = {stock:3}{group:3}   مثلا 001001
-        var prefixStr = padStock + padGroup;              // "001001"
-        var minCode = long.Parse(prefixStr + "0000");     // 0010010000
-        var maxCode = long.Parse(prefixStr + "9999");     // 0010019999
+        var prefixStr = padStock + padGroup;
+        var minCode = long.Parse(prefixStr + "0000");
+        var maxCode = long.Parse(prefixStr + "9999");
 
-        // ⭐ آخرین کد ثبت‌شده در این انبار+گروه
         var lastCode = await conn.ExecuteScalarAsync<long?>(
             new CommandDefinition(@"
                 SELECT TOP 1 CAST(Code AS BIGINT)
@@ -472,7 +586,6 @@ public class ArticleRepository : IArticleRepository
 
         if (lastCode.HasValue)
         {
-            // آخرین کد موجود + 1
             nextCodeNum = lastCode.Value + 1;
             nextSeq = (int)(nextCodeNum % 10000);
         }
@@ -482,7 +595,6 @@ public class ArticleRepository : IArticleRepository
             nextCodeNum = long.Parse(prefixStr + "0001");
         }
 
-        // اطمینان از اینکه کد جدید تداخل نداره
         while (true)
         {
             var exists = await conn.ExecuteScalarAsync<int>(
@@ -512,84 +624,110 @@ public class ArticleRepository : IArticleRepository
     public async Task<ArticleCreateResultDto> CreateAsync(
         long orgId, long fyId, ArticleCreateDto dto, CancellationToken ct = default)
     {
-        // گرفتن کد بعدی
         var nextCode = await GetNextCodeAsync(orgId, fyId, dto.StockTypeId, dto.ArticleGroupId, ct);
 
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         await conn.OpenAsync(ct);
 
-        const string sql = @"
-            INSERT INTO ArticleNew (
-                ArticleGroupID, Code, Name, ArticleUnitID,
-                Code_Col, Code_Moein, Code_Tafzil,
-                DepreciationType, Depreciation,
-                Code_Col_Buy, Code_Moein_Buy, Code_Tafzil_Buy,
-                Status, AmountFirst, CostFirst,
-                Code_Col_ReBuy, Code_Moein_ReBuy, Code_Tafzil_ReBuy,
-                Code_Col_ReSale, Code_Moein_ReSale, Code_Tafzil_ReSale,
-                ArticleUnitID2, HasUnit2, MaxCostOrderBy, MinCostOrderBy,
-                AmountSale, ArticleUnitID3, MarketerPercent,
-                ArticleCoding, CodingStore, CodingGroupStore, tax_id
-            ) VALUES (
-                @articleGroupId, @code, @name, @articleUnitId,
-                @codeCol, @codeMoein, @codeTafzil,
-                @depreciationType, @depreciation,
-                @codeColBuy, @codeMoeinBuy, @codeTafzilBuy,
-                @status, @amountFirst, @costFirst,
-                @codeColReBuy, @codeMoeinReBuy, @codeTafzilReBuy,
-                @codeColReSale, @codeMoeinReSale, @codeTafzilReSale,
-                @articleUnitId2, @hasUnit2, @maxCostOrderBy, @minCostOrderBy,
-                @amountSale, @articleUnitId3, @marketerPercent,
-                @ArticleCoding,@codingStore, @codingGroupStore, @taxId
-            );
-            SELECT CAST(SCOPE_IDENTITY() AS BIGINT);";
-
-        var newId = await conn.ExecuteScalarAsync<long>(
-            new CommandDefinition(sql, new
-            {
-                articleGroupId = dto.ArticleGroupId,
-                code = nextCode.Code,
-                name = dto.Name ?? "",
-                articleUnitId = dto.ArticleUnitId ?? 0,
-                articleCoding = nextCode.FullCode,
-                codeCol = dto.CodeCol ?? 0,
-                codeMoein = dto.CodeMoein ?? 0,
-                codeTafzil = dto.CodeTafzil ?? 0,
-                depreciationType = dto.DepreciationType ?? 0,
-                depreciation = dto.Depreciation ?? 0,
-                codeColBuy = dto.CodeColBuy ?? 0,
-                codeMoeinBuy = dto.CodeMoeinBuy ?? 0,
-                codeTafzilBuy = dto.CodeTafzilBuy ?? 0,
-                status = dto.Status ?? 1,
-                amountFirst = dto.AmountFirst ?? 0,
-                costFirst = dto.CostFirst ?? 0,
-                codeColReBuy = dto.CodeColReBuy ?? 0,
-                codeMoeinReBuy = dto.CodeMoeinReBuy ?? 0,
-                codeTafzilReBuy = dto.CodeTafzilReBuy ?? 0,
-                codeColReSale = dto.CodeColReSale ?? 0,
-                codeMoeinReSale = dto.CodeMoeinReSale ?? 0,
-                codeTafzilReSale = dto.CodeTafzilReSale ?? 0,
-                articleUnitId2 = dto.ArticleUnitId2 ?? 0,
-                hasUnit2 = (dto.ArticleUnitId2 ?? 0) > 0,
-                maxCostOrderBy = dto.MaxCostOrderBy ?? 0,
-                minCostOrderBy = dto.MinCostOrderBy ?? 0,
-                amountSale = dto.AmountSale ?? 0,
-                articleUnitId3 = dto.ArticleUnitId3 ?? 0,
-                marketerPercent = dto.MarketerPercent ?? 0,
-                codingStore = nextCode.CodingStore,
-                codingGroupStore = nextCode.CodingGroupStore,
-                taxId = dto.TaxId
-            }, cancellationToken: ct));
-
-        return new ArticleCreateResultDto
+        using var tx = conn.BeginTransaction();
+        try
         {
-            Id = newId,
-            Code = nextCode.Code,
-            FullCode = nextCode.FullCode
-        };
+            const string sql = @"
+                INSERT INTO ArticleNew (
+                    ArticleGroupID, Code, Name, ArticleUnitID,
+                    Code_Col, Code_Moein, Code_Tafzil,
+                    DepreciationType, Depreciation,
+                    Code_Col_Buy, Code_Moein_Buy, Code_Tafzil_Buy,
+                    Status, AmountFirst, CostFirst,
+                    Code_Col_ReBuy, Code_Moein_ReBuy, Code_Tafzil_ReBuy,
+                    Code_Col_ReSale, Code_Moein_ReSale, Code_Tafzil_ReSale,
+                    ArticleUnitID2, HasUnit2, MaxCostOrderBy, MinCostOrderBy,
+                    AmountSale, ArticleUnitID3, MarketerPercent,
+                    ArticleCoding, CodingStore, CodingGroupStore, tax_id
+                ) VALUES (
+                    @articleGroupId, @code, @name, @articleUnitId,
+                    @codeCol, @codeMoein, @codeTafzil,
+                    @depreciationType, @depreciation,
+                    @codeColBuy, @codeMoeinBuy, @codeTafzilBuy,
+                    @status, @amountFirst, @costFirst,
+                    @codeColReBuy, @codeMoeinReBuy, @codeTafzilReBuy,
+                    @codeColReSale, @codeMoeinReSale, @codeTafzilReSale,
+                    @articleUnitId2, @hasUnit2, @maxCostOrderBy, @minCostOrderBy,
+                    @amountSale, @articleUnitId3, @marketerPercent,
+                    @ArticleCoding, @codingStore, @codingGroupStore, @taxId
+                );
+                SELECT CAST(SCOPE_IDENTITY() AS BIGINT);";
+
+            var newId = await conn.ExecuteScalarAsync<long>(
+                new CommandDefinition(sql, new
+                {
+                    articleGroupId = dto.ArticleGroupId,
+                    code = nextCode.Code,
+                    name = dto.Name ?? "",
+                    articleUnitId = dto.ArticleUnitId ?? 0,
+                    articleCoding = nextCode.FullCode,
+                    codeCol = dto.CodeCol ?? 0,
+                    codeMoein = dto.CodeMoein ?? 0,
+                    codeTafzil = dto.CodeTafzil ?? 0,
+                    depreciationType = dto.DepreciationType ?? 0,
+                    depreciation = dto.Depreciation ?? 0,
+                    codeColBuy = dto.CodeColBuy ?? 0,
+                    codeMoeinBuy = dto.CodeMoeinBuy ?? 0,
+                    codeTafzilBuy = dto.CodeTafzilBuy ?? 0,
+                    status = dto.Status ?? 1,
+                    amountFirst = dto.AmountFirst ?? 0,
+                    costFirst = dto.CostFirst ?? 0,
+                    codeColReBuy = dto.CodeColReBuy ?? 0,
+                    codeMoeinReBuy = dto.CodeMoeinReBuy ?? 0,
+                    codeTafzilReBuy = dto.CodeTafzilReBuy ?? 0,
+                    codeColReSale = dto.CodeColReSale ?? 0,
+                    codeMoeinReSale = dto.CodeMoeinReSale ?? 0,
+                    codeTafzilReSale = dto.CodeTafzilReSale ?? 0,
+                    articleUnitId2 = dto.ArticleUnitId2 ?? 0,
+                    hasUnit2 = (dto.ArticleUnitId2 ?? 0) > 0,
+                    maxCostOrderBy = dto.MaxCostOrderBy ?? 0,
+                    minCostOrderBy = dto.MinCostOrderBy ?? 0,
+                    amountSale = dto.AmountSale ?? 0,
+                    articleUnitId3 = dto.ArticleUnitId3 ?? 0,
+                    marketerPercent = dto.MarketerPercent ?? 0,
+                    codingStore = nextCode.CodingStore,
+                    codingGroupStore = nextCode.CodingGroupStore,
+                    taxId = dto.TaxId
+                }, transaction: tx, cancellationToken: ct));
+
+            await conn.ExecuteAsync(new CommandDefinition(
+                @"INSERT INTO ArticleStock (ArticleID, StockTypeID) 
+                  VALUES (@articleId, @stockTypeId)",
+                new { articleId = newId, stockTypeId = dto.StockTypeId },
+                transaction: tx, cancellationToken: ct));
+
+            tx.Commit();
+
+            _logger.LogInformation(
+                "Article created: ID={Id}, Code={Code}, StockTypeId={StockTypeId}",
+                newId, nextCode.Code, dto.StockTypeId);
+
+            return new ArticleCreateResultDto
+            {
+                Id = newId,
+                Code = nextCode.Code,
+                FullCode = nextCode.FullCode
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating article");
+            try { tx.Rollback(); } catch { }
+            throw;
+        }
     }
+
+    // ═══════════════════════════════════════════
+    //  حذف کالا
+    //  ⭐ FIX BUG #3: چک Sanad + Asset (مثل دلفی)
+    // ═══════════════════════════════════════════
     public async Task DeleteAsync(
-    long orgId, long fyId, long articleId, CancellationToken ct = default)
+        long orgId, long fyId, long articleId, CancellationToken ct = default)
     {
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         if (conn.State != ConnectionState.Open)
@@ -598,27 +736,49 @@ public class ArticleRepository : IArticleRepository
         using var tx = conn.BeginTransaction();
         try
         {
-            // ۱. چک کن در فاکتورها استفاده نشده
-            var used = await conn.ExecuteScalarAsync<int>(
+            // ⭐ ۱. چک سند (اسناد حسابداری)
+            var sanadCount = await conn.ExecuteScalarAsync<int>(
+                new CommandDefinition(
+                    "SELECT COUNT(*) FROM Sanad WHERE ArticleID = @articleId",
+                    new { articleId }, transaction: tx, cancellationToken: ct));
+
+            if (sanadCount > 0)
+                throw new InvalidOperationException(
+                    "برای این کالا سند صادر شده است و قابل حذف نیست");
+
+            // ⭐ ۲. چک دارایی (اموال)
+            var assetCount = await conn.ExecuteScalarAsync<int>(
+                new CommandDefinition(
+                    "SELECT COUNT(*) FROM Asset WHERE ArticleID = @articleId",
+                    new { articleId }, transaction: tx, cancellationToken: ct));
+
+            if (assetCount > 0)
+                throw new InvalidOperationException(
+                    "برای این کالا دارایی ثبت شده است و قابل حذف نیست");
+
+            // ۳. چک فاکتور
+            var factorCount = await conn.ExecuteScalarAsync<int>(
                 new CommandDefinition(
                     "SELECT COUNT(*) FROM FactorDetail WHERE ArticleID = @articleId",
                     new { articleId }, transaction: tx, cancellationToken: ct));
 
-            if (used > 0)
+            if (factorCount > 0)
                 throw new InvalidOperationException(
-                    "این کالا در فاکتورها استفاده شده و قابل حذف نیست");
+                    "برای این کالا فاکتور صادر شده است و قابل حذف نیست");
 
-            // ۲. حذف از ArticleStock (many-to-many)
+            // ۴. حذف از ArticleStock
             await conn.ExecuteAsync(new CommandDefinition(
                 "DELETE FROM ArticleStock WHERE ArticleID = @articleId",
                 new { articleId }, transaction: tx, cancellationToken: ct));
 
-            // ۳. حذف از ArticleNew
+            // ۵. حذف از ArticleNew
             await conn.ExecuteAsync(new CommandDefinition(
                 "DELETE FROM ArticleNew WHERE ID = @articleId",
                 new { articleId }, transaction: tx, cancellationToken: ct));
 
             tx.Commit();
+
+            _logger.LogInformation("Article deleted: ID={Id}", articleId);
         }
         catch
         {
@@ -626,6 +786,7 @@ public class ArticleRepository : IArticleRepository
             throw;
         }
     }
+
     // ═══════════════════════════════════════════
     //  اصلاح کدینگ‌های خراب (SP: UpDate_Article)
     // ═══════════════════════════════════════════

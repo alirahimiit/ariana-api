@@ -1,13 +1,5 @@
 ﻿/* ═══════════════════════════════════════════════════
    Feature / Article (کالاها)
-   مسئولیت: لیست کالاها، فیلتر، جزئیات، خروجی
-   ═══════════════════════════════════════════════════
-   وابستگی‌ها:
-     - window.App.Helpers  (fmt, esc)
-     - window.App.Http     (api)
-     - window.App.state    (user، settings، currentPage)
-     - window.App.openModal / toast / enhanceTables
-     - Exporter
    ═══════════════════════════════════════════════════ */
 
 window.App = window.App || {};
@@ -17,7 +9,6 @@ window.App.Features.Article = (function () {
     'use strict';
 
     const H = window.App.Helpers;
-    let _stockFilter = 'all';
 
     // ═══════════════════════════════════════════
     //  RENDER — صفحه فیلتر + نتیجه
@@ -26,7 +17,6 @@ window.App.Features.Article = (function () {
         const c = document.getElementById('content');
         c.innerHTML = `<div class="loading"><div class="spinner"></div><p>در حال بارگذاری...</p></div>`;
 
-        // ⭐ لود lookup ها برای dropdown
         let lookups = { groups: [], stockTypes: [] };
         try {
             lookups = await window.App.Http.api('/api/article/lookups') || lookups;
@@ -34,7 +24,6 @@ window.App.Features.Article = (function () {
             console.error('lookup load failed:', err);
         }
 
-        // ⭐ ساخت dropdown انبار
         let stockOpts = '<option value="">همه انبارها</option>';
         (lookups.stockTypes || []).forEach(s => {
             stockOpts += `<option value="${s.id}">${H.esc(s.name || '')}</option>`;
@@ -83,7 +72,6 @@ window.App.Features.Article = (function () {
             <div class="loading"><div class="spinner"></div></div>
         </div>`;
 
-        // ⭐ Cascade: انبار → گروه کالا
         const stockSel = document.getElementById('artStockTypeId');
         const groupSel = document.getElementById('artGroupId');
 
@@ -104,11 +92,9 @@ window.App.Features.Article = (function () {
         stockSel.addEventListener('change', rebuildGroupOptions);
         rebuildGroupOptions();
 
-        // ⭐ رویداد دکمه‌ها
         document.getElementById('artBtnRun').addEventListener('click', () => runList(1));
         document.getElementById('artBtnFixCoding').addEventListener('click', fixCoding);
 
-        // Enter → جستجو
         ['artCode', 'artName', 'artTaxId'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('keydown', e => {
@@ -116,13 +102,16 @@ window.App.Features.Article = (function () {
             });
         });
 
-        // ⭐ اجرای اولیه
         runList(1);
     }
 
     // ⭐ اصلاح کدینگ‌ها با SP
     async function fixCoding() {
-        if (!confirm('آیا از اصلاح کدینگ همه کالاها مطمئن هستید؟\n(ممکن است کمی طول بکشد)')) return;
+        if (!await window.App.confirm(
+            'آیا از اصلاح کدینگ همه کالاها مطمئن هستید؟\n(ممکن است کمی طول بکشد)',
+            { title: 'اصلاح کدینگ', okText: 'بله، اصلاح کن' }
+        )) return;
+
         const btn = document.getElementById('artBtnFixCoding');
         const orig = btn.textContent;
         try {
@@ -137,33 +126,6 @@ window.App.Features.Article = (function () {
             btn.disabled = false;
             btn.textContent = orig;
         }
-    }
-
-    function setupCustomSelect() {
-        const wrap = document.getElementById('artStockFilterWrap');
-        const trigger = document.getElementById('artStockFilterTrigger');
-        const menu = document.getElementById('artStockFilterMenu');
-        const valueEl = trigger.querySelector('.custom-select-value');
-
-        trigger.addEventListener('click', (e) => {
-            e.stopPropagation();
-            document.querySelectorAll('.custom-select.open').forEach(el => {
-                if (el !== wrap) el.classList.remove('open');
-            });
-            wrap.classList.toggle('open');
-        });
-
-        menu.querySelectorAll('.custom-select-option').forEach(opt => {
-            opt.addEventListener('click', (e) => {
-                e.stopPropagation();
-                _stockFilter = opt.dataset.value;
-                valueEl.textContent = opt.textContent.trim();
-                menu.querySelectorAll('.custom-select-option')
-                    .forEach(o => o.classList.remove('selected'));
-                opt.classList.add('selected');
-                wrap.classList.remove('open');
-            });
-        });
     }
 
     // ═══════════════════════════════════════════
@@ -188,6 +150,7 @@ window.App.Features.Article = (function () {
     }
 
     function buildPayload(page, pageSizeOverride = null) {
+        const _sort = window.App.Features.Article._sort || { by: 'code', dir: 'asc' };
         const parseIntOrNull = (id) => {
             const el = document.getElementById(id);
             if (!el) return null;
@@ -203,9 +166,10 @@ window.App.Features.Article = (function () {
             taxId: document.getElementById('artTaxId')?.value || null,
             stockTypeId: parseIntOrNull('artStockTypeId'),
             groupId: parseIntOrNull('artGroupId'),
-            // unitId و stockFilter حذف شدن
-            stockFilter: 'all',   // برای سازگاری با Backend
+            stockFilter: 'all',
             page: page,
+            sortBy: _sort.by,
+            sortDir: _sort.dir,
             pageSize: pageSizeOverride || window.App.state.settings.pageSize
         };
     }
@@ -226,30 +190,36 @@ window.App.Features.Article = (function () {
             return;
         }
 
-        const rows = items.map(a => {
-            const stock = a.finallExistence ?? 0;
-            const stockClass = stock > 0
-                ? 'color:#059669; font-weight:600;'
-                : (stock < 0 ? 'color:#DC2626; font-weight:600;' : 'color:#6B7280;');
-
-            return `
+        const rows = items.map((a, idx) => `
             <tr>
-                <td class="num text-center">${a.stockTypeCode || '-'}</td>
-                <td class="num text-center">${a.articleGroupCode || '-'}</td>
+                <td class="text-center" style="font-size:11px;">${(data.page - 1) * data.pageSize + idx + 1}</td>
                 <td class="num text-center" style="font-weight:600;">${a.code || ''}</td>
+                <td class="num text-center" style="font-size:11px;">${a.taxId || '-'}</td>
                 <td>${H.esc(a.name || '')}</td>
-                <td class="text-center">${H.esc(a.articleUnitName || '')}</td>
+                <td class="text-center">${H.esc(a.articleUnitName || '-')}</td>
+                <td class="text-center">${H.esc(a.articleUnitName2 || '-')}</td>
+                <td class="text-center">${H.esc(a.articleUnitName3 || '-')}</td>
+                <td class="num text-center">${a.articleGroupCode || '-'}</td>
+                <td>${H.esc(a.articleGroupName || '-')}</td>
+                <td class="num text-center">${a.stockTypeCode || '-'}</td>
+                <td>${H.esc(a.stockTypeName || '-')}</td>
+                <td class="text-center">${H.esc(a.statusName || '-')}</td>
                 <td class="num text-left">${H.fmtT(a.amountFirst)}</td>
                 <td class="num text-left">${H.fmtT(a.costFirst)}</td>
-                <td class="num text-left" style="color:#DC2626;">${H.fmtT(a.outAmount1)}</td>
-                <td class="num text-left" style="color:#DC2626;">${H.fmtT(a.outVal1)}</td>
-                <td class="num text-left" style="color:#059669;">${H.fmtT(a.inAmount1)}</td>
-                <td class="num text-left" style="color:#059669;">${H.fmtT(a.inVal1)}</td>
-                <td class="num text-left">${H.fmtT(a.backAmount1)}</td>
-                <td class="num text-left">${H.fmtT(a.backVal1)}</td>
-                <td class="num text-left" style="${stockClass}">${H.fmtT(stock)}</td>
-                <td class="num text-left">${H.fmtT(a.amountSale)}</td>
-                <td class="text-center">${H.esc(a.statusName || '')}</td>
+                <td class="text-center" style="font-size:11px;">${H.esc(a.depreciationTypeName || '-')}</td>
+                <td class="num text-left">${a.depreciation ?? '-'}</td>
+                <td class="num text-center" style="font-family:Consolas,monospace;">${a.codeCol || '-'}</td>
+                <td class="num text-center" style="font-family:Consolas,monospace;">${a.codeMoein || '-'}</td>
+                <td class="num text-center" style="font-family:Consolas,monospace;">${a.codeTafzil || '-'}</td>
+                <td class="num text-center" style="font-family:Consolas,monospace;">${a.codeColBuy || '-'}</td>
+                <td class="num text-center" style="font-family:Consolas,monospace;">${a.codeMoeinBuy || '-'}</td>
+                <td class="num text-center" style="font-family:Consolas,monospace;">${a.codeTafzilBuy || '-'}</td>
+                <td class="num text-center" style="font-family:Consolas,monospace;">${a.codeColReBuy || '-'}</td>
+                <td class="num text-center" style="font-family:Consolas,monospace;">${a.codeMoeinReBuy || '-'}</td>
+                <td class="num text-center" style="font-family:Consolas,monospace;">${a.codeTafzilReBuy || '-'}</td>
+                <td class="num text-center" style="font-family:Consolas,monospace;">${a.codeColReSale || '-'}</td>
+                <td class="num text-center" style="font-family:Consolas,monospace;">${a.codeMoeinReSale || '-'}</td>
+                <td class="num text-center" style="font-family:Consolas,monospace;">${a.codeTafzilReSale || '-'}</td>
                 <td class="text-center">
                     <button class="btn btn-sm btn-ghost"
                             onclick="App.Features.Article.showDetail(${a.id})"
@@ -264,13 +234,11 @@ window.App.Features.Article = (function () {
                             title="حذف" style="color:var(--danger);">🗑️</button>
                 </td>
             </tr>
-        `;
-        }).join('');
+        `).join('');
 
         const page = data.page || 1;
         const totalPages = data.totalPages || 1;
         const totalCount = data.totalCount || items.length;
-
         const paginationHtml = buildPagination(page, totalPages, totalCount, items.length);
 
         container.innerHTML = `
@@ -285,25 +253,40 @@ window.App.Features.Article = (function () {
             </div>
             <div class="table-wrapper" style="overflow-x:auto;">
                 <table class="article-list-table">
-                    <thead>
-                        <tr>
-                            <th style="width:60px;">انبار</th>
-                            <th style="width:60px;">گروه</th>
-                            <th style="width:90px;">کد کالا</th>
-                            <th style="min-width:200px;">نام کالا</th>
-                            <th style="width:70px;">واحد</th>
-                            <th class="text-left" style="width:80px;">موج اولیه</th>
-                            <th class="text-left" style="width:100px;">ارزش اولیه</th>
-                            <th class="text-left" style="width:80px;">فروش (تعداد)</th>
-                            <th class="text-left" style="width:100px;">فروش (ریالی)</th>
-                            <th class="text-left" style="width:80px;">خرید (تعداد)</th>
-                            <th class="text-left" style="width:100px;">خرید (ریالی)</th>
-                            <th class="text-left" style="width:80px;">برگشت (تعداد)</th>
-                            <th class="text-left" style="width:100px;">برگشت (ریالی)</th>
-                            <th class="text-left" style="width:100px;">موجودی فعلی</th>
-                            <th class="text-left" style="width:110px;">قیمت فروش</th>
-                            <th style="width:80px;">وضعیت</th>
-                            <th style="width:90px;"></th>
+                                        <thead>
+                        <tr style="background:#EEF2FF;">
+                            <th rowspan="2" style="background:#EEF2FF; color:#4338CA; text-align:center; vertical-align:middle;">#</th>
+                            <th rowspan="2" data-sort-key="code" style="background:#EEF2FF; color:#4338CA; text-align:center; vertical-align:middle;">کد</th>
+                            <th rowspan="2" style="background:#EEF2FF; color:#4338CA; text-align:center; vertical-align:middle;">شناسه مالیاتی</th>
+                            <th colspan="1" style="background:#EEF2FF; color:#4338CA; text-align:center;">مشخصات کالا</th>
+                            <th colspan="3" style="background:#EEF2FF; color:#4338CA; text-align:center;">واحد شمارش کالا</th>
+                            <th colspan="5" style="background:#EEF2FF; color:#4338CA; text-align:center;">اطلاعات انبار</th>
+                            <th colspan="2" style="background:#EEF2FF; color:#4338CA; text-align:center;">موجودی اولیه</th>
+                            <th colspan="2" style="background:#EEF2FF; color:#4338CA; text-align:center;">استهلاک</th>
+                            <th colspan="3" style="background:#EEF2FF; color:#4338CA; text-align:center;">فروش</th>
+                            <th colspan="3" style="background:#EEF2FF; color:#4338CA; text-align:center;">خرید</th>
+                            <th colspan="3" style="background:#EEF2FF; color:#4338CA; text-align:center;">برگشت خرید</th>
+                            <th colspan="3" style="background:#EEF2FF; color:#4338CA; text-align:center;">برگشت فروش</th>
+                            <th rowspan="2" style="background:#EEF2FF; color:#4338CA; text-align:center; vertical-align:middle;">عملیات</th>
+                        </tr>
+                        <tr style="background:#F9FAFB;">
+                            <th data-sort-key="name">عنوان کالا</th>
+                            <th data-sort-key="unitname">اول</th>
+                            <th>دوم</th>
+                            <th>سوم</th>
+                            <th data-sort-key="groupcode">کد گروه</th>
+                            <th>عنوان گروه</th>
+                            <th data-sort-key="stocktypecode">کد انبار</th>
+                            <th>عنوان انبار</th>
+                            <th data-sort-key="statusname">وضعیت</th>
+                            <th data-sort-key="amountfirst">مقدار</th>
+                            <th data-sort-key="costfirst">ریالی</th>
+                            <th>نوع</th>
+                            <th>درصد</th>
+                            <th>کل</th><th>معین</th><th>تفصیل</th>
+                            <th>کل</th><th>معین</th><th>تفصیل</th>
+                            <th>کل</th><th>معین</th><th>تفصیل</th>
+                            <th>کل</th><th>معین</th><th>تفصیل</th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
@@ -311,14 +294,29 @@ window.App.Features.Article = (function () {
             </div>
             ${paginationHtml}
         </div>`;
-        // ⭐ اعمال permission
+
+        // ⭐ سورت روی هدرها (با data-sort-key)
+        const _sort = window.App.Features.Article._sort || { by: 'code', dir: 'asc' };
+        container.querySelectorAll('th[data-sort-key]').forEach(th => {
+            const key = th.dataset.sortKey;
+            th.classList.add('sortable-th');
+            th.style.cursor = 'pointer';
+
+            if (_sort.by === key) {
+                th.textContent = th.textContent.replace(/[▲▼]/g, '').trim() + (_sort.dir === 'asc' ? ' ▲' : ' ▼');
+            }
+
+            th.addEventListener('click', () => {
+                const newDir = (_sort.by === key && _sort.dir === 'asc') ? 'desc' : 'asc';
+                window.App.Features.Article._sort = { by: key, dir: newDir };
+                runList(1);
+            });
+        });
+
         if (window.App.UI.PermissionGuard) {
             window.App.UI.PermissionGuard.apply(container);
         }
 
-        // ⭐ Export
-        // ⭐ Export
-       
         Exporter.attach(container, {
             title: 'لیست کالاها',
             subtitle: (window.App.state.user?.orgName || '') + ' - ' + (window.App.state.user?.fyName || ''),
@@ -333,57 +331,76 @@ window.App.Features.Article = (function () {
             }
         });
     }
+
     function buildArticleTableHtml(items) {
         let rows = '';
-        items.forEach(a => {
-            const stock = a.finallExistence ?? 0;
-            const stockClass = stock > 0
-                ? 'color:#059669; font-weight:600;'
-                : (stock < 0 ? 'color:#DC2626; font-weight:600;' : 'color:#6B7280;');
-
+        items.forEach((a, idx) => {
             rows += '<tr>' +
-                '<td class="num text-center">' + (a.stockTypeCode || '-') + '</td>' +
-                '<td class="num text-center">' + (a.articleGroupCode || '-') + '</td>' +
-                '<td class="num text-center">' + (a.code || '') + '</td>' +
+                '<td>' + (idx + 1) + '</td>' +
+                '<td>' + (a.code || '') + '</td>' +
+                '<td>' + (a.taxId || '-') + '</td>' +
                 '<td>' + H.esc(a.name || '') + '</td>' +
-                '<td class="text-center">' + H.esc(a.articleUnitName || '') + '</td>' +
-                '<td class="num text-left">' + H.fmtT(a.amountFirst) + '</td>' +
-                '<td class="num text-left">' + H.fmtT(a.costFirst) + '</td>' +
-                '<td class="num text-left">' + H.fmtT(a.outAmount1) + '</td>' +
-                '<td class="num text-left">' + H.fmtT(a.outVal1) + '</td>' +
-                '<td class="num text-left">' + H.fmtT(a.inAmount1) + '</td>' +
-                '<td class="num text-left">' + H.fmtT(a.inVal1) + '</td>' +
-                '<td class="num text-left">' + H.fmtT(a.backAmount1) + '</td>' +
-                '<td class="num text-left">' + H.fmtT(a.backVal1) + '</td>' +
-                '<td class="num text-left" style="' + stockClass + '">' + H.fmtT(stock) + '</td>' +
-                '<td class="num text-left">' + H.fmtT(a.amountSale) + '</td>' +
-                '<td class="text-center">' + H.esc(a.statusName || '') + '</td>' +
+                '<td>' + H.esc(a.articleUnitName || '-') + '</td>' +
+                '<td>' + H.esc(a.articleUnitName2 || '-') + '</td>' +
+                '<td>' + H.esc(a.articleUnitName3 || '-') + '</td>' +
+                '<td>' + (a.articleGroupCode || '-') + '</td>' +
+                '<td>' + H.esc(a.articleGroupName || '-') + '</td>' +
+                '<td>' + (a.stockTypeCode || '-') + '</td>' +
+                '<td>' + H.esc(a.stockTypeName || '-') + '</td>' +
+                '<td>' + H.esc(a.statusName || '-') + '</td>' +
+                '<td>' + H.fmtT(a.amountFirst) + '</td>' +
+                '<td>' + H.fmtT(a.costFirst) + '</td>' +
+                '<td>' + H.esc(a.depreciationTypeName || '-') + '</td>' +
+                '<td>' + (a.depreciation ?? '-') + '</td>' +
+                '<td>' + (a.codeCol || '-') + '</td>' +
+                '<td>' + (a.codeMoein || '-') + '</td>' +
+                '<td>' + (a.codeTafzil || '-') + '</td>' +
+                '<td>' + (a.codeColBuy || '-') + '</td>' +
+                '<td>' + (a.codeMoeinBuy || '-') + '</td>' +
+                '<td>' + (a.codeTafzilBuy || '-') + '</td>' +
+                '<td>' + (a.codeColReBuy || '-') + '</td>' +
+                '<td>' + (a.codeMoeinReBuy || '-') + '</td>' +
+                '<td>' + (a.codeTafzilReBuy || '-') + '</td>' +
+                '<td>' + (a.codeColReSale || '-') + '</td>' +
+                '<td>' + (a.codeMoeinReSale || '-') + '</td>' +
+                '<td>' + (a.codeTafzilReSale || '-') + '</td>' +
                 '</tr>';
         });
 
         const table = document.createElement('table');
         table.innerHTML =
-            '<thead><tr>' +
-            '<th>انبار</th>' +
-            '<th>گروه</th>' +
-            '<th>کد کالا</th>' +
-            '<th>نام کالا</th>' +
-            '<th>واحد</th>' +
-            '<th class="text-left">موج اولیه</th>' +
-            '<th class="text-left">ارزش اولیه</th>' +
-            '<th class="text-left">فروش (تعداد)</th>' +
-            '<th class="text-left">فروش (ریالی)</th>' +
-            '<th class="text-left">خرید (تعداد)</th>' +
-            '<th class="text-left">خرید (ریالی)</th>' +
-            '<th class="text-left">برگشت (تعداد)</th>' +
-            '<th class="text-left">برگشت (ریالی)</th>' +
-            '<th class="text-left">موجودی فعلی</th>' +
-            '<th class="text-left">قیمت فروش</th>' +
-            '<th>وضعیت</th>' +
-            '</tr></thead>' +
+            '<thead>' +
+            '<tr>' +
+            '<th rowspan="2">#</th>' +
+            '<th rowspan="2">کد</th>' +
+            '<th rowspan="2">شناسه مالیاتی</th>' +
+            '<th>مشخصات کالا</th>' +
+            '<th colspan="3">واحد شمارش</th>' +
+            '<th colspan="5">اطلاعات انبار</th>' +
+            '<th colspan="2">موجودی اولیه</th>' +
+            '<th colspan="2">استهلاک</th>' +
+            '<th colspan="3">فروش</th>' +
+            '<th colspan="3">خرید</th>' +
+            '<th colspan="3">برگشت خرید</th>' +
+            '<th colspan="3">برگشت فروش</th>' +
+            '</tr>' +
+            '<tr>' +
+            '<th>عنوان کالا</th>' +
+            '<th>اول</th><th>دوم</th><th>سوم</th>' +
+            '<th>کد گروه</th><th>عنوان گروه</th>' +
+            '<th>کد انبار</th><th>عنوان انبار</th><th>وضعیت</th>' +
+            '<th>مقدار</th><th>ریالی</th>' +
+            '<th>نوع</th><th>درصد</th>' +
+            '<th>کل</th><th>معین</th><th>تفصیل</th>' +
+            '<th>کل</th><th>معین</th><th>تفصیل</th>' +
+            '<th>کل</th><th>معین</th><th>تفصیل</th>' +
+            '<th>کل</th><th>معین</th><th>تفصیل</th>' +
+            '</tr>' +
+            '</thead>' +
             '<tbody>' + rows + '</tbody>';
         return table;
     }
+
 
     function buildPagination(page, totalPages, totalCount, itemCount) {
         if (totalPages <= 1) {
@@ -420,52 +437,6 @@ window.App.Features.Article = (function () {
     }
 
     // ═══════════════════════════════════════════
-    //  EXPORT — fetch کل داده
-    // ═══════════════════════════════════════════
-    async function fetchFullTable() {
-        const payload = buildPayload(1, 100000);
-        const full = await window.App.Http.api('/api/article/list', {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
-        return buildTableHtml(full.items || []);
-    }
-
-    function buildTableHtml(items) {
-        const rows = items.map(a => `
-            <tr>
-                <td class="num text-center">${a.code || ''}</td>
-                <td>${H.esc(a.name || '')}</td>
-                <td class="num text-center">${a.taxId || '-'}</td>
-                <td>${H.esc(a.articleGroupName || '')}</td>
-                <td>${H.esc(a.stockTypeName || '')}</td>
-                <td>${H.esc(a.articleUnitName || '')}</td>
-                <td class="num text-left">${H.fmtT(a.finallExistence)}</td>
-                <td class="num text-left">${H.fmtT(a.amountSale)}</td>
-                <td class="text-center">${H.esc(a.statusName || '')}</td>
-            </tr>
-        `).join('');
-
-        const table = document.createElement('table');
-        table.innerHTML = `
-            <thead>
-                <tr>
-                    <th>کد</th>
-                    <th>نام کالا</th>
-                    <th>شناسه مالیاتی</th>
-                    <th>گروه</th>
-                    <th>انبار</th>
-                    <th>واحد</th>
-                    <th class="text-left">موجودی</th>
-                    <th class="text-left">قیمت فروش</th>
-                    <th>وضعیت</th>
-                </tr>
-            </thead>
-            <tbody>${rows}</tbody>`;
-        return table;
-    }
-
-    // ═══════════════════════════════════════════
     //  SHOW DETAIL — modal
     // ═══════════════════════════════════════════
     async function showDetail(articleId) {
@@ -473,7 +444,6 @@ window.App.Features.Article = (function () {
             `<div class="loading"><div class="spinner"></div></div>`);
 
         try {
-            // ⭐ لود کردن lookup ها (گروه، معین، تفصیلی)
             let lookups = { cols: [], moeins: [], tafzils: [] };
             try {
                 lookups = await window.App.Features.ArticleForm.getLookups();
@@ -503,7 +473,6 @@ window.App.Features.Article = (function () {
 
         return `
         <div class="art-view">
-            <!-- ═══ Header ═══ -->
             <div class="art-view-header">
                 <div class="art-view-title">
                     <div class="art-view-icon">🏷️</div>
@@ -519,7 +488,6 @@ window.App.Features.Article = (function () {
                 </div>
             </div>
 
-            <!-- ═══ Cards ═══ -->
             <div class="art-view-grid">
                 <div class="art-card">
                     <div class="art-card-title">📋 اطلاعات پایه</div>
@@ -567,7 +535,6 @@ window.App.Features.Article = (function () {
                 </div>
             </div>
 
-            <!-- ═══ آمار حرکات ═══ -->
             <div class="art-card art-card-full art-stats-card">
                 <div class="art-card-title">📊 آمار و موجودی</div>
                 <div class="art-stats-grid">
@@ -584,19 +551,18 @@ window.App.Features.Article = (function () {
 
                     <div class="art-stat-item art-stat-buy">
                         <div class="art-stat-label">📦 خرید</div>
-                        <div class="art-stat-value">${H.fmtT(d.inAmount1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
-                        <div class="art-stat-sub art-num">${H.fmtT(d.inVal1)} ریال</div>
+                        <div class="art-stat-value">${H.fmtT(d.inVal1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
+                        <div class="art-stat-sub art-num">${H.fmtT(d.inAmount1)} ریال</div>
                     </div>
                     <div class="art-stat-item art-stat-sell">
                         <div class="art-stat-label">💸 فروش</div>
-                        <div class="art-stat-value">${H.fmtT(d.outAmount1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
-                        <div class="art-stat-sub art-num">${H.fmtT(d.outVal1)} ریال</div>
+                        <div class="art-stat-value">${H.fmtT(d.outVal1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
+                        <div class="art-stat-sub art-num">${H.fmtT(d.outAmount1)} ریال</div>
                     </div>
-
                     <div class="art-stat-item art-stat-return">
                         <div class="art-stat-label">↩️ برگشت</div>
-                        <div class="art-stat-value">${H.fmtT(d.backAmount1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
-                        <div class="art-stat-sub art-num">${H.fmtT(d.backVal1)} ریال</div>
+                        <div class="art-stat-value">${H.fmtT(d.backVal1)} <span class="art-stat-unit">${H.esc(d.articleUnitName || '')}</span></div>
+                        <div class="art-stat-sub art-num">${H.fmtT(d.backAmount1)} ریال</div>
                     </div>
                     <div class="art-stat-item art-stat-final">
                         <div class="art-stat-label">📊 موجودی فعلی</div>
@@ -607,7 +573,6 @@ window.App.Features.Article = (function () {
                 </div>
             </div>
 
-            <!-- ═══ کدینگ حسابداری ═══ -->
             <div class="art-card art-card-full">
                 <div class="art-card-title">🔢 کدینگ حسابداری</div>
                 <table class="art-coding-table">
@@ -633,7 +598,6 @@ window.App.Features.Article = (function () {
         </div>`;
     }
 
-    // ⭐ یک ردیف کدینگ
     function codingRow(label, col, moein, tafzil, lookups) {
         const colName = findColName(col, lookups);
         const moeinName = findMoeinName(col, moein, lookups);
@@ -668,16 +632,6 @@ window.App.Features.Article = (function () {
         if (!code || !lookups || !lookups.tafzils) return '';
         const t = lookups.tafzils.find(x => x.code === parseInt(code));
         return t ? t.name : '';
-    }   
-
-    function getStatusInfo(status) {
-        const map = {
-            0: { text: 'غیرفعال', cls: 'art-badge-gray' },
-            1: { text: 'فعال', cls: 'art-badge-success' },
-            2: { text: 'انباری', cls: 'art-badge-info' },
-            3: { text: 'اموالی', cls: 'art-badge-warning' }
-        };
-        return map[status] || { text: 'نامشخص', cls: 'art-badge-gray' };
     }
 
     function getStatusInfo(status) {
@@ -802,9 +756,6 @@ window.App.Features.Article = (function () {
         return (u.orgName || '') + ' - ' + (u.fyName || '');
     }
 
-    // ═══════════════════════════════════════════
-    //  API عمومی
-    // ═══════════════════════════════════════════
     return {
         render: render,
         runList: runList,
@@ -814,7 +765,6 @@ window.App.Features.Article = (function () {
 
 })();
 
-// ⭐ alias برای سازگاری با کد فعلی
 window.App.renderArticleList = window.App.Features.Article.render;
 window.App.runArticleList = window.App.Features.Article.runList;
 window.App.showArticleDetail = window.App.Features.Article.showDetail;

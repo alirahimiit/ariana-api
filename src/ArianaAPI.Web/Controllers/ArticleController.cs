@@ -123,6 +123,15 @@ public class ArticleController : ControllerBase
         }
     }
 
+    [HttpGet("{id:long}/can-delete")]
+    [RequirePermission(192)]
+    public async Task<ActionResult<ArticleUsageDto>> CanDelete(long id, CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+        var result = await _repo.CheckUsageAsync(orgId, fyId, id, ct);
+        return Ok(result);
+    }
     /// <summary>حذف کالا</summary>
     [HttpDelete("{id:long}")]
     [RequirePermission(192)]
