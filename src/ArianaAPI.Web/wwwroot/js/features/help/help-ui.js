@@ -13,22 +13,30 @@ window.HelpUI = (function () {
     //  تعیین کلید راهنما بر اساس صفحه‌ی فعلی
     // ═══════════════════════════════════════════════
     function _resolvePageKey() {
-        // ⭐ اگه داخل فرم سند هستیم (مودال باز)
-        if (document.querySelector('[data-help="sanad-form"], .sanad-form, #sanadFormModal')) {
-            return 'sanad-form';
+        // ⭐ ۱. جستجوی همه‌ی [data-help] موجود و فعال در DOM
+        //    آخرین عنصر (داخلی‌ترین) = فعال‌ترین
+        const helpEls = document.querySelectorAll('[data-help]');
+        for (let i = helpEls.length - 1; i >= 0; i--) {
+            const el = helpEls[i];
+            const rect = el.getBoundingClientRect();
+            // فقط اگه واقعاً visible باشه
+            if (rect.width > 0 && rect.height > 0) {
+                return el.getAttribute('data-help');
+            }
         }
-        // ⭐ اگه داخل فرم کالا هستیم
-        if (document.querySelector('[data-help="article-form"], .article-form, #articleFormModal')) {
-            return 'article-form';
-        }
-        // ⭐ از state صفحه‌ی فعلی
+
+        // ⭐ ۲. از state صفحه‌ی فعلی
         const page = window.App?.state?.currentPage;
-        if (page) return page;
+        if (!page) return '__default__';
 
-        // ⭐ fallback
-        return '__default__';
+        // ⭐ ۳. نگاشت صفحات فاکتور (چند route → یه راهنما)
+        const factorPages = ['factor', 'factor-buy', 'factor-sell',
+            'factor-buy-return', 'factor-sell-return',
+            'factor-scrap', 'factor-pre'];
+        if (factorPages.includes(page)) return 'factor';
+
+        return page;
     }
-
     // ═══════════════════════════════════════════════
     //  Render
     // ═══════════════════════════════════════════════

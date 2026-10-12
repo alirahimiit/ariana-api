@@ -152,7 +152,7 @@ window.App.Features.FactorItemForm = (function () {
         const it = _state.item;
 
         return '' +
-            '<div class="ffi-box">' +
+            '<div class="ffi-box" data-help="factor-item-form">' +
 
             // ─── Header ───
             '<div class="ffi-header">' +

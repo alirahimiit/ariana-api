@@ -485,7 +485,7 @@ window.App.Features.HesabManage = (function () {
         }
 
         return `
-            <div class="hm-form">
+            <div class="hm-form" data-help="hesab-manage-form">
                 ${lockWarning}
                 ${parentColField}
                 ${groupTypeField}

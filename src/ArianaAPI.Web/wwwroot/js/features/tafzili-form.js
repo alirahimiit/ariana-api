@@ -68,7 +68,7 @@ window.App.Features.TafziliForm = (function () {
         ].map(o => `<option value="${o.v}" ${d.kind === o.v ? 'selected' : ''}>${o.t}</option>`).join('');
 
         return `
-        <div class="tf-form">
+        <div class="tf-form" data-help="tafzili-form">
             <div class="tf-section">
                 <div class="tf-section-title">📋 اطلاعات پایه</div>
                 <div class="tf-grid tf-grid-2">

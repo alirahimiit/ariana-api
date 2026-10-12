@@ -176,7 +176,7 @@ window.App.Features.FactorForm = (function () {
     //  HTML BUILDER
     // ═══════════════════════════════════════════════════
     function buildFormHtml() {
-        let html = '<div class="ff-form">';
+        let html = '<div class="ff-form" data-help="factor-form">';
 
         // ═══ ۱. هدر ═══
         html += buildHeaderSection();

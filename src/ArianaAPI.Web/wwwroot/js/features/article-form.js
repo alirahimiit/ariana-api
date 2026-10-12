@@ -107,7 +107,7 @@ window.App.Features.ArticleForm = (function () {
     function buildFormHtml(d) {
         const isEdit = _state.mode === 'edit';
 
-        let html = '<div class="af-form">';
+        let html = '<div class="af-form" data-help="article-form">';
         html += sectionStockGroup(d, isEdit);
         html += sectionBasic(d);
         html += sectionUnits(d);
