@@ -639,6 +639,8 @@ window.App = Object.assign(window.App || {}, {
                 window.App.Features.Article.runList(1);
             } else if (this.state.currentPage === 'factor') {
                 window.App.Features.Factor.runList(1);
+            } else if (this.state.currentPage === 'tafzili2') {
+                window.App.Features.Tafzili2.runList(1);
             } else if (this.state.currentPage === 'ledger') {
                 // کاربر باید دوباره تهیه گزارش بزنه
             }
@@ -716,7 +718,9 @@ window.App = Object.assign(window.App || {}, {
             daybook: 'دفتر روزنامه',
             factor: 'فاکتورها',
             hesab: 'حساب‌ها',
-            tafzili: 'تفضیلی‌ها',
+            tafzili: 'تفضیلی 1',
+            tafzili2: 'تفضیلی ۲',
+            unit: 'واحدهای شمارش',
             article: 'کالاها',
             sharh: 'شرح‌ها',
             kind: 'انواع سند',
@@ -749,6 +753,10 @@ window.App = Object.assign(window.App || {}, {
             'party-factor': 'فاکتورهای طرف حساب',
             'factor-profit-loss': 'سود و زیان فاکتوری',
             'article-stock': 'گزارش موجودی کالا',
+            //
+            'stock-type': 'انبارها / اموال',
+            'article-group': 'گروه‌های کالا',
+
             // * مودیان
             'moadian': '🏛️ سامانه مودیان'
         };
@@ -774,6 +782,10 @@ window.App = Object.assign(window.App || {}, {
             case 'article': window.App.Features.Article.render(); break;
             case 'hesab': window.App.Features.Hesab.render(); break;
             case 'tafzili': window.App.Features.Tafzili.render(); break;
+            case 'tafzili2': window.App.Features.Tafzili2.render(); break;
+            case 'stock-type': window.App.Features.StockType.render(); break; 
+            case 'article-group': window.App.Features.ArticleGroup.render(); break;
+            case 'unit': window.App.Features.Unit.render(); break;
             case 'sharh': window.App.Features.Sharh.render(); break;
             case 'kind': window.App.Features.Kind.render(); break;
             case 'kardex': window.App.Features.Kardex.render(); break;

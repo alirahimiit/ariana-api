@@ -56,6 +56,17 @@ public class TafziliController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>کد پیشنهادی برای تفضیلی جدید</summary>
+    [HttpGet("next-code")]
+    public async Task<ActionResult<object>> GetNextCode(CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        var next = await _repo.GetNextCodeAsync(orgId, fyId, ct);
+        return Ok(new { nextCode = next });
+    }
+
     /// <summary>ذخیره گروه تفضیلی (جدید یا ویرایش)</summary>
     [HttpPost("groups/save")]
     public async Task<ActionResult<long>> SaveGroup(

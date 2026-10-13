@@ -1,0 +1,54 @@
+﻿/* ─── ArticleGroup List ─── */
+#agResult .table-wrapper {
+    overflow-x: auto;
+    overflow-y: visible;
+}
+
+#agResult table {
+    width: auto;
+    min-width: 100%;
+    border-collapse: collapse;
+}
+
+    #agResult table th,
+    #agResult table td {
+        padding: 10px 12px;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+        #agResult table td:last-child {
+            text-align: center;
+            padding: 6px 10px;
+        }
+
+            #agResult table td:last-child .btn {
+                padding: 2px 6px;
+                font-size: 13px;
+                margin: 0 1px;
+            }
+
+        #agResult table td.num {
+            font-family: 'Vazirmatn', sans-serif;
+            direction: ltr;
+            text-align: right;
+            font-size: 12.5px;
+        }
+
+#agResult .table-wrapper::-webkit-scrollbar {
+    height: 8px;
+}
+
+#agResult .table-wrapper::-webkit-scrollbar-track {
+    background: #F3F4F6;
+    border-radius: 4px;
+}
+
+#agResult .table-wrapper::-webkit-scrollbar-thumb {
+    background: #D1D5DB;
+    border-radius: 4px;
+}
+
+    #agResult .table-wrapper::-webkit-scrollbar-thumb:hover {
+        background: #9CA3AF;
+    }

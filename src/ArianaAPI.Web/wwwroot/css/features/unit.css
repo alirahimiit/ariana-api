@@ -1,0 +1,49 @@
+﻿#unResult .table-wrapper {
+    overflow-x: auto;
+    overflow-y: visible;
+}
+
+#unResult table {
+    width: auto;
+    min-width: 100%;
+    border-collapse: collapse;
+}
+
+    #unResult table th,
+    #unResult table td {
+        padding: 10px 12px;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+        #unResult table td:last-child {
+            text-align: center;
+            padding: 6px 10px;
+        }
+
+            #unResult table td:last-child .btn {
+                padding: 2px 6px;
+                font-size: 13px;
+                margin: 0 1px;
+            }
+
+        #unResult table td.num {
+            font-family: 'Vazirmatn', sans-serif;
+            direction: ltr;
+            text-align: right;
+            font-size: 12.5px;
+        }
+
+#unResult .table-wrapper::-webkit-scrollbar {
+    height: 8px;
+}
+
+#unResult .table-wrapper::-webkit-scrollbar-track {
+    background: #F3F4F6;
+    border-radius: 4px;
+}
+
+#unResult .table-wrapper::-webkit-scrollbar-thumb {
+    background: #D1D5DB;
+    border-radius: 4px;
+}

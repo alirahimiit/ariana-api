@@ -120,9 +120,12 @@ public class TafziliGroupSaveDto
 
 public class TafziliCreateDto
 {
+    // ⭐ جدید — اگه null یا 0 باشه، خودکار MAX+1
+    public long? CodeTafzil { get; set; }
+
     public string? Name { get; set; }
     public long? TafziliGroupId { get; set; }
-    public int? Kind { get; set; }              // 0-4
+    public int? Kind { get; set; }
     public string? Discript { get; set; }
 
     public string? Phone { get; set; }
@@ -140,8 +143,8 @@ public class TafziliCreateDto
     public int? CityId { get; set; }
     public int? CityId2 { get; set; }
 
-    public int? Mahiat { get; set; }            // 1=بدهکار، 2=بستانکار
-    public int? Vaziat { get; set; } = 1;       // 0/1
+    public int? Mahiat { get; set; }
+    public int? Vaziat { get; set; } = 1;
     public bool? IsSaleMan { get; set; }
     public bool? IsStock { get; set; }
 }

@@ -112,8 +112,15 @@ public class ArticleStockRepository : IArticleStockRepository
         var orderBy = (req.OrderBy ?? "name").ToLower() switch
         {
             "code" => "AN.Code",
-            "stock" => "FinalQty DESC",
-            "value" => "FinalVal DESC",
+
+            "stock" => @"(ISNULL(AN.AmountFirst, 0) 
+                  + ISNULL(P.BuyQty, 0) + ISNULL(P.SellBackQty, 0) 
+                  - ISNULL(P.SellQty, 0) - ISNULL(P.BuyBackQty, 0) - ISNULL(P.ScrapQty, 0)) DESC",
+
+            "value" => @"(ISNULL(AN.CostFirst, 0) 
+                  + ISNULL(P.BuyVal, 0) + ISNULL(P.SellBackVal, 0) 
+                  - ISNULL(P.SellVal, 0) - ISNULL(P.BuyBackVal, 0) - ISNULL(P.ScrapVal, 0)) DESC",
+
             _ => "AN.Name"
         };
         sb.Append($" ORDER BY {orderBy} ");

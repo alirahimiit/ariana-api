@@ -162,6 +162,11 @@
     flex-shrink: 0;
 }
 
+    /* ⭐ رفع باگ — hidden باید کار کنه */
+    .hp-tabs[hidden] {
+        display: none !important;
+    }
+
 .hp-tab {
     padding: 8px 20px;
     border: none;
@@ -194,7 +199,7 @@
     min-height: 240px;
     max-height: 55vh;
     padding: 6px 0;
-    scrollbar-width: thin;
+    
 }
 
     .hp-list::-webkit-scrollbar {
@@ -458,4 +463,10 @@
 /* ─── Dark mode (اختیاری) ─── */
 @media (prefers-color-scheme: dark) {
     /* فعلاً غیرفعال — چون پروژه روشنه */
+}
+
+/* ─── تفصیلی ۲ — رنگ متفاوت برای تفکیک ─── */
+.hp-badge-tafzil2 {
+    background: #FCE7F3;
+    color: #9D174D;
 }

@@ -57,10 +57,15 @@ public static class DependencyInjection
         services.AddScoped<IPermissionRepository, PermissionRepository>();
         services.AddScoped<IKardexRepository, KardexRepository>();
         services.AddScoped<IArticleRotateRepository, ArticleRotateRepository>();
+        services.AddScoped<IStockTypeRepository, StockTypeRepository>();
+        services.AddScoped<IArticleGroupRepository, ArticleGroupRepository>();
+        services.AddScoped<IUnitRepository, UnitRepository>();
         services.AddScoped<IPartyFactorRepository, PartyFactorRepository>();
         services.AddScoped<IFactorProfitLossRepository, FactorProfitLossRepository>();
         services.AddScoped<IArticleStockRepository, ArticleStockRepository>();
         services.AddScoped<ISpecialHesabRepository, SpecialHesabRepository>();
+        services.AddScoped<ILocationRepository, LocationRepository>();
+        services.AddScoped<ITafzili2Repository, Tafzili2Repository>();
 
         // ═══ Support Relay Client ═══
         services.AddHttpClient<SupportRelayClient>((sp, http) =>

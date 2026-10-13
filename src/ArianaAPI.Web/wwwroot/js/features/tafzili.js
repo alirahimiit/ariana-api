@@ -252,38 +252,38 @@ window.App.Features.Tafzili = (function () {
                         ➕ تفضیلی جدید
                     </button>
                 </div>
-                                <div class="table-wrapper">
+                  <div class="table-wrapper">
                     <table>
                         <thead>
                             <tr>
-                                <th class="sortable-th" style="width:80px;" onclick="App.Features.Tafzili.sortBy('codeTafzil')">
+                                <th class="sortable-th" data-nosort style="width:80px;" onclick="App.Features.Tafzili.sortBy('codeTafzil')">
                                     کد ${sortIcon('codeTafzil')}
                                 </th>
-                                <th class="sortable-th" onclick="App.Features.Tafzili.sortBy('name')">
+                                <th class="sortable-th" data-nosort onclick="App.Features.Tafzili.sortBy('name')">
                                     نام ${sortIcon('name')}
                                 </th>
-                                <th class="sortable-th" style="width:130px;" onclick="App.Features.Tafzili.sortBy('tafziliGroupName')">
+                                <th class="sortable-th" data-nosort style="width:130px;" onclick="App.Features.Tafzili.sortBy('tafziliGroupName')">
                                     گروه تفضیلی ${sortIcon('tafziliGroupName')}
                                 </th>
-                                <th class="sortable-th" style="width:100px;" onclick="App.Features.Tafzili.sortBy('kind')">
+                                <th class="sortable-th" data-nosort style="width:100px;" onclick="App.Features.Tafzili.sortBy('kind')">
                                     نوع ${sortIcon('kind')}
                                 </th>
-                                <th class="sortable-th" style="width:110px;" onclick="App.Features.Tafzili.sortBy('mobile')">
+                                <th class="sortable-th" data-nosort style="width:110px;" onclick="App.Features.Tafzili.sortBy('mobile')">
                                     موبایل ${sortIcon('mobile')}
                                 </th>
-                                <th class="sortable-th" style="width:110px;" onclick="App.Features.Tafzili.sortBy('melliCode')">
+                                <th class="sortable-th" data-nosort style="width:110px;" onclick="App.Features.Tafzili.sortBy('melliCode')">
                                     کد ملی ${sortIcon('melliCode')}
                                 </th>
-                                <th class="sortable-th text-left" style="width:110px;" onclick="App.Features.Tafzili.sortBy('sumBed')">
+                                <th class="sortable-th text-left" data-nosort style="width:110px;" onclick="App.Features.Tafzili.sortBy('sumBed')">
                                     گردش بدهکار ${sortIcon('sumBed')}
                                 </th>
-                                <th class="sortable-th text-left" style="width:110px;" onclick="App.Features.Tafzili.sortBy('sumBes')">
+                                <th class="sortable-th text-left" data-nosort style="width:110px;" onclick="App.Features.Tafzili.sortBy('sumBes')">
                                     گردش بستانکار ${sortIcon('sumBes')}
                                 </th>
-                                <th class="sortable-th text-left" style="width:110px;" onclick="App.Features.Tafzili.sortBy('mabManBed')">
+                                <th class="sortable-th text-left" data-nosort style="width:110px;" onclick="App.Features.Tafzili.sortBy('mabManBed')">
                                     مانده بدهکار ${sortIcon('mabManBed')}
                                 </th>
-                                <th class="sortable-th text-left" style="width:110px;" onclick="App.Features.Tafzili.sortBy('mabManBes')">
+                                <th class="sortable-th text-left" data-nosort style="width:110px;" onclick="App.Features.Tafzili.sortBy('mabManBes')">
                                     مانده بستانکار ${sortIcon('mabManBes')}
                                 </th>
                                 <th style="width:90px;"></th>

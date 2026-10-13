@@ -270,15 +270,15 @@ window.App.UI.HesabPicker = (function () {
         else codeDisplay = item.codeTafzil;
 
         return `
-            <div class="hp-row ${isSel ? 'selected' : ''}" data-item='${JSON.stringify({ level: item.level, codeCol: item.codeCol, codeMoein: item.codeMoein, codeTafzil: item.codeTafzil, name: item.name, isStock: item.isStock || false, hasTafzili: item.hasTafzili || false })}'>
+            <div class="hp-row ${isSel ? 'selected' : ''}" data-item='${JSON.stringify({ level: item.level, codeCol: item.codeCol, codeMoein: item.codeMoein, codeTafzil: item.codeTafzil, name: item.name, isStock: item.isStock || false, hasTafzili: item.hasTafzili || false, hasTafzili2: item.hasTafzili2 || false })}'>
                 <span class="hp-code">${codeDisplay}</span>
                 <div class="hp-name">
                     <div>${H.esc(item.name || '')}</div>
                     ${item.parentName ? `<div class="hp-sub">${H.esc(item.parentName)}</div>` : ''}
                 </div>
                 <div class="hp-badges">
-                    ${item.hasTafzili ? '<span class="hp-badge hp-badge-tafzil">تفصیلی</span>' : ''}
-                    ${item.hasTafzili2 ? '<span class="hp-badge hp-badge-tafzil">تفصیلی۲</span>' : ''}
+                    ${item.hasTafzili ? '<span class="hp-badge hp-badge-tafzil">تفصیلی ۱</span>' : ''}
+                    ${item.hasTafzili2 ? '<span class="hp-badge hp-badge-tafzil2">تفصیلی ۲</span>' : ''}
                     ${item.isStock ? '<span class="hp-badge hp-badge-stock">انبار</span>' : ''}
                 </div>
             </div>`;

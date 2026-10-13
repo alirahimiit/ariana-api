@@ -162,6 +162,12 @@ window.App.Features.SanadForm = (function () {
         const t = list.find(x => x.code === parseInt(code));
         return t ? t.name : '';
     }
+    function findTafzili2Name(code) {
+        if (!code) return '';
+        const list = _cache.tafzils2 || [];
+        const t = list.find(x => x.code === parseInt(code));
+        return t ? t.name : '';
+    }
 
     async function ensureTafzili2Lookup() {
         if (_cache.tafzils2 !== undefined) return _cache.tafzils2;
@@ -456,6 +462,7 @@ window.App.Features.SanadForm = (function () {
         const bes = Number(item.mabBes) || 0;
         const megh = Number(item.meghdar) || 0;
         const tafzilName = item.codeTafzil ? findTafzilName(item.codeTafzil) : '';
+        const tafzil2Name = item.codeTafzili2 ? findTafzili2Name(item.codeTafzili2) : '';
         const currentMoein = item.codeMoein
             ? (_cache.moeins.find(m => m.codeCol === item.codeCol && m.codeMoein === item.codeMoein) || null)
             : null;
@@ -463,6 +470,10 @@ window.App.Features.SanadForm = (function () {
         const canTafzil1 = !currentMoein || currentMoein.hasTafzili;
         const canTafzil2 = !currentMoein || currentMoein.hasTafzili2;
         const isStock = currentMoein?.isStock === true;
+
+        // ⭐ Tafzili2 اجباری — وقتی معین انتخاب‌شده hasTafzili2 داره
+        const requireTafzil2 = !!currentMoein && currentMoein.hasTafzili2 === true;
+        const requireTafzil1 = !!currentMoein && currentMoein.hasTafzili === true;
 
         const bedStr = bed ? bed.toLocaleString('en-US') : '';
         const besStr = bes ? bes.toLocaleString('en-US') : '';
@@ -491,20 +502,23 @@ window.App.Features.SanadForm = (function () {
                                 <button type="button" class="sf-pick-btn" data-idx="${idx}" data-pick="moein" title="انتخاب معین">🔍</button>
                             </div>
                         </div>
-                        <div class="sf-field">
-                            <label>تفصیلی ۱</label>
+                         <div class="sf-field">
+                            <label>تفصیلی ۱ ${requireTafzil1 ? '<span class="sf-hint sf-stock-req">*</span>' : ''}</label>
                             <div class="sf-input-with-btn">
                                 <input type="number" class="sf-tafzil num-input" data-idx="${idx}"
-                                       value="${item.codeTafzil || ''}" placeholder="کد"
+                                       value="${item.codeTafzil || ''}" placeholder="${requireTafzil1 ? 'اجباری' : 'کد'}"
                                        ${canTafzil1 ? '' : 'disabled'}>
                                 ${canTafzil1 ? `<button type="button" class="sf-pick-btn" data-idx="${idx}" data-pick="tafzil">🔍</button>` : ''}
                             </div>
                         </div>
                         <div class="sf-field">
-                            <label>تفصیلی ۲</label>
+                            <label>تفصیلی ۲ ${requireTafzil2 ? '<span class="sf-hint sf-stock-req">*</span>' : ''}</label>
                             <div class="sf-input-with-btn">
-                                <input type="number" class="sf-tafzil2 num-input" data-idx="${idx}"
-                                       value="${item.codeTafzili2 || ''}" placeholder="کد"
+                                <input type="text" class="sf-tafzil2 sf-tafzil2-text num-input" data-idx="${idx}"
+                                       value="${item.codeTafzili2 ? item.codeTafzili2 + (tafzil2Name ? ' - ' + H.esc(tafzil2Name) : '') : ''}"
+                                       placeholder="${requireTafzil2 ? 'اجباری — 🔍' : (canTafzil2 ? 'کد یا 🔍' : '—')}"
+                                       readonly
+                                       style="cursor:${canTafzil2 ? 'pointer' : 'not-allowed'}; background:${canTafzil2 ? '#fff' : '#F3F4F6'};"
                                        ${canTafzil2 ? '' : 'disabled'}>
                                 ${canTafzil2 ? `<button type="button" class="sf-pick-btn" data-idx="${idx}" data-pick="tafzil2">🔍</button>` : ''}
                             </div>
@@ -1216,6 +1230,8 @@ window.App.Features.SanadForm = (function () {
             }
 
             _state.items[idx].meghdar = parseNum(newVal) || 0;
+        } else if (t.classList.contains('sf-tafzil2')) {
+            _state.items[idx].codeTafzili2 = parseInt(t.value) || 0;
         }
     }
 
@@ -1308,13 +1324,28 @@ window.App.Features.SanadForm = (function () {
         _state.items[rowIdx].codeTafzil = 0;
         _state.items[rowIdx].codeTafzili2 = 0;
         renderRows();
+
+        // ⭐ بعد از انتخاب معین، اگه hasTafzili2 داشت، فوکوس روی فیلد Tafzili2
         setTimeout(() => {
             const wrap = document.getElementById('sfRowsWrap');
             const row = wrap?.querySelector(`.sf-row[data-row-idx="${rowIdx}"]`);
-            row?.querySelector('.sf-moein-text')?.focus();
+            if (!row) return;
+
+            if (result.hasTafzili2) {
+                // اجباری — فوکوس روی Tafzili2 و هشدار
+                row.querySelector('.sf-tafzil2-text')?.focus();
+                window.App.toast(
+                    'این معین تفصیلی ۲ دارد — انتخاب تفصیلی ۲ اجباری است',
+                    'info',
+                    { duration: 2500 }
+                );
+            } else if (result.hasTafzili) {
+                row.querySelector('.sf-tafzil')?.focus();
+            } else {
+                row.querySelector('.sf-moein-text')?.focus();
+            }
         }, 50);
     }
-
     async function handleCreateFromPicker(rowIdx, pickerResult) {
         const { keyword, mode, codeCol } = pickerResult;
         const name = prompt(`نام ${mode === 'moein' ? 'معین' : 'تفصیلی'} جدید:`, keyword);
@@ -1434,6 +1465,16 @@ window.App.Features.SanadForm = (function () {
             errs.push({ severity: 'error', label: 'مقدار انباری ندارد' });
         }
 
+        // ⭐ جدید — تفصیلی ۱ اجباری
+        if (currentMoein?.hasTafzili && hasAmount && (!it.codeTafzil || it.codeTafzil === 0)) {
+            errs.push({ severity: 'error', label: 'تفصیلی ۱ ندارد (اجباری)' });
+        }
+
+        // ⭐ جدید — تفصیلی ۲ اجباری
+        if (currentMoein?.hasTafzili2 && hasAmount && (!it.codeTafzili2 || it.codeTafzili2 === 0)) {
+            errs.push({ severity: 'error', label: 'تفصیلی ۲ ندارد (اجباری)' });
+        }
+
         // ⚠️ هشدار — مبلغ صفر
         if (!hasAmount) {
             errs.push({ severity: 'warn', label: 'مبلغ صفر است' });
@@ -1441,7 +1482,6 @@ window.App.Features.SanadForm = (function () {
 
         return errs;
     }
-
     // ⭐⭐ چک کلی سند برای Vazeit
     function _validateVazeit(vazeit, tb, ts) {
         if (vazeit === 0) return { ok: true };   // پیش‌نویس → آزاد
@@ -1508,10 +1548,29 @@ window.App.Features.SanadForm = (function () {
            return;
         }
 
-        const valid = _state.items.filter(it => it.codeCol > 0 && (it.mabBed > 0 || it.mabBes > 0));
+       const valid = _state.items.filter(it => it.codeCol > 0 && (it.mabBed > 0 || it.mabBes > 0));
        if (valid.length === 0) {
            console.warn('[save] هیچ ردیف معتبری نیست');
            window.App.toast('حداقل یک ردیف با کد کل و مبلغ لازم است', 'error');
+           return;
+       }
+
+       // ⭐ چک Tafzili2 اجباری
+       const missingTafzil2 = [];
+       valid.forEach((it, i) => {
+           const curMoein = _cache.moeins.find(m => m.codeCol === it.codeCol && m.codeMoein === it.codeMoein);
+           if (curMoein?.hasTafzili2 && !it.codeTafzili2) {
+               missingTafzil2.push(i + 1);
+           }
+       });
+       if (missingTafzil2.length > 0) {
+           window.App.toast(
+               `ردیف‌های ${missingTafzil2.join('، ')} — تفصیلی ۲ اجباری است (معین انتخابی تفضیلی ۲ دارد)`,
+               'error',
+               { duration: 4000 }
+           );
+           // فوکوس روی اولین ردیف مشکل‌دار
+           focusRow(missingTafzil2[0] - 1, 'tafzil2');
            return;
        }
 

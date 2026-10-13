@@ -1620,3 +1620,19 @@ tr.row-selected {
     .sf-row-tool.sf-tool-tik-active:hover {
         background: #D97706 !important;
     }
+/* ─── فیلد اجباری تفصیلی ─── */
+.sf-hint.sf-stock-req {
+    color: #DC2626;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.sf-tafzil2-text[readonly]:not([disabled]) {
+    cursor: pointer;
+}
+
+.sf-tafzil2-text:not([disabled]):focus {
+    outline: none;
+    border-color: var(--primary, #4F46E5);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}

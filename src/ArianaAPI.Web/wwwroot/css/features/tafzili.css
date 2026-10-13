@@ -1,0 +1,298 @@
+﻿/* ═══════════════════════════════════════════════════
+   Tafzili — استایل فرم تفضیلی + لیست
+   ═══════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════
+   فرم تفضیلی (tf-*)
+   ═══════════════════════════════════════════════════ */
+
+.modal-box:has(.tf-form) {
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+}
+
+    .modal-box:has(.tf-form) .modal-body {
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        padding-bottom: 0;
+    }
+
+.tf-form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    flex: 1;
+    min-height: 0;
+}
+
+.tf-section {
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    padding: 16px 18px;
+}
+
+.tf-section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--primary, #4F46E5);
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed #E5E7EB;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tf-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px 18px;
+}
+
+.tf-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px 18px;
+}
+
+.tf-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.tf-field-full {
+    grid-column: 1 / -1;
+}
+
+.tf-field label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+    .tf-field label .req {
+        color: #DC2626;
+        font-weight: 700;
+    }
+
+.tf-field input,
+.tf-field select,
+.tf-field textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #fff;
+    color: #1F2937;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    min-height: 38px;
+    box-sizing: border-box;
+}
+
+    .tf-field input:focus,
+    .tf-field select:focus,
+    .tf-field textarea:focus {
+        outline: none;
+        border-color: var(--primary, #4F46E5);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+    }
+
+    .tf-field input::placeholder {
+        color: #9CA3AF;
+        font-size: 12px;
+    }
+
+    .tf-field input[dir="ltr"] {
+        text-align: left;
+        direction: ltr;
+    }
+
+    .tf-field input:disabled,
+    .tf-field select:disabled {
+        background: #F3F4F6;
+        color: #9CA3AF;
+        cursor: not-allowed;
+    }
+
+.tf-code-hint {
+    font-size: 11px;
+    color: #6B7280;
+    padding: 2px 4px;
+    line-height: 1.4;
+}
+
+/* ─── Footer (Sticky) ─── */
+.tf-footer {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    margin-left: -20px;
+    margin-right: -20px;
+    margin-bottom: -20px;
+    padding: 12px 20px;
+    background: #fff;
+    border-top: 1px solid #E5E7EB;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.04);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    z-index: 5;
+    border-radius: 0 0 16px 16px;
+}
+
+.tf-save-btn {
+    min-width: 120px;
+    font-weight: 700;
+    font-size: 14px;
+    padding: 10px 22px;
+    background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%) !important;
+    color: #fff !important;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35) !important;
+    transition: transform 0.12s, box-shadow 0.12s;
+}
+
+    .tf-save-btn:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(79, 70, 229, 0.45) !important;
+    }
+
+    .tf-save-btn:active:not(:disabled) {
+        transform: translateY(0);
+    }
+
+    .tf-save-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+.tf-footer-hint {
+    margin-right: auto;
+    font-size: 11.5px;
+    color: #6B7280;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+    .tf-footer-hint kbd {
+        background: #F3F4F6;
+        border: 1px solid #D1D5DB;
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 1px 6px;
+        font-size: 11px;
+        font-family: 'Vazirmatn', sans-serif;
+        color: #374151;
+        min-width: 20px;
+        text-align: center;
+        display: inline-block;
+    }
+
+/* ═══════════════════════════════════════════════════
+   لیست تفضیلی ۱ (#tafResult) — اسکرول افقی طبیعی
+   ═══════════════════════════════════════════════════ */
+
+#tafResult .table-wrapper {
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+}
+
+#tafResult table {
+    width: auto;
+    min-width: 100%;
+    border-collapse: collapse;
+}
+
+    #tafResult table th,
+    #tafResult table td {
+        padding: 10px 12px;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+        #tafResult table td:last-child {
+            text-align: center;
+            padding: 6px 10px;
+        }
+
+            #tafResult table td:last-child .btn {
+                padding: 2px 6px;
+                font-size: 13px;
+                margin: 0 1px;
+            }
+
+        #tafResult table td.num {
+            font-family: 'Vazirmatn', sans-serif;
+            direction: ltr;
+            text-align: right;
+            font-size: 12.5px;
+        }
+
+/* ─── اسکرول‌بار باریک ─── */
+#tafResult .table-wrapper::-webkit-scrollbar {
+    height: 8px;
+}
+
+#tafResult .table-wrapper::-webkit-scrollbar-track {
+    background: #F3F4F6;
+    border-radius: 4px;
+}
+
+#tafResult .table-wrapper::-webkit-scrollbar-thumb {
+    background: #D1D5DB;
+    border-radius: 4px;
+}
+
+    #tafResult .table-wrapper::-webkit-scrollbar-thumb:hover {
+        background: #9CA3AF;
+    }
+
+/* ═══════════════════════════════════════════════════
+   Responsive
+   ═══════════════════════════════════════════════════ */
+
+@media (max-width: 900px) {
+    .tf-grid-3 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .tf-footer {
+        padding: 10px 16px;
+    }
+
+        .tf-footer .btn {
+            flex: 1;
+        }
+}
+
+@media (max-width: 640px) {
+    .tf-grid-2,
+    .tf-grid-3 {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .tf-section {
+        padding: 12px 14px;
+    }
+
+    .tf-footer-hint {
+        display: none;
+    }
+}

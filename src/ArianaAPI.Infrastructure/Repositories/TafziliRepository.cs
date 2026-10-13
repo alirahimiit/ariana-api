@@ -41,32 +41,61 @@ public class TafziliRepository : ITafziliRepository
 
 
     // ⭐ نگاشت ستون سورت به SQL
+    // ⭐ نگاشت ستون سورت به SQL
+    // ⭐ نگاشت ستون سورت به SQL
     private static (string inner, string outer) BuildSortMap(string? col, string? dir)
     {
         var dirSql = (dir ?? "asc").ToLower() == "desc" ? "DESC" : "ASC";
         var key = (col ?? "codetafzil").ToLower();
 
+        // ⭐ Tie-breaker — کد تفضیلی همیشه صعودی (برای ترتیب قطعی وقتی مقادیر تکراری‌ان)
+        const string tieAsc = "H.Code_Tafzil ASC";
+
         return key switch
         {
-            "codetafzil" => ("H.Code_Tafzil", $"T.CodeTafzil {dirSql}"),
-            "name" => ("H.Name", $"T.Name {dirSql}"),
-            "tafziligroupname" => ("TG.Name", $"T.TafziliGroupName {dirSql}"),
-            "kind" => ("ISNULL(CAST(H.Kind AS INT), 0)", $"T.Kind {dirSql}"),
-            "mobile" => ("H.Mobile", $"T.Mobile {dirSql}"),
-            "mellicode" => ("H.MelliCode", $"T.MelliCode {dirSql}"),
-            "sumbed" => ("ISNULL(SA.SumBed, 0)", $"T.SumBed {dirSql}"),
-            "sumbes" => ("ISNULL(SA.SumBes, 0)", $"T.SumBes {dirSql}"),
+            "codetafzil" => (
+                $"H.Code_Tafzil {dirSql}",
+                $"T.CodeTafzil {dirSql}"),
+
+            "name" => (
+                $"H.Name {dirSql}, {tieAsc}",
+                $"T.Name {dirSql}, T.CodeTafzil ASC"),
+
+            "tafziligroupname" => (
+                $"TG.Name {dirSql}, {tieAsc}",
+                $"T.TafziliGroupName {dirSql}, T.CodeTafzil ASC"),
+
+            "kind" => (
+                $"ISNULL(CAST(H.Kind AS INT), 0) {dirSql}, {tieAsc}",
+                $"T.Kind {dirSql}, T.CodeTafzil ASC"),
+
+            "mobile" => (
+                $"H.Mobile {dirSql}, {tieAsc}",
+                $"T.Mobile {dirSql}, T.CodeTafzil ASC"),
+
+            "mellicode" => (
+                $"H.MelliCode {dirSql}, {tieAsc}",
+                $"T.MelliCode {dirSql}, T.CodeTafzil ASC"),
+
+            "sumbed" => (
+                $"ISNULL(SA.SumBed, 0) {dirSql}, {tieAsc}",
+                $"T.SumBed {dirSql}, T.CodeTafzil ASC"),
+
+            "sumbes" => (
+                $"ISNULL(SA.SumBes, 0) {dirSql}, {tieAsc}",
+                $"T.SumBes {dirSql}, T.CodeTafzil ASC"),
+
             "mabmanbed" => (
-                "(CASE WHEN ISNULL(SA.SumBed, 0) > ISNULL(SA.SumBes, 0) THEN ISNULL(SA.SumBed, 0) - ISNULL(SA.SumBes, 0) ELSE 0 END)",
-                $"T.MabManBed {dirSql}"),
+                $"(CASE WHEN ISNULL(SA.SumBed, 0) > ISNULL(SA.SumBes, 0) THEN ISNULL(SA.SumBed, 0) - ISNULL(SA.SumBes, 0) ELSE 0 END) {dirSql}, {tieAsc}",
+                $"T.MabManBed {dirSql}, T.CodeTafzil ASC"),
+
             "mabmanbes" => (
-                "(CASE WHEN ISNULL(SA.SumBes, 0) > ISNULL(SA.SumBed, 0) THEN ISNULL(SA.SumBes, 0) - ISNULL(SA.SumBed, 0) ELSE 0 END)",
-                $"T.MabManBes {dirSql}"),
-            _ => ("H.Code_Tafzil", $"T.CodeTafzil {dirSql}")
+                $"(CASE WHEN ISNULL(SA.SumBes, 0) > ISNULL(SA.SumBed, 0) THEN ISNULL(SA.SumBes, 0) - ISNULL(SA.SumBed, 0) ELSE 0 END) {dirSql}, {tieAsc}",
+                $"T.MabManBes {dirSql}, T.CodeTafzil ASC"),
+
+            _ => ($"H.Code_Tafzil {dirSql}", $"T.CodeTafzil {dirSql}")
         };
-    }
-    // ═══════════════════════════════════════════
-    //  لیست تفضیلی‌ها
+    }    //  لیست تفضیلی‌ها
     // ═══════════════════════════════════════════
     public async Task<TafziliListResultDto> GetListAsync(
         long orgId, long fyId, TafziliRequestDto req, CancellationToken ct = default)
@@ -395,11 +424,31 @@ public class TafziliRepository : ITafziliRepository
         using var tx = conn.BeginTransaction();
         try
         {
-            // ۱. کد جدید
-            var nextCode = await conn.ExecuteScalarAsync<long>(
-                new CommandDefinition(
-                    "SELECT ISNULL(MAX(Code_Tafzil), 0) + 1 FROM Hesab WHERE Code_Col = -1",
-                    transaction: tx, cancellationToken: ct));
+            // ۱. کد — اگه کاربر داده، استفاده کن؛ وگرنه MAX+1
+            long nextCode;
+
+            if (dto.CodeTafzil is > 0)
+            {
+                // ⭐ چک تکراری
+                var exists = await conn.ExecuteScalarAsync<int>(
+                    new CommandDefinition(
+                        "SELECT COUNT(*) FROM Hesab WHERE Code_Col = -1 AND Code_Tafzil = @code",
+                        new { code = dto.CodeTafzil.Value },
+                        transaction: tx, cancellationToken: ct));
+
+                if (exists > 0)
+                    throw new InvalidOperationException(
+                        $"کد تفضیلی «{dto.CodeTafzil.Value}» قبلاً استفاده شده است");
+
+                nextCode = dto.CodeTafzil.Value;
+            }
+            else
+            {
+                nextCode = await conn.ExecuteScalarAsync<long>(
+                    new CommandDefinition(
+                        "SELECT ISNULL(MAX(Code_Tafzil), 0) + 1 FROM Hesab WHERE Code_Col = -1",
+                        transaction: tx, cancellationToken: ct));
+            }
 
             // ۲. درج در Hesab
             const string insertSql = @"
@@ -480,8 +529,23 @@ public class TafziliRepository : ITafziliRepository
         if (conn.State != ConnectionState.Open)
             await conn.OpenAsync(ct);
 
+        // ⭐ چک تکراری کد (اگه کاربر کد داده)
+        if (dto.CodeTafzil is > 0)
+        {
+            var exists = await conn.ExecuteScalarAsync<int>(
+                new CommandDefinition(
+                    "SELECT COUNT(*) FROM Hesab WHERE Code_Col = -1 AND Code_Tafzil = @code AND HesabID <> @id",
+                    new { code = dto.CodeTafzil.Value, id = dto.Id },
+                    cancellationToken: ct));
+
+            if (exists > 0)
+                throw new InvalidOperationException(
+                    $"کد تفضیلی «{dto.CodeTafzil.Value}» قبلاً استفاده شده است");
+        }
+
         const string sql = @"
-        UPDATE Hesab SET
+            UPDATE Hesab SET
+            Code_Tafzil = ISNULL(@codeTafzil, Code_Tafzil),   -- ⭐ کد (اگه null، دست‌نخورده)
             Name = @name,
             Discript = @discript,
             Mahiat = @mahiat,
@@ -508,6 +572,7 @@ public class TafziliRepository : ITafziliRepository
             new CommandDefinition(sql, new
             {
                 id = dto.Id,
+                codeTafzil = dto.CodeTafzil,
                 name = dto.Name,
                 discript = dto.Discript ?? "",
                 mahiat = dto.Mahiat ?? 2,
@@ -578,5 +643,45 @@ public class TafziliRepository : ITafziliRepository
             try { tx.Rollback(); } catch { }
             throw;
         }
+    }
+
+    // ═══════════════════════════════════════════
+    //  کد پیشنهادی بعدی
+    // ═══════════════════════════════════════════
+    public async Task<long> GetNextCodeAsync(
+        long orgId, long fyId, CancellationToken ct = default)
+    {
+        const string sql = @"
+            SELECT ISNULL(MAX(Code_Tafzil), 0) + 1 
+            FROM Hesab 
+            WHERE Code_Col = -1";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        return await conn.ExecuteScalarAsync<long>(
+            new CommandDefinition(sql, cancellationToken: ct));
+    }
+
+    // ═══════════════════════════════════════════
+    //  چک تکراری بودن کد تفضیلی
+    // ═══════════════════════════════════════════
+    public async Task<bool> IsCodeExistsAsync(
+        long orgId, long fyId, long code, long? excludeId = null,
+        CancellationToken ct = default)
+    {
+        var sql = "SELECT COUNT(*) FROM Hesab WHERE Code_Col = -1 AND Code_Tafzil = @code";
+        var p = new DynamicParameters();
+        p.Add("code", code);
+
+        if (excludeId is > 0)
+        {
+            sql += " AND HesabID <> @excludeId";
+            p.Add("excludeId", excludeId.Value);
+        }
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        var count = await conn.ExecuteScalarAsync<int>(
+            new CommandDefinition(sql, p, cancellationToken: ct));
+
+        return count > 0;
     }
 }

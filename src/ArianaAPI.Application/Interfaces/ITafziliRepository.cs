@@ -5,33 +5,19 @@ namespace ArianaAPI.Application.Interfaces;
 public interface ITafziliRepository
 {
     Task<TafziliListResultDto> GetListAsync(
-        long orgId,
-        long fyId,
-        TafziliRequestDto request,
-        CancellationToken ct = default);
+        long orgId, long fyId, TafziliRequestDto request, CancellationToken ct = default);
 
     Task<TafziliDetailDto?> GetDetailAsync(
-        long orgId,
-        long fyId,
-        long tafziliId,
-        CancellationToken ct = default);
+        long orgId, long fyId, long tafziliId, CancellationToken ct = default);
 
     Task<IEnumerable<TafziliGroupDto>> GetGroupsAsync(
-        long orgId,
-        long fyId,
-        CancellationToken ct = default);
+        long orgId, long fyId, CancellationToken ct = default);
 
     Task<long> SaveGroupAsync(
-        long orgId,
-        long fyId,
-        TafziliGroupSaveDto dto,
-        CancellationToken ct = default);
+        long orgId, long fyId, TafziliGroupSaveDto dto, CancellationToken ct = default);
 
     Task<bool> DeleteGroupAsync(
-        long orgId,
-        long fyId,
-        long groupId,
-        CancellationToken ct = default);
+        long orgId, long fyId, long groupId, CancellationToken ct = default);
 
     Task<TafziliCreateResultDto> CreateAsync(
         long orgId, long fyId, TafziliCreateDto dto, CancellationToken ct = default);
@@ -41,4 +27,13 @@ public interface ITafziliRepository
 
     Task DeleteAsync(
         long orgId, long fyId, long tafziliId, CancellationToken ct = default);
+
+    // ⭐ جدید — کد پیشنهادی (MAX + 1)
+    Task<long> GetNextCodeAsync(
+        long orgId, long fyId, CancellationToken ct = default);
+
+    // ⭐ جدید — چک تکراری بودن کد
+    // اگه excludeId بدی، خود رکورد از چک حذف می‌شه (برای ویرایش)
+    Task<bool> IsCodeExistsAsync(
+        long orgId, long fyId, long code, long? excludeId = null, CancellationToken ct = default);
 }

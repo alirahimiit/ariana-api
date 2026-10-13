@@ -1,0 +1,60 @@
+﻿/* ═══════════════════════════════════════════════════
+   Tafzili2 — استایل لیست (مکمل tafzili.css)
+   ═══════════════════════════════════════════════════ */
+
+/* ─── لیست تفضیلی ۲ — اسکرول افقی طبیعی ─── */
+#t2Result .table-wrapper {
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+}
+
+#t2Result table {
+    width: auto;
+    min-width: 100%;
+    border-collapse: collapse;
+}
+
+    #t2Result table th,
+    #t2Result table td {
+        padding: 10px 12px;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+        #t2Result table td:last-child {
+            text-align: center;
+            padding: 6px 10px;
+        }
+
+            #t2Result table td:last-child .btn {
+                padding: 2px 6px;
+                font-size: 13px;
+                margin: 0 1px;
+            }
+
+        #t2Result table td.num {
+            font-family: 'Vazirmatn', sans-serif;
+            direction: ltr;
+            text-align: right;
+            font-size: 12.5px;
+        }
+
+/* ─── اسکرول‌بار باریک ─── */
+#t2Result .table-wrapper::-webkit-scrollbar {
+    height: 8px;
+}
+
+#t2Result .table-wrapper::-webkit-scrollbar-track {
+    background: #F3F4F6;
+    border-radius: 4px;
+}
+
+#t2Result .table-wrapper::-webkit-scrollbar-thumb {
+    background: #D1D5DB;
+    border-radius: 4px;
+}
+
+    #t2Result .table-wrapper::-webkit-scrollbar-thumb:hover {
+        background: #9CA3AF;
+    }
