@@ -299,6 +299,7 @@ window.App.Features.FactorForm = (function () {
             '<div class="ff-input-with-btn">' +
             '<input type="text" id="ffCodeTafzil" value="' + (c.codeTafzil || '') + '" class="num-input" dir="ltr" placeholder="کد را وارد کنید...">' +
             '<button type="button" class="ff-pick-btn" id="ffPickCustomerBtn" title="انتخاب ' + label + '">🔍</button>' +
+            '<button type="button" class="ff-pick-btn" id="ffAddCustomerBtn" title="ایجاد ' + label + ' جدید">➕</button>' +
             '</div>' +
             '</div>' +
 
@@ -547,6 +548,7 @@ window.App.Features.FactorForm = (function () {
 
         // ─── کلیک روی دکمه‌ها ───
         document.getElementById('ffPickCustomerBtn')?.addEventListener('click', pickCustomer);
+        document.getElementById('ffAddCustomerBtn')?.addEventListener('click', onAddNewCustomer);
         document.getElementById('ffPickMarketerBtn')?.addEventListener('click', pickMarketer);
         document.getElementById('ffClearMarketerBtn')?.addEventListener('click', clearMarketer);
         document.getElementById('ffAddItemBtn')?.addEventListener('click', addNewItem);
@@ -642,6 +644,34 @@ window.App.Features.FactorForm = (function () {
                 renderCustomer();
             }
         });
+    }
+
+    async function onAddNewCustomer() {
+        if (!window.App.Features.TafziliForm) {
+            window.App.toast('ماژول تفضیلی بارگذاری نشده', 'error');
+            return;
+        }
+
+        const newTafzili = await window.App.Features.TafziliForm.openCreateWithCallback();
+        if (newTafzili && newTafzili.codeTafzil) {
+            _state.customer = {
+                codeTafzil: newTafzili.codeTafzil,
+                name: newTafzili.name,
+                phone: newTafzili.phone,
+                mobile: newTafzili.mobile,
+                nationalCode: newTafzili.nationalCode,
+                economicCode: newTafzili.economicCode,
+                postalCode: newTafzili.postalCode,
+                address: newTafzili.address,
+                stateName: newTafzili.stateName,
+                cityName1: newTafzili.cityName1,
+                cityName2: newTafzili.cityName2,
+                mandeh: 0
+            };
+            setVal('ffCodeTafzil', newTafzili.codeTafzil);
+            renderCustomer();
+            window.App.toast(`«${newTafzili.name}» انتخاب شد`, 'success');
+        }
     }
 
     async function loadCustomerInfo(codeTafzil) {

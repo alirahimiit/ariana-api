@@ -1,6 +1,6 @@
 ﻿/* ═══════════════════════════════════════════════════
    Feature / TafziliForm — فرم درج/ویرایش تفضیلی
-   نسخه 2.2 — با کد قابل ویرایش
+   نسخه 2.1 — Standalone mode برای ایجاد سریع
    ═══════════════════════════════════════════════════ */
 
 window.App = window.App || {};
@@ -10,40 +10,33 @@ window.App.Features.TafziliForm = (function () {
     'use strict';
 
     const H = window.App.Helpers;
-    let _state = { isEdit: false, id: null, suggestedCode: null, currentCode: null };
+    let _state = { isEdit: false, id: null, onSuccess: null, suggestedCode: null, currentCode: null };
     let _groups = [];
     let _states = [];
     let _cities = [];
+    let _isStandalone = false;
 
     // ═══ LOAD LOOKUPS ═══
     async function loadGroups() {
-        try {
-            _groups = await window.App.Http.api('/api/tafzili/groups') || [];
-        } catch (e) { _groups = []; }
+        try { _groups = await window.App.Http.api('/api/tafzili/groups') || []; }
+        catch (e) { _groups = []; }
     }
-
     async function loadStates() {
-        try {
-            _states = await window.App.Http.api('/api/location/states') || [];
-        } catch (e) { _states = []; }
+        try { _states = await window.App.Http.api('/api/location/states') || []; }
+        catch (e) { _states = []; }
     }
-
     async function loadAllCities() {
-        try {
-            _cities = await window.App.Http.api('/api/location/cities') || [];
-        } catch (e) { _cities = []; }
+        try { _cities = await window.App.Http.api('/api/location/cities') || []; }
+        catch (e) { _cities = []; }
     }
-
     async function loadNextCode() {
         try {
             const r = await window.App.Http.api('/api/tafzili/next-code');
             return r?.nextCode || 1;
-        } catch (e) {
-            return 1;
-        }
+        } catch (e) { return 1; }
     }
 
-    // ═══ RENDER HELPERS ═══
+    // ═══ HELPERS ═══
     function renderStateOptions(selectedId) {
         const sel = selectedId ? String(selectedId) : '';
         return ['<option value="">-- انتخاب استان --</option>']
@@ -61,8 +54,55 @@ window.App.Features.TafziliForm = (function () {
         return opts.join('');
     }
 
+    // ⭐ بستن مودال — مستقل یا مشترک
+    function closeThisModal() {
+        if (_isStandalone) {
+            closeStandalone();
+        } else {
+            window.App.closeModal();
+        }
+    }
+
+    // ═══ STANDALONE OVERLAY ═══
+    function openStandalone(html) {
+        document.getElementById('tfStandalone')?.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'tfStandalone';
+        overlay.className = 'hp-overlay';
+        overlay.style.zIndex = '11000';
+        overlay.innerHTML = `
+            <div class="hp-box" style="width:min(900px,94vw);max-height:90vh;display:flex;flex-direction:column;background:#fff;border-radius:14px;">
+                <div class="hp-header">
+                    <div class="hp-title">➕ تفضیلی جدید</div>
+                    <button type="button" class="hp-close" id="tfStandaloneClose">✕</button>
+                </div>
+                <div style="flex:1;overflow-y:auto;padding:16px 20px 20px;">
+                    ${html}
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        document.getElementById('tfStandaloneClose')?.addEventListener('click', closeStandalone);
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeStandalone();
+        });
+
+        bindEvents();
+    }
+
+    function closeStandalone() {
+        document.getElementById('tfStandalone')?.remove();
+        _isStandalone = false;
+        _state.onSuccess = null;
+        if (_keyHandler) {
+            document.removeEventListener('keydown', _keyHandler);
+            _keyHandler = null;
+        }
+    }
+
     // ═══ OPEN CREATE ═══
-    async function openCreate() {
+    async function openCreate(onSuccess) {
         if (window.App.Permissions && !window.App.Permissions.can(193)) {
             window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
             return;
@@ -79,11 +119,22 @@ window.App.Features.TafziliForm = (function () {
             isEdit: false,
             id: null,
             suggestedCode: nextCode,
-            currentCode: nextCode
+            currentCode: nextCode,
+            onSuccess: onSuccess || null
         };
 
-        window.App.openModal('➕ تفضیلی جدید', buildForm({}, nextCode));
-        bindEvents();
+        const html = buildForm({}, nextCode);
+
+        if (onSuccess) {
+            // ⭐ حالت مستقل — overlay جدا (نمی‌ذاره closeModal فاکتور رو ببنده)
+            _isStandalone = true;
+            openStandalone(html);
+        } else {
+            // معمولی — مودال مشترک
+            _isStandalone = false;
+            window.App.openModal('➕ تفضیلی جدید', html);
+            bindEvents();
+        }
     }
 
     // ═══ OPEN EDIT ═══
@@ -104,8 +155,10 @@ window.App.Features.TafziliForm = (function () {
                 isEdit: true,
                 id: id,
                 suggestedCode: detail.codeTafzil,
-                currentCode: detail.codeTafzil
+                currentCode: detail.codeTafzil,
+                onSuccess: null
             };
+            _isStandalone = false;
 
             window.App.openModal(
                 '✏️ ویرایش تفضیلی: ' + (detail.name || ''),
@@ -134,7 +187,6 @@ window.App.Features.TafziliForm = (function () {
             { v: 4, t: 'بازاریاب' }
         ].map(o => `<option value="${o.v}" ${d.kind === o.v ? 'selected' : ''}>${o.t}</option>`).join('');
 
-        // ⭐ کد
         const codeHint = isEdit
             ? '<span class="tf-code-hint">🔒 کد در حالت ویرایش قابل تغییر نیست</span>'
             : `<span class="tf-code-hint">آخرین کد: ${H.fmt(_state.suggestedCode - 1)} — پیشنهاد: ${H.fmt(_state.suggestedCode)}</span>`;
@@ -144,7 +196,6 @@ window.App.Features.TafziliForm = (function () {
             <div class="tf-section">
                 <div class="tf-section-title">📋 اطلاعات پایه</div>
                 <div class="tf-grid tf-grid-2">
-
                     <div class="tf-field">
                         <label>کد تفضیلی <span class="req">*</span></label>
                         <input type="text" id="tfCode"
@@ -154,12 +205,10 @@ window.App.Features.TafziliForm = (function () {
                                style="${isEdit ? 'background:#F3F4F6; cursor:not-allowed;' : ''}">
                         ${codeHint}
                     </div>
-
                     <div class="tf-field">
                         <label>نام <span class="req">*</span></label>
                         <input type="text" id="tfName" value="${H.esc(d.name || '')}">
                     </div>
-
                     <div class="tf-field">
                         <label>گروه تفضیلی</label>
                         <select id="tfGroupId">${groupOpts}</select>
@@ -218,7 +267,6 @@ window.App.Features.TafziliForm = (function () {
                         <label>کد پستی</label>
                         <input type="text" id="tfPostalCode" value="${H.esc(d.postalCode || '')}" dir="ltr">
                     </div>
-
                     <div class="tf-field">
                         <label>استان</label>
                         <select id="tfStateId">${renderStateOptions(d.stateId)}</select>
@@ -231,7 +279,6 @@ window.App.Features.TafziliForm = (function () {
                         <label>شهر (شهر ۲)</label>
                         <select id="tfCityId2">${renderCityOptions(d.cityId2, '-- انتخاب شهر --')}</select>
                     </div>
-
                     <div class="tf-field tf-field-full">
                         <label>آدرس</label>
                         <input type="text" id="tfAddress" value="${H.esc(d.address || '')}">
@@ -266,14 +313,12 @@ window.App.Features.TafziliForm = (function () {
             </div>
 
             <div class="tf-footer">
-                 <button class="btn btn-primary tf-save-btn" id="tfSaveBtn">
+                <button class="btn btn-primary tf-save-btn" id="tfSaveBtn">
                     💾 ${isEdit ? 'ذخیره' : 'ثبت'}
                 </button>
-                <button class="btn btn-ghost" id="tfCancelBtn">
-                    انصراف
-                </button>
+                <button class="btn btn-ghost" id="tfCancelBtn">انصراف</button>
                 <span class="tf-footer-hint">
-                    کلیدهای میان‌بر: <kbd>F2</kbd> یا <kbd>Ctrl+Enter</kbd> برای ذخیره — <kbd>Esc</kbd> برای انصراف
+                    کلیدها: <kbd>F2</kbd> / <kbd>Ctrl+Enter</kbd> ذخیره — <kbd>Esc</kbd> انصراف
                 </span>
             </div>
         </div>`;
@@ -283,40 +328,28 @@ window.App.Features.TafziliForm = (function () {
 
     function bindEvents() {
         document.getElementById('tfSaveBtn')?.addEventListener('click', save);
-        document.getElementById('tfCancelBtn')?.addEventListener('click', () => window.App.closeModal());
+        document.getElementById('tfCancelBtn')?.addEventListener('click', closeThisModal);
 
-        // ⭐ فقط عدد در فیلد کد
         const codeEl = document.getElementById('tfCode');
         codeEl?.addEventListener('input', () => {
             const cleaned = codeEl.value.replace(/[^0-9]/g, '');
-            if (cleaned !== codeEl.value) {
-                codeEl.value = cleaned;
-            }
+            if (cleaned !== codeEl.value) codeEl.value = cleaned;
         });
 
         if (_keyHandler) document.removeEventListener('keydown', _keyHandler);
         _keyHandler = (e) => {
-            // ⭐ F2 — ذخیره
-            if (e.key === 'F2') {
-                e.preventDefault();
-                save();
-            }
-            // ⭐ Ctrl+Enter (و Cmd+Enter روی مک) — ذخیره
-            else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                e.stopPropagation();
-                save();
-            }
-            // ⭐ Esc — انصراف
+            if (e.key === 'F2') { e.preventDefault(); save(); }
+            else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
             else if (e.key === 'Escape') {
                 e.preventDefault();
-                window.App.closeModal();
+                closeThisModal();
                 document.removeEventListener('keydown', _keyHandler);
                 _keyHandler = null;
             }
         };
         document.addEventListener('keydown', _keyHandler);
     }
+
     // ═══ SAVE ═══
     async function save() {
         const btn = document.getElementById('tfSaveBtn');
@@ -333,7 +366,6 @@ window.App.Features.TafziliForm = (function () {
             return isNaN(n) ? null : n;
         }
 
-        // ⭐ چک کد
         const codeStr = val('tfCode');
         if (!codeStr) {
             window.App.toast('کد تفضیلی الزامی است', 'error');
@@ -342,12 +374,9 @@ window.App.Features.TafziliForm = (function () {
         }
         const codeNum = parseInt(codeStr, 10);
         if (isNaN(codeNum) || codeNum <= 0) {
-            window.App.toast('کد تفضیلی باید عددی و بزرگ‌تر از صفر باشد', 'error');
-            document.getElementById('tfCode')?.focus();
+            window.App.toast('کد باید عددی و بزرگ‌تر از صفر باشد', 'error');
             return;
         }
-
-        // ⭐ در ویرایش، اگه کاربر کد رو عوض نکرده، نفرست (تا بلااستفاده چک نکنه)
         const codeChanged = _state.isEdit && codeNum !== _state.currentCode;
 
         const name = val('tfName');
@@ -380,7 +409,6 @@ window.App.Features.TafziliForm = (function () {
             isSaleMan: val('tfIsSaleMan') === 'true'
         };
 
-        // ⭐ کد فقط در درج یا وقتی کاربر عوضش کرده فرستاده می‌شه
         if (!_state.isEdit || codeChanged) {
             payload.codeTafzil = codeNum;
         }
@@ -388,6 +416,8 @@ window.App.Features.TafziliForm = (function () {
         try {
             btn.disabled = true;
             btn.textContent = '⏳ در حال ذخیره...';
+
+            let resp = null;
 
             if (_state.isEdit) {
                 payload.id = _state.id;
@@ -397,17 +427,48 @@ window.App.Features.TafziliForm = (function () {
                 });
                 window.App.toast('تفضیلی به‌روزرسانی شد', 'success');
             } else {
-                await window.App.Http.api('/api/tafzili', {
+                resp = await window.App.Http.api('/api/tafzili', {
                     method: 'POST',
                     body: JSON.stringify(payload)
                 });
                 window.App.toast('تفضیلی جدید ثبت شد', 'success');
             }
 
-            if (_keyHandler) document.removeEventListener('keydown', _keyHandler);
-            _keyHandler = null;
-            window.App.closeModal();
+            // ⭐ اطلاعات رو قبل از بستن کپی کن
+            const cb = _state.onSuccess;
+            const isStandalone = _isStandalone;
 
+            const result = {
+                id: resp?.id,
+                codeTafzil: resp?.codeTafzil || payload.codeTafzil,
+                name: payload.name,
+                phone: payload.phone,
+                mobile: payload.mobile,
+                nationalCode: payload.nationalCode,
+                economicCode: payload.economicCode,
+                postalCode: payload.postalCode,
+                address: payload.address,
+                stateId: payload.stateId,
+                cityId: payload.cityId,
+                cityId2: payload.cityId2
+            };
+
+            // ⭐ بستن — مستقل یا مشترک
+            if (isStandalone) {
+                closeStandalone();
+            } else {
+                if (_keyHandler) document.removeEventListener('keydown', _keyHandler);
+                _keyHandler = null;
+                window.App.closeModal();
+            }
+
+            // ⭐ callback — بعد از بستن
+            if (cb) {
+                setTimeout(() => cb(result), 100);
+                return;
+            }
+
+            // رفرش لیست (فقط در حالت عادی)
             try {
                 if (window.App.state.currentPage === 'tafzili') {
                     window.App.Features.Tafzili.runList(1);
@@ -420,12 +481,7 @@ window.App.Features.TafziliForm = (function () {
                 console.error('[TafziliForm] refresh error:', e);
             }
         } catch (err) {
-            // ⭐ خطای کد تکراری از Backend
             window.App.toast(err.message || 'خطا در ذخیره', 'error');
-            if ((err.message || '').includes('کد')) {
-                document.getElementById('tfCode')?.focus();
-            }
-        } finally {
             btn.disabled = false;
             btn.textContent = orig;
         }
@@ -441,14 +497,11 @@ window.App.Features.TafziliForm = (function () {
         let usage = null;
         try {
             usage = await window.App.Http.api(`/api/hesab/${id}/usage`);
-        } catch (e) {
-            console.warn('[deleteTafzili] usage check failed:', e);
-        }
+        } catch (e) { }
 
         if (usage?.usedInSanad) {
             await window.App.alert.warning(
-                `این تفضیلی در ${H.fmt(usage.sanadCount)} سند استفاده شده و قابل حذف نیست.\n\n` +
-                `برای حذف، ابتدا باید تمام اسناد مرتبط حذف یا اصلاح شوند.`,
+                `این تفضیلی در ${H.fmt(usage.sanadCount)} سند استفاده شده و قابل حذف نیست.`,
                 { title: '🔒 قابل حذف نیست' }
             );
             return;
@@ -456,21 +509,15 @@ window.App.Features.TafziliForm = (function () {
 
         if (usage?.hasChildren) {
             await window.App.alert.warning(
-                `این تفضیلی دارای ${usage.childrenInfo || 'زیرمجموعه'} است.\n\n` +
-                `ابتدا زیرمجموعه‌ها را حذف کنید.`,
+                `این تفضیلی دارای ${usage.childrenInfo || 'زیرمجموعه'} است.`,
                 { title: '🔒 دارای زیرمجموعه' }
             );
             return;
         }
 
         const ok = await window.App.confirm(
-            'آیا از حذف این تفضیلی مطمئن هستید؟\n\nاین عملیات قابل بازگشت نیست.',
-            {
-                title: '🗑️ حذف تفضیلی',
-                danger: true,
-                okText: 'بله، حذف کن',
-                cancelText: 'لغو'
-            }
+            'آیا از حذف این تفضیلی مطمئن هستید؟',
+            { title: '🗑️ حذف تفضیلی', danger: true, okText: 'بله، حذف کن', cancelText: 'لغو' }
         );
         if (!ok) return;
 
@@ -485,18 +532,26 @@ window.App.Features.TafziliForm = (function () {
                         window.App.Features.HesabManage.reload();
                     }
                 }
-            } catch (e) { console.error(e); }
+            } catch (e) { }
         } catch (err) {
-            await window.App.alert.error(
-                err.message || 'خطا در حذف تفضیلی',
-                { title: 'خطا در حذف' }
-            );
+            await window.App.alert.error(err.message || 'خطا در حذف', { title: 'خطا' });
         }
+    }
+
+    // ═══ CALLBACK WRAPPER ═══
+    function openCreateWithCallback(cb) {
+        return new Promise((resolve) => {
+            openCreate(function (result) {
+                resolve(result);
+                if (cb) cb(result);
+            });
+        });
     }
 
     return {
         openCreate: openCreate,
         openEdit: openEdit,
-        delete: deleteTafzili
+        delete: deleteTafzili,
+        openCreateWithCallback: openCreateWithCallback
     };
 })();

@@ -168,6 +168,7 @@ window.App.Features.FactorItemForm = (function () {
             '<input type="text" id="ffiArticleCode" class="num-input" dir="ltr" ' +
             'placeholder="کد کالا..." autocomplete="off">' +
             '<button type="button" class="ffi-pick-btn" id="ffiPickArticleBtn" title="جستجو">🔍</button>' +
+            '<button type="button" class="ffi-pick-btn ffi-add-btn" id="ffiAddArticleBtn" title="ایجاد کالای جدید">➕</button>' +
             '</div>' +
             '</div>' +
             '<div class="ffi-article-name" id="ffiArticleName">—</div>' +
@@ -317,6 +318,7 @@ window.App.Features.FactorItemForm = (function () {
         document.getElementById('ffiSaveBtn')?.addEventListener('click', save);
 
         document.getElementById('ffiPickArticleBtn')?.addEventListener('click', openArticlePicker);
+        document.getElementById('ffiAddArticleBtn')?.addEventListener('click', onAddNewArticle);
 
         // ─── کد کالا Enter → بررسی ───
         const codeEl = document.getElementById('ffiArticleCode');
@@ -411,7 +413,18 @@ window.App.Features.FactorItemForm = (function () {
         };
         document.addEventListener('keydown', _keyHandler);
     }
+    async function onAddNewArticle() {
+        if (!window.App.Features.ArticleQuickCreate) {
+            window.App.toast('ماژول ایجاد کالا بارگذاری نشده', 'error');
+            return;
+        }
 
+        const newArticle = await window.App.Features.ArticleQuickCreate.open();
+        if (newArticle && newArticle.id) {
+            await loadArticleCalc(newArticle.id, newArticle.code);
+            window.App.toast(`کالای «${newArticle.name}» انتخاب شد`, 'success');
+        }
+    }
     function unbindKeyboard() {
         if (_keyHandler) {
             document.removeEventListener('keydown', _keyHandler);
