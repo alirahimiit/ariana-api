@@ -6,6 +6,7 @@ using ArianaAPI.Infrastructure.Data;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+using ArianaAPI.Application.Services;
 
 namespace ArianaAPI.Infrastructure.Repositories;
 
@@ -28,86 +29,87 @@ public class FactorRepository : IFactorRepository
     public async Task<FactorListResultDto> GetListAsync(
         long orgId, long fyId, FactorRequestDto req, CancellationToken ct = default)
     {
+        // ⭐ همه‌ی ستون‌ها با پیشوند p. (چون توی کوئری FROM FactorParent_View p هست)
         var sb = new StringBuilder(" WHERE 1=1 ");
         var p = new DynamicParameters();
 
         // ─── نوع فاکتور ───
         if (req.FactorKind.HasValue)
         {
-            sb.Append(" AND FactorKind = @factorKind ");
+            sb.Append(" AND p.FactorKind = @factorKind ");
             p.Add("factorKind", req.FactorKind.Value);
         }
 
         // ─── شماره فاکتور ───
         if (req.NoFrom is > 0)
         {
-            sb.Append(" AND NoFactor >= @noFrom ");
+            sb.Append(" AND p.NoFactor >= @noFrom ");
             p.Add("noFrom", req.NoFrom.Value);
         }
         if (req.NoTo is > 0)
         {
-            sb.Append(" AND NoFactor <= @noTo ");
+            sb.Append(" AND p.NoFactor <= @noTo ");
             p.Add("noTo", req.NoTo.Value);
         }
 
         // ─── مبلغ ───
         if (req.CostFrom.HasValue)
         {
-            sb.Append(" AND Cost >= @costFrom ");
+            sb.Append(" AND p.Cost >= @costFrom ");
             p.Add("costFrom", req.CostFrom.Value);
         }
         if (req.CostTo.HasValue)
         {
-            sb.Append(" AND Cost <= @costTo ");
+            sb.Append(" AND p.Cost <= @costTo ");
             p.Add("costTo", req.CostTo.Value);
         }
 
         // ─── تاریخ ───
         if (!string.IsNullOrWhiteSpace(req.DateFrom))
         {
-            sb.Append(" AND Date_In >= @dateFrom ");
+            sb.Append(" AND p.Date_In >= @dateFrom ");
             p.Add("dateFrom", req.DateFrom);
         }
         if (!string.IsNullOrWhiteSpace(req.DateTo))
         {
-            sb.Append(" AND Date_In <= @dateTo ");
+            sb.Append(" AND p.Date_In <= @dateTo ");
             p.Add("dateTo", req.DateTo);
         }
 
         // ─── طرف حساب ───
         if (req.CodeTafzil is > 0)
         {
-            sb.Append(" AND CodeTafzil = @codeTafzil ");
+            sb.Append(" AND p.CodeTafzil = @codeTafzil ");
             p.Add("codeTafzil", req.CodeTafzil.Value);
         }
         if (!string.IsNullOrWhiteSpace(req.HesabName))
         {
-            sb.Append(" AND HesabName LIKE @hesabName ");
+            sb.Append(" AND p.HesabName LIKE @hesabName ");
             p.Add("hesabName", "%" + req.HesabName + "%");
         }
 
         // ─── شرح ───
         if (!string.IsNullOrWhiteSpace(req.Descript))
         {
-            sb.Append(" AND Descript LIKE @descript ");
+            sb.Append(" AND p.Descript LIKE @descript ");
             p.Add("descript", "%" + req.Descript + "%");
         }
 
         // ─── کالا (زیر‌کوئری) ───
         if (!string.IsNullOrWhiteSpace(req.ArticleName))
         {
-            sb.Append(@" AND ID IN (
-                SELECT DISTINCT FD.FactorID FROM FactorDetail FD
-                INNER JOIN ArticleNew AN ON AN.ID = FD.ArticleID
-                WHERE AN.Name LIKE @articleName) ");
+            sb.Append(@" AND p.ID IN (
+            SELECT DISTINCT FD.FactorID FROM FactorDetail FD
+            INNER JOIN ArticleNew AN ON AN.ID = FD.ArticleID
+            WHERE AN.Name LIKE @articleName) ");
             p.Add("articleName", "%" + req.ArticleName + "%");
         }
         if (!string.IsNullOrWhiteSpace(req.ArticleCode))
         {
-            sb.Append(@" AND ID IN (
-                SELECT DISTINCT FD.FactorID FROM FactorDetail FD
-                INNER JOIN ArticleNew AN ON AN.ID = FD.ArticleID
-                WHERE AN.Code = @articleCode) ");
+            sb.Append(@" AND p.ID IN (
+            SELECT DISTINCT FD.FactorID FROM FactorDetail FD
+            INNER JOIN ArticleNew AN ON AN.ID = FD.ArticleID
+            WHERE AN.Code = @articleCode) ");
             p.Add("articleCode", req.ArticleCode);
         }
 
@@ -118,13 +120,11 @@ public class FactorRepository : IFactorRepository
 
         var offset = (req.Page - 1) * req.PageSize;
 
-        _logger.LogDebug("Factor list - where: {Where}", sb.ToString());
-
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         await conn.OpenAsync(ct);
 
         // ⭐ اول شمارش کل (با پارامترهای فعلی، بدون صفحه‌بندی)
-        var countSql = $@"SELECT COUNT(*) FROM FactorParent_View {sb}";
+        var countSql = $@"SELECT COUNT(*) FROM FactorParent_View p {sb}";
         var total = await conn.ExecuteScalarAsync<int>(
             new CommandDefinition(countSql, p, cancellationToken: ct));
 
@@ -132,48 +132,49 @@ public class FactorRepository : IFactorRepository
         p.Add("startRow", offset + 1);
         p.Add("endRow", offset + req.PageSize);
 
+        // ⭐⭐ LEFT JOIN حذف شد → با ساب‌کوئری (SELECT NoFactor FROM FactorParent WHERE ID = p.NoFactor_Per)
+        //     دلیل: با JOIN، ستون‌های NoFactor/ID/FactorKind ambiguous می‌شن
         var sql = $@"
-            SELECT * FROM (
-                SELECT 
-                    ID             AS Id,
-                    NoFactor       AS NoFactor,
-                    Date_In        AS DateIn,
-                    Descript       AS Descript,
-                    FactorKind     AS FactorKind,
-                    CASE FactorKind
-                        WHEN 0 THEN N'خرید'
-                        WHEN 1 THEN N'فروش'
-                        WHEN 2 THEN N'برگشت از خرید'
-                        WHEN 3 THEN N'برگشت از فروش'
-                        WHEN 4 THEN N'پیش فاکتور'
-                        WHEN 5 THEN N'امانی ما نزد دیگران'
-                        WHEN 6 THEN N'امانی دیگران نزد ما'
-                        WHEN 7 THEN N'ارائه خدمات'
-                        WHEN 8 THEN N'دریافت خدمات'
-                        WHEN 9 THEN N'ضایعات'
-                        ELSE N'نامشخص'
-                    END            AS FactorKindTitle,
-                    CodeTafzil     AS CodeTafzil,
-                    HesabName      AS HesabName,
-                    IsCaSh         AS IsCash,
-                    CASE ISNULL(IsCaSh, 0)
-                        WHEN 1 THEN N'نقدی'
-                        WHEN 2 THEN N'غیرنقدی'
-                        ELSE N''
-                    END            AS IsCashName,
-                    Cost           AS Cost,
-                    NO_Sanad       AS NoSanad,
-                    DateSanad      AS DateSanad,
-                    MarkerName     AS MarkerName,
-                    ISNULL(TransCost, 0) AS TransCost,
-                    ROW_NUMBER() OVER (ORDER BY NoFactor DESC, ID DESC) AS RowNum
-                FROM FactorParent_View
-                {sb}
-            ) AS T
-            WHERE T.RowNum BETWEEN @startRow AND @endRow
-            ORDER BY T.RowNum";
-
-        _logger.LogDebug("Factor list SQL:\n{Sql}", sql);
+        SELECT * FROM (
+            SELECT 
+                p.ID             AS Id,
+                p.NoFactor       AS NoFactor,
+                p.Date_In        AS DateIn,
+                p.Descript       AS Descript,
+                p.FactorKind     AS FactorKind,
+                CASE p.FactorKind
+                    WHEN 0 THEN N'خرید'
+                    WHEN 1 THEN N'فروش'
+                    WHEN 2 THEN N'برگشت از خرید'
+                    WHEN 3 THEN N'برگشت از فروش'
+                    WHEN 4 THEN N'پیش فاکتور'
+                    WHEN 5 THEN N'امانی ما نزد دیگران'
+                    WHEN 6 THEN N'امانی دیگران نزد ما'
+                    WHEN 7 THEN N'ارائه خدمات'
+                    WHEN 8 THEN N'دریافت خدمات'
+                    WHEN 9 THEN N'ضایعات'
+                    ELSE N'نامشخص'
+                END            AS FactorKindTitle,
+                p.CodeTafzil     AS CodeTafzil,
+                p.HesabName      AS HesabName,
+                p.IsCaSh         AS IsCash,
+                CASE ISNULL(p.IsCaSh, 0)
+                    WHEN 1 THEN N'نقدی'
+                    WHEN 2 THEN N'غیرنقدی'
+                    ELSE N''
+                END            AS IsCashName,
+                p.Cost           AS Cost,
+                p.NO_Sanad       AS NoSanad,
+                p.DateSanad      AS DateSanad,
+                p.MarkerName     AS MarkerName,
+                ISNULL(p.TransCost, 0) AS TransCost,
+                ISNULL((SELECT NoFactor FROM FactorParent WHERE ID = p.NoFactor_Per), 0) AS NoFactorPer,
+                ROW_NUMBER() OVER (ORDER BY p.NoFactor DESC, p.ID DESC) AS RowNum
+            FROM FactorParent_View p
+            {sb}
+        ) AS T
+        WHERE T.RowNum BETWEEN @startRow AND @endRow
+        ORDER BY T.RowNum";
 
         var items = (await conn.QueryAsync<FactorListDto>(
             new CommandDefinition(sql, p, cancellationToken: ct))).ToList();
@@ -189,7 +190,6 @@ public class FactorRepository : IFactorRepository
             TotalPages = totalPages
         };
     }
-
     // ═══════════════════════════════════════════════════
     //  جزئیات فاکتور
     // ═══════════════════════════════════════════════════
@@ -239,7 +239,8 @@ public class FactorRepository : IFactorRepository
                 DateSanad    AS DateSanad,
                 CodeTaf_Marketer AS CodeTafMarketer,
                 MarkerName   AS MarkerName,
-                MarkerMobile AS MarkerMobile
+                MarkerMobile AS MarkerMobile,
+                NoFactor_Per AS NoFactorPer
             FROM FactorParent_View
             WHERE ID = @factorId";
 
@@ -1302,5 +1303,201 @@ public class FactorRepository : IFactorRepository
             try { tx.Rollback(); } catch { }
             throw;
         }
+    }
+    public async Task<FactorConvertResultDto> ConvertPishToSaleAsync(
+        long orgId, long fyId, long sourceFactorId, long userCode, CancellationToken ct = default)
+    {
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        if (conn.State != ConnectionState.Open) await conn.OpenAsync(ct);
+
+        using var tx = conn.BeginTransaction();
+        try
+        {
+            // ۱. چک: منبع باید پیش‌فاکتور باشه (FactorKind = 4)
+            const string srcSql = @"
+        SELECT ID, NoFactor, Date_In, Descript, FactorKind, IsCaSh,
+               CodeTafzil, CodeTaf_Marketer, TransCost, CarInfo,
+               ISNULL(Cost, 0)     AS Cost,
+               ISNULL(StockID, 0)  AS StockID,
+               ISNULL(NoFactor_Per, 0) AS NoFactor_Per
+        FROM FactorParent
+        WHERE ID = @id";
+
+            var src = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                new CommandDefinition(srcSql, new { id = sourceFactorId },
+                    transaction: tx, cancellationToken: ct));
+
+            if (src == null)
+                throw new InvalidOperationException("پیش‌فاکتور یافت نشد");
+
+            int factorKind = (int)(src.FactorKind ?? 0);
+            if (factorKind != 4)
+                throw new InvalidOperationException("فقط پیش‌فاکتور قابل تبدیل است");
+
+            // ۲. چک: قبلاً تبدیل نشده باشه (اگر فاکتور فروشی با NoFactor_Per = sourceFactorId وجود داشته باشه)
+            long srcNoFactor = (long)(src.NoFactor ?? 0L);
+            int alreadyConverted = await conn.ExecuteScalarAsync<int>(
+                new CommandDefinition(
+                    @"SELECT COUNT(*) FROM FactorParent 
+                  WHERE FactorKind = 1 AND NoFactor_Per = @srcId",
+                    new { srcId = sourceFactorId }, transaction: tx, cancellationToken: ct));
+
+            if (alreadyConverted > 0)
+                throw new InvalidOperationException(
+                    "این پیش‌فاکتور قبلاً به فاکتور فروش تبدیل شده است");
+
+            // ۳. شماره فاکتور فروش جدید
+            long newNoFactor = await conn.ExecuteScalarAsync<long>(
+                new CommandDefinition(
+                    @"SELECT ISNULL(MAX(NoFactor), 0) + 1 FROM FactorParent WITH (TABLOCKX)
+          WHERE FactorKind = 1",
+                    transaction: tx, cancellationToken: ct));
+
+            // ۴. ساخت فاکتور فروش جدید (کپی کامل + NoFactor_Per = sourceFactorId)
+            const string insSql = @"
+        INSERT INTO FactorParent
+            (NoFactor, Date_In, Descript, FactorKind, IsCaSh,
+             Cost, CodeTafzil, CodeTaf_Marketer, TransCost, CarInfo,
+             StockID, NoFactor_Per, Per_Ok,
+             Code_Op, Date_Op, Time_Op)
+        OUTPUT INSERTED.ID
+        VALUES
+            (@newNo, @dateIn, @descript, 1, @isCash,
+             @cost, @codeTafzil, @codeMarketer, @transCost, @carInfo,
+             @stockId, @noFactorPer, 0,
+             @userCode, @dateOp, @timeOp)";
+
+            var newId = await conn.ExecuteScalarAsync<long>(
+                new CommandDefinition(insSql, new
+                {
+                    newNo = newNoFactor,
+                    dateIn = src.Date_In ?? PersianToday(),
+                    descript = (string?)(src.Descript) ?? "",
+                    isCash = src.IsCaSh ?? 1,
+                    cost = src.Cost ?? 0,
+                    codeTafzil = src.CodeTafzil ?? 0,
+                    codeMarketer = src.CodeTaf_Marketer ?? 0,
+                    transCost = src.TransCost ?? 0,
+                    carInfo = (string?)(src.CarInfo) ?? "",
+                    stockId = src.StockID ?? 0,
+                    noFactorPer = sourceFactorId,       // ⭐ سابقه: ID پیش‌فاکتور
+                    userCode,
+                    dateOp = PersianToday(),
+                    timeOp = DateTime.Now.ToString("HH:mm:ss")
+                }, transaction: tx, cancellationToken: ct));
+
+            // ۵. کپی ردیف‌های فاکتور
+            const string copyItemsSql = @"
+        INSERT INTO FactorDetail
+            (FactorID, ArticleID, ArticleCount,
+             Cost, IncCost, Discount, PerDiscount,
+             Tax, TaxFi, TransCost, StockID,
+             MarketerPercent, MarketerCosts,
+             DegreeKala, DropKala)
+        SELECT 
+            @newId, ArticleID, ArticleCount,
+            Cost, IncCost, Discount, PerDiscount,
+            Tax, TaxFi, TransCost, StockID,
+            MarketerPercent, MarketerCosts,
+            DegreeKala, DropKala
+        FROM FactorDetail
+        WHERE FactorID = @srcId";
+
+            await conn.ExecuteAsync(
+                new CommandDefinition(copyItemsSql,
+                    new { newId, srcId = sourceFactorId },
+                    transaction: tx, cancellationToken: ct));
+
+            tx.Commit();
+
+            return new FactorConvertResultDto
+            {
+                NewFactorId = newId,
+                NewNoFactor = newNoFactor,
+                SourceFactorId = sourceFactorId,
+                SourceNoFactor = srcNoFactor
+            };
+        }
+        catch
+        {
+            try { tx.Rollback(); } catch { }
+            throw;
+        }
+    }
+    private static string PersianToday()
+    {
+        try
+        {
+            var pc = new System.Globalization.PersianCalendar();
+            var now = DateTime.Now;
+            return $"{pc.GetYear(now):0000}/{pc.GetMonth(now):00}/{pc.GetDayOfMonth(now):00}";
+        }
+        catch { return DateTime.Now.ToString("yyyy/MM/dd"); }
+    }
+    /// <summary>
+    /// چک اینکه همه‌ی حساب‌های ویژه‌ی این نوع فاکتور تعریف شدن
+    /// خروجی: لیست موارد ناقص (خالی = همه چیز OK)
+    /// </summary>
+    public async Task<List<string>> CheckConstHesabsAsync(
+        long orgId, long fyId, int factorKind, CancellationToken ct = default)
+    {
+        var missing = new List<string>();
+
+        var required = factorKind switch
+        {
+            1 => new (int type, string label)[]  // فروش
+            {
+            (ConstHesabTypes.Bed, "حساب بدهکار (طرف حساب)"),
+            (ConstHesabTypes.TaxSale, "حساب مالیات فروش"),
+            (ConstHesabTypes.AvarezSale, "حساب عوارض فروش"),
+            (ConstHesabTypes.SaleDiscount, "حساب تخفیف فروش")
+            },
+            0 => new (int, string)[]  // خرید
+            {
+            (ConstHesabTypes.Buy, "حساب خرید"),
+            (ConstHesabTypes.BuyDiscount, "حساب تخفیف خرید")
+            },
+            2 => new (int, string)[]  // برگشت از خرید
+            {
+            (ConstHesabTypes.BackBuy, "حساب برگشت از خرید"),
+            (ConstHesabTypes.BackBuyDiscount, "حساب تخفیف برگشت از خرید")
+            },
+            3 => new (int, string)[]  // برگشت از فروش
+            {
+            (ConstHesabTypes.BackSale, "حساب برگشت از فروش"),
+            (ConstHesabTypes.BackSaleDiscount, "حساب تخفیف برگشت از فروش")
+            },
+            9 => new (int, string)[]  // ضایعات
+            {
+            (ConstHesabTypes.Loss, "حساب ضایعات"),
+            (ConstHesabTypes.SaleDiscount, "حساب تخفیف فروش")
+            },
+            4 => new (int, string)[]  // پیش‌فاکتور → مثل فروش چک می‌شه
+            {
+            (ConstHesabTypes.Bed, "حساب بدهکار (طرف حساب)"),
+            (ConstHesabTypes.TaxSale, "حساب مالیات فروش"),
+            (ConstHesabTypes.AvarezSale, "حساب عوارض فروش"),
+            (ConstHesabTypes.SaleDiscount, "حساب تخفیف فروش")
+            },
+            _ => Array.Empty<(int, string)>()
+        };
+
+        if (required.Length == 0) return missing;
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        await conn.OpenAsync(ct);   // ⭐ این خط قبلاً نبود!
+
+        foreach (var (type, label) in required)
+        {
+            var exists = await conn.ExecuteScalarAsync<int>(
+                new CommandDefinition(
+                    "SELECT COUNT(*) FROM ConstHesabs WHERE Type = @type",
+                    new { type }, cancellationToken: ct));
+
+            if (exists == 0)
+                missing.Add(label);
+        }
+
+        return missing;
     }
 }

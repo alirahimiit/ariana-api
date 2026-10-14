@@ -79,7 +79,8 @@ window.App.Features.SanadForm = (function () {
         return {
             codeCol: 0, codeMoein: 0, codeTafzil: 0, codeTafzili2: 0,
             tafzili2Id: 0, codeSharh: 0, otherSharh: '', mabBed: 0, mabBes: 0, meghdar: 0,
-            tikRow: 0
+            tikRow: 0,
+            doDate: '', doOK: false    // ⭐ جدید
         };
     }
 
@@ -272,7 +273,9 @@ window.App.Features.SanadForm = (function () {
                     mabBed: it.mabBed || 0,
                     mabBes: it.mabBes || 0,
                     meghdar: Math.abs(it.meghdar || 0),
-                    tikRow: it.tikRow || it.TikRow || 0
+                    tikRow: it.tikRow || it.TikRow || 0,
+                    doDate: it.doDate || '',                                    // ⭐
+                    doOK: it.doOK === true || it.doOk === true                   // ⭐
                 }))
             };
             // ⭐ _clipboard رو دست نزن — بین اسناد حفظ می‌شه
@@ -547,6 +550,19 @@ window.App.Features.SanadForm = (function () {
                             <input type="text" class="sf-sharh" data-idx="${idx}" value="${H.esc(item.otherSharh || '')}" placeholder="شرح ردیف">
                         </div>
 
+                        <div class="sf-field sf-field-dodate">
+                            <label>ت. سر رسید</label>
+                            <input type="text" class="sf-dodate num-input" data-idx="${idx}"
+                                   value="${H.esc(item.doDate || '')}"
+                                   placeholder="1404/01/01" maxlength="10">
+                        </div>
+                        <div class="sf-field sf-field-dook">
+                            <label class="sf-dook-label" title="مورد رسیدگی واقع شد — از گزارش pending حذف می‌شود">
+                                <input type="checkbox" class="sf-dook" data-idx="${idx}"
+                                       ${item.doOK ? 'checked' : ''}>
+                                <span>رسیدگی</span>
+                            </label>
+                        </div>
                         <div class="sf-row-tools">
                             <button type="button" class="sf-row-tool" data-idx="${idx}" data-action="up" title="بالا (F6)">▲</button>
                             <button type="button" class="sf-row-tool" data-idx="${idx}" data-action="down" title="پایین (Ctrl+F6)">▼</button>
@@ -1231,9 +1247,11 @@ window.App.Features.SanadForm = (function () {
 
             _state.items[idx].meghdar = parseNum(newVal) || 0;
         } else if (t.classList.contains('sf-tafzil2')) {
-            _state.items[idx].codeTafzili2 = parseInt(t.value) || 0;
+          _state.items[idx].codeTafzili2 = parseInt(t.value) || 0;
+        } else if (t.classList.contains('sf-dodate')) {
+          _state.items[idx].doDate = t.value || '';
         }
-    }
+  }
 
     function onFieldChange(e) {
         const t = e.target;
@@ -1262,6 +1280,8 @@ window.App.Features.SanadForm = (function () {
             _state.items[idx].codeTafzili2 = parseInt(t.value) || 0;
         } else if (t.classList.contains('sf-tafzil')) {
             _state.items[idx].codeTafzil = parseInt(t.value) || 0;
+        } else if (t.classList.contains('sf-dook')) {
+            _state.items[idx].doOK = !!t.checked;
         }
     }
 
@@ -1625,7 +1645,9 @@ window.App.Features.SanadForm = (function () {
                 codeTafzil: it.codeTafzil, codeTafzili2: it.codeTafzili2,
                 tafzili2Id: it.tafzili2Id, codeSharh: it.codeSharh,
                 otherSharh: it.otherSharh, mabBed: it.mabBed, mabBes: it.mabBes,
-                meghdar: Math.abs(it.meghdar || 0), tikRow: it.tikRow || 0
+                meghdar: Math.abs(it.meghdar || 0), tikRow: it.tikRow || 0,
+                doDate: it.doDate || null,       // ⭐
+                doOk: !!it.doOK                   // ⭐
             }))
         };
 

@@ -50,6 +50,8 @@ public class FactorListDto
     public string? DateSanad { get; set; }
     public string? MarkerName { get; set; }
     public decimal TransCost { get; set; }
+
+    public int? NoFactorPer { get; set; }
 }
 
 public class FactorDetailDto
@@ -86,6 +88,8 @@ public class FactorDetailDto
     public int? CodeTafMarketer { get; set; }
     public string? MarkerName { get; set; }
     public string? MarkerMobile { get; set; }
+    public long? NoFactorPer { get; set; }
+
 }
 
 public class FactorItemDto

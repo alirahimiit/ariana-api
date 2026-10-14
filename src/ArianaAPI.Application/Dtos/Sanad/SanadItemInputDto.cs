@@ -43,4 +43,12 @@ public class SanadItemInputDto
     [JsonPropertyName("tikRow")]
     public int? TikRow { get; set; }    // ⭐ جدید
 
+    // ⭐⭐ جدید: تاریخ سر رسید — معمولاً برای چک‌ها
+    [JsonPropertyName("doDate")]
+    public string? DoDate { get; set; }
+
+    // ⭐⭐ جدید: «مورد رسیدگی واقع شد» — وقتی true باشه از گزارش‌های pending حذف می‌شه
+    [JsonPropertyName("doOk")]
+    public bool? DoOK { get; set; }
+
 }

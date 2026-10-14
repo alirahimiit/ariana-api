@@ -1636,3 +1636,131 @@ tr.row-selected {
     border-color: var(--primary, #4F46E5);
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
 }
+/* ═══════════════════════════════════════════════════
+   FIX LAYOUT جلسه ۴۳ — v3 (بلوک آخر، override)
+   ⚠️ این باید آخرین چیز توی فایل باشه
+   ═══════════════════════════════════════════════════ */
+
+/* ─── ردیف: شماره + body کنار هم ─── */
+.sanad-form .sf-row {
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    padding: 8px 6px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.sanad-form .sf-row-num {
+    flex: 0 0 60px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    padding: 6px 0 0 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+}
+
+.sanad-form .sf-row-body {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+    padding: 0 !important;
+}
+
+/* ─── خط کدینگ: ۴ فیلد با عرض مساوی ─── */
+.sanad-form .sf-line-codes {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    margin-bottom: 6px !important;
+    align-items: flex-end !important;
+    width: 100% !important;
+}
+
+    .sanad-form .sf-line-codes .sf-field {
+        flex: 1 1 0 !important;
+        min-width: 130px !important;
+        width: auto !important;
+    }
+
+/* ─── خط مقادیر: wrap-enabled ─── */
+.sanad-form .sf-line-values {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    align-items: flex-end !important;
+    padding: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* ─── عرض فیلدهای مقدار ─── */
+.sanad-form .sf-field-money {
+    flex: 0 1 125px !important;
+    min-width: 100px !important;
+    max-width: 150px !important;
+}
+
+.sanad-form .sf-field-meghdar {
+    flex: 0 1 85px !important;
+    min-width: 70px !important;
+    max-width: 110px !important;
+}
+
+.sanad-form .sf-field-sharh {
+    flex: 1 1 200px !important;
+    min-width: 150px !important;
+    max-width: none !important;
+}
+
+.sanad-form .sf-field-dodate {
+    flex: 0 1 105px !important;
+    min-width: 95px !important;
+    max-width: 120px !important;
+}
+
+.sanad-form .sf-field-dook {
+    flex: 0 0 46px !important;
+    min-width: 46px !important;
+    max-width: 46px !important;
+}
+
+/* ─── ورودی‌ها پر کنن ─── */
+.sanad-form .sf-field-money input,
+.sanad-form .sf-field-meghdar input,
+.sanad-form .sf-field-dodate input,
+.sanad-form .sf-field-sharh input {
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* ─── ابزارها ─── */
+.sanad-form .sf-row-tools {
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    align-self: flex-end !important;
+    display: flex !important;
+    gap: 3px !important;
+    opacity: 0.55;
+    transition: opacity .15s;
+}
+
+.sanad-form .sf-row:hover .sf-row-tools,
+.sanad-form .sf-row.sf-row-focused .sf-row-tools {
+    opacity: 1;
+}
+
+/* ─── موبایل ─── */
+@media (max-width: 900px) {
+    .sanad-form .sf-field-sharh {
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+        order: 10;
+    }
+
+    .sanad-form .sf-line-codes .sf-field {
+        flex: 1 1 45% !important;
+    }
+}

@@ -92,9 +92,17 @@ builder.Services.AddRateLimiter(options =>
 });
 
 // ═══ Swagger + JWT ═══
+// ═══ Swagger + JWT ═══
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "ArianaAPI", Version = "v1" });
+
+    // ⭐⭐ حل تداخل نام کلاس‌ها بین namespace های مختلف
+    // مثال: Application.DTOs.Sanad.SanadCreateResultDto
+    //       Application.DTOs.Factor.SanadCreateResultDto
+    // بدون این خط، Swagger خطای 500 می‌ده
+    c.CustomSchemaIds(type =>
+        type.FullName?.Replace("+", ".") ?? type.Name);
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -121,7 +129,6 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 });
-
 // ═══ JWT Authentication ═══
 var jwtSettings = builder.Configuration
     .GetSection(JwtSettings.SectionName)

@@ -336,18 +336,44 @@ window.App.Features.TafziliForm = (function () {
             if (cleaned !== codeEl.value) codeEl.value = cleaned;
         });
 
-        if (_keyHandler) document.removeEventListener('keydown', _keyHandler);
+        if (_keyHandler) document.removeEventListener('keydown', _keyHandler, true);
         _keyHandler = (e) => {
+            // ⭐ حالت مستقل — اول این رو ببند، نذار به فرم پدر برسه
+            if (_isStandalone) {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();   // ⭐ جلوی فرم پدر رو می‌گیره
+                    closeThisModal();
+                    document.removeEventListener('keydown', _keyHandler, true);
+                    _keyHandler = null;
+                    return;
+                }
+                if (e.key === 'F2') {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    save();
+                    return;
+                }
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    save();
+                    return;
+                }
+                return;   // ⭐ بقیه کلیدها نادیده
+            }
+
+            // حالت عادی (openModal مشترک)
             if (e.key === 'F2') { e.preventDefault(); save(); }
             else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
             else if (e.key === 'Escape') {
                 e.preventDefault();
                 closeThisModal();
-                document.removeEventListener('keydown', _keyHandler);
+                document.removeEventListener('keydown', _keyHandler, true);
                 _keyHandler = null;
             }
         };
-        document.addEventListener('keydown', _keyHandler);
+        document.addEventListener('keydown', _keyHandler, true);   // ⭐ capture: true
     }
 
     // ═══ SAVE ═══

@@ -152,7 +152,8 @@ window.App.Features.FactorForm = (function () {
                     descript: h.descript || '',
                     carInfo: h.carInfo || '',
                     withSanad: true,
-                    existingNoSanad: h.noSanad || 0
+                    existingNoSanad: h.noSanad || 0,
+                    noFactorPer: h.noFactorPer || 0    // ⭐ جدید — سابقه‌ی پیش‌فاکتور
                 },
                 items: (detail.items || []).map(mapServerItemToLocal),
                 customer: null,
@@ -521,11 +522,21 @@ window.App.Features.FactorForm = (function () {
 
     // ─── Footer ───
     function buildFooter() {
+        const isPish = _state.factorKind === 4;   // پیش‌فاکتور
+        const isEdit = _state.mode === 'edit';
+
         return '' +
             '<div class="ff-footer">' +
             '<button type="button" class="btn btn-primary" id="ffSaveBtn">' +
             '💾 ذخیره <span class="kbd-hint">F2</span>' +
             '</button>' +
+
+            // ⭐ دکمه تبدیل — فقط برای پیش‌فاکتور در حالت ویرایش
+            (isPish && isEdit ?
+                '<button type="button" class="btn btn-success" id="ffConvertBtn" style="background:linear-gradient(135deg,#059669,#047857);color:#fff;">' +
+                '🔄 تبدیل به فاکتور فروش' +
+                '</button>' : '') +
+
             '<button type="button" class="btn btn-ghost" id="ffCancelBtn">' +
             'انصراف <span class="kbd-hint">Esc</span>' +
             '</button>' +
@@ -556,6 +567,7 @@ window.App.Features.FactorForm = (function () {
         document.getElementById('ffApplyTransCost')?.addEventListener('click', applyTransCost);
         document.getElementById('ffSaveBtn')?.addEventListener('click', save);
         document.getElementById('ffCancelBtn')?.addEventListener('click', cancel);
+        document.getElementById('ffConvertBtn')?.addEventListener('click', convertToSale);
 
         // ─── تغییر تاریخ ───
         document.getElementById('ffDateIn')?.addEventListener('blur', function () {
@@ -1187,7 +1199,7 @@ window.App.Features.FactorForm = (function () {
             transCost: _state.header.transCost || 0,
             carInfo: val('ffCarInfo'),
             perOk: 0,
-            noFactorPer: 0,
+            noFactorPer: _state.header.noFactorPer || 0,   // ⭐ مقدار اصلی حفظ می‌شه,
             cost: _state.header.totalCost || 0,
             items: _state.items.map(mapLocalItemToServer)
         };
@@ -1228,11 +1240,37 @@ window.App.Features.FactorForm = (function () {
 
             // ─── ۲. سند خودکار ───
             if (withSanad && factorId) {
+                btn.innerHTML = '⏳ بررسی حساب‌های ویژه...';
+
+                // ⭐ چک ConstHesabs
+                try {
+                    const check = await window.App.Http.api(
+                        `/api/factor/${factorId}/check-sanad-ready`);
+
+                    if (!check.ready) {
+                        const listHtml = check.missing
+                            .map(x => `• ${x}`).join('\n');
+
+                        await window.App.alert.error(
+                            `قبل از ثبت سند، حساب‌های ویژه‌ی زیر باید تعریف شوند:\n\n${listHtml}\n\n` +
+                            `لطفاً به «اطلاعات پایه ← حساب‌های ویژه» بروید و آن‌ها را تعریف کنید.`,
+                            { title: '🚫 حساب‌های ویژه ناقص' }
+                        );
+
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        return;
+                    }
+                } catch (checkErr) {
+                    console.warn('[Sanad check]', checkErr);
+                    // اگه endpoint خطا داد، سفت نگیر — ادامه بده
+                }
+
                 btn.innerHTML = '⏳ در حال ثبت سند...';
 
                 try {
                     const sanadResult = await window.App.Http.api(
-                        '/api/factor/' + factorId + '/create-sanad',
+                        '/api/factor/' + factorId + '/create-sanad', 
                         {
                             method: 'POST',
                             body: JSON.stringify({
@@ -1434,7 +1472,55 @@ window.App.Features.FactorForm = (function () {
             dropKala: it.dropKala
         };
     }
+    async function convertToSale() {
+        if (_state.mode !== 'edit' || _state.factorKind !== 4) return;
 
+        const srcNo = _state.header.noFactor || '?';
+
+        const ok = await _askConfirm(
+            `آیا از تبدیل پیش‌فاکتور شماره ${srcNo} به فاکتور فروش مطمئن هستید؟\n\n` +
+            `• یک فاکتور فروش جدید با شماره جدید ساخته می‌شود\n` +
+            `• کلیه اقلام پیش‌فاکتور به آن منتقل می‌شود\n` +
+            `• پیش‌فاکتور اصلی دست‌نخورده باقی می‌ماند`,
+            {
+                title: '🔄 تبدیل به فاکتور فروش',
+                type: 'warning',
+                okText: 'بله، تبدیل کن',
+                cancelText: 'لغو'
+            }
+        );
+        if (!ok) return;
+
+        const btn = document.getElementById('ffConvertBtn');
+        const orig = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '⏳ در حال تبدیل...';
+
+        try {
+            const r = await window.App.Http.api(
+                `/api/factor/${_state.factorId}/convert-to-sale`,
+                { method: 'POST' });
+
+            await window.App.alert.success(
+                `فاکتور فروش جدید با شماره ${r.newNoFactor} ساخته شد.\n\n` +
+                `پیش‌فاکتور اصلی (شماره ${r.sourceNoFactor}) دست‌نخورده باقی ماند.`,
+                { title: '✅ تبدیل موفق' }
+            );
+
+            unbindKeyboard();
+            window.App.closeModal();
+            if (window.App.Features.Factor?.runList) {
+                window.App.Features.Factor.runList(1);
+            }
+        } catch (err) {
+            await window.App.alert.error(
+                err.message || 'خطا در تبدیل',
+                { title: 'خطا در تبدیل' }
+            );
+            btn.disabled = false;
+            btn.innerHTML = orig;
+        }
+    }
     // ═══════════════════════════════════════════════════
     //  API عمومی
     // ═══════════════════════════════════════════════════

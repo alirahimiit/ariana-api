@@ -184,6 +184,14 @@ window.App.Features.Factor = (function () {
                 '</div>';
         } else {
             const rows = items.map(function (f) {
+                // ⭐ badge «از پیش‌فاکتور» — حالا داخل map و با f (نه t)
+                const fromPishBadge = (f.noFactorPer && f.noFactorPer > 0)
+                    ? '<span class="badge badge-info" title="از پیش‌فاکتور شماره ' + f.noFactorPer + '" ' +
+                    'style="display:inline-block;margin-top:4px;font-size:10px;background:#DBEAFE;color:#1E40AF;padding:2px 6px;border-radius:4px;">' +
+                    '📋 از پیش‌فاکتور #' + f.noFactorPer +
+                    '</span>'
+                    : '';
+
                 // ⭐ badge سند
                 let sanadBadge;
                 if (f.noSanad) {
@@ -195,7 +203,7 @@ window.App.Features.Factor = (function () {
 
                 return '' +
                     '<tr>' +
-                    '<td class="num text-center">' + (f.noFactor || '') + '</td>' +
+                    '<td class="num text-center">' + (f.noFactor || '') + fromPishBadge + '</td>' +
                     '<td class="num">' + H.esc(f.dateIn || '') + '</td>' +
                     '<td>' + H.esc(f.factorKindTitle || '') + '</td>' +
                     '<td class="num">' + (f.codeTafzil || '') + '</td>' +
@@ -225,7 +233,7 @@ window.App.Features.Factor = (function () {
                 '<div class="table-wrapper">' +
                 '<table>' +
                 '<thead><tr>' +
-                '<th style="width:70px;">شماره</th>' +
+                '<th style="width:90px;">شماره</th>' +
                 '<th style="width:90px;">تاریخ</th>' +
                 '<th style="width:110px;">نوع</th>' +
                 '<th style="width:70px;">کد طرف</th>' +
@@ -268,8 +276,7 @@ window.App.Features.Factor = (function () {
             });
             window.App.enhanceTables(container);
         }
-    }
-    // ═══════════════════════════════════════════
+    }    // ═══════════════════════════════════════════
     //  دکمه فاکتور جدید
     // ═══════════════════════════════════════════
     function buildNewFactorButton() {

@@ -217,4 +217,44 @@ public class FactorController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
     }
+
+    [HttpPost("{id:long}/convert-to-sale")]
+    [RequirePermission(200)]
+    public async Task<ActionResult<FactorConvertResultDto>> ConvertToSale(
+        long id, CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+        var userCode = User.GetUserId();
+
+        try
+        {
+            var result = await _repo.ConvertPishToSaleAsync(orgId, fyId, id, userCode, ct);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("{id:long}/check-sanad-ready")]
+    public async Task<ActionResult<object>> CheckSanadReady(long id, CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        // فاکتور رو بگیر
+        var factor = await _repo.GetDetailAsync(orgId, fyId, id, ct);
+        if (factor == null) return NotFound();
+
+        var missing = await _repo.CheckConstHesabsAsync(
+            orgId, fyId, factor.Header?.FactorKind ?? 0, ct);
+
+        return Ok(new
+        {
+            ready = missing.Count == 0,
+            missing
+        });
+    }
 }

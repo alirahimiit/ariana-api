@@ -412,6 +412,7 @@ public class SanadRepository : ISanadRepository
                      Code_Sharh, OtherSharh,
                      Mab_Bed, Mab_Bes, Meghdar,
                      TikRow, ResidNum, CheckType,
+                     DoDate, DoOK,
                      Code_Op, Date_Op, Time_Op)
                 VALUES 
                     (@noSanad, @parentId, @rowNum,
@@ -419,6 +420,7 @@ public class SanadRepository : ISanadRepository
                      @codeSharh, @otherSharh,
                      @mabBed, @mabBes, @meghdar,
                      @tikRow, 0, -1,
+                     @doDate, @doOK,
                      @userCode, @dateOp, @timeOp)";
 
             var rowNum = 1;
@@ -441,6 +443,10 @@ public class SanadRepository : ISanadRepository
                         mabBes = item.MabBes,
                         meghdar = item.Meghdar ?? 0m,
                         tikRow = item.TikRow ?? 0,
+                        doDate = string.IsNullOrWhiteSpace(item.DoDate)
+                                    ? (object)DBNull.Value
+                                    : item.DoDate,
+                        doOK = item.DoOK ?? false,
                         userCode = userCode,
                         dateOp = GetTodayPersian(),
                         timeOp = GetCurrentTime()
@@ -539,6 +545,7 @@ public class SanadRepository : ISanadRepository
                      Code_Sharh, OtherSharh,
                      Mab_Bed, Mab_Bes, Meghdar,
                      TikRow, ResidNum, CheckType,
+                     DoDate, DoOK,
                      Code_Op, Date_Op, Time_Op)
                 VALUES 
                     (@noSanad, @parentId, @rowNum,
@@ -546,6 +553,7 @@ public class SanadRepository : ISanadRepository
                      @codeSharh, @otherSharh,
                      @mabBed, @mabBes, @meghdar,
                      @tikRow, 0, -1,
+                     @doDate, @doOK,
                      @userCode, @dateOp, @timeOp)";
 
             var rowNum = 1;
@@ -568,6 +576,10 @@ public class SanadRepository : ISanadRepository
                         mabBes = item.MabBes,
                         meghdar = item.Meghdar ?? 0m,
                         tikRow = item.TikRow ?? 0,
+                        doDate = string.IsNullOrWhiteSpace(item.DoDate)
+                                    ? (object)DBNull.Value
+                                    : item.DoDate,
+                        doOK = item.DoOK ?? false,
                         userCode = userCode,
                         dateOp = GetTodayPersian(),
                         timeOp = GetCurrentTime()

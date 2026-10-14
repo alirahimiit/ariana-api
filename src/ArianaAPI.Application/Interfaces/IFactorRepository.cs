@@ -9,6 +9,7 @@ public interface IFactorRepository
 
     Task<FactorResultDto?> GetDetailAsync(
         long orgId, long fyId, long factorId, CancellationToken ct = default);
+
     Task<FactorLookupsDto> GetLookupsAsync(
         long orgId, long fyId, CancellationToken ct = default);
 
@@ -27,6 +28,7 @@ public interface IFactorRepository
 
     Task DeleteAsync(
         long orgId, long fyId, long factorId, long userCode, CancellationToken ct = default);
+
     // ─── سند خودکار ───
     Task<SanadCreateResultDto> CreateSanadAsync(
         long orgId, long fyId, long factorId, SanadCreateRequestDto request,
@@ -39,4 +41,12 @@ public interface IFactorRepository
     Task DeleteSanadAsync(
         long orgId, long fyId, long factorId,
         CancellationToken ct = default);
+
+    // ─── تبدیل پیش‌فاکتور به فاکتور فروش ───
+    Task<FactorConvertResultDto> ConvertPishToSaleAsync(
+        long orgId, long fyId, long sourceFactorId, long userCode, CancellationToken ct = default);
+
+    // ─── چک حساب‌های ویژه قبل از ثبت سند ───
+    Task<List<string>> CheckConstHesabsAsync(
+        long orgId, long fyId, int factorKind, CancellationToken ct = default);
 }

@@ -165,9 +165,19 @@ window.App.Features.ArticleQuickCreate = (function () {
         document.getElementById('aqcGroup')?.addEventListener('change', onGroupChange);
 
         _keyHandler = (e) => {
-            if (e.key === 'F2') { e.preventDefault(); save(); }
-            else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
-            else if (e.key === 'Escape') { e.preventDefault(); close(null); }
+            if (e.key === 'F2') {
+                e.preventDefault();
+                e.stopImmediatePropagation();   // ⭐
+                save();
+            } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                e.stopImmediatePropagation();   // ⭐
+                save();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopImmediatePropagation();   // ⭐
+                close(null);
+            }
         };
         document.addEventListener('keydown', _keyHandler, true);
     }

@@ -756,6 +756,8 @@ window.App = Object.assign(window.App || {}, {
             //
             'stock-type': 'انبارها / اموال',
             'article-group': 'گروه‌های کالا',
+            'bank': 'بانک‌ها',
+            'bank-acc': 'حساب‌های بانکی',
 
             // * مودیان
             'moadian': '🏛️ سامانه مودیان'
@@ -771,14 +773,12 @@ window.App = Object.assign(window.App || {}, {
             case 'bilan': window.App.Features.Bilan.render(); break;
             case 'daybook': window.App.Features.DayBook.render(); break;
             case 'factor': window.App.Features.Factor.render(); break;
-
             case 'factor-buy': window.App.Features.Factor.render(0); break;
             case 'factor-sell': window.App.Features.Factor.render(1); break;
             case 'factor-buy-return': window.App.Features.Factor.render(2); break;
             case 'factor-sell-return': window.App.Features.Factor.render(3); break;
             case 'factor-scrap': window.App.Features.Factor.render(9); break;
             case 'factor-pre': window.App.Features.Factor.render(4); break;
-
             case 'article': window.App.Features.Article.render(); break;
             case 'hesab': window.App.Features.Hesab.render(); break;
             case 'tafzili': window.App.Features.Tafzili.render(); break;
@@ -793,6 +793,8 @@ window.App = Object.assign(window.App || {}, {
             case 'party-factor': window.App.Features.PartyFactor.render(); break;
             case 'factor-profit-loss': window.App.Features.FactorProfitLoss.render(); break;
             case 'article-stock': window.App.Features.ArticleStock.render(); break;
+            case 'bank': window.App.Features.Bank.render(); break;
+            case 'bank-acc': window.App.Features.BankAcc.render(); break;
             case 'moadian': window.App.Features.Moadian.render(); break;
             // ⭐ صفحات در حال توسعه — placeholder نمایش می‌ده
             default:
