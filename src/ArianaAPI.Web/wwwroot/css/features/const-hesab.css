@@ -1,0 +1,273 @@
+﻿/* ═══════════════════════════════════════════════════════════
+   Feature / ConstHesab — حساب‌های پیش‌فرض
+   ═══════════════════════════════════════════════════════════ */
+
+.ch-page {
+    padding: 8px 4px;
+}
+
+.ch-header {
+    margin-bottom: 16px;
+}
+
+.ch-title {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 800;
+    color: #1F2937;
+}
+
+.ch-sub {
+    font-size: 13px;
+    color: #6B7280;
+}
+
+.ch-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.ch-stats {
+    display: flex;
+    gap: 10px;
+}
+
+.ch-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 16px;
+    border-radius: 10px;
+    min-width: 80px;
+    background: #F3F4F6;
+}
+
+.ch-stat-total {
+    background: #EEF2FF;
+}
+
+.ch-stat-ok {
+    background: #ECFDF5;
+}
+
+.ch-stat-warn {
+    background: #FEF3C7;
+}
+
+.ch-stat-num {
+    font-size: 20px;
+    font-weight: 800;
+    color: #4F46E5;
+}
+
+.ch-stat-label {
+    font-size: 11px;
+    color: #6B7280;
+    margin-top: 2px;
+}
+
+.ch-stat-ok .ch-stat-num {
+    color: #059669;
+}
+
+.ch-stat-warn .ch-stat-num {
+    color: #D97706;
+}
+
+.ch-filters {
+    display: flex;
+    gap: 8px;
+}
+
+.ch-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    font-size: 12px;
+    user-select: none;
+}
+
+    .ch-filter input {
+        accent-color: #4F46E5;
+    }
+
+.ch-table-wrap {
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border: 1px solid #E5E7EB;
+}
+
+.ch-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+    .ch-table thead th {
+        background: #F9FAFB;
+        padding: 10px 12px;
+        text-align: right;
+        font-weight: 700;
+        color: #374151;
+        font-size: 12px;
+        border-bottom: 1px solid #E5E7EB;
+    }
+
+    .ch-table tbody tr {
+        border-bottom: 1px solid #F3F4F6;
+        transition: background .15s;
+    }
+
+        .ch-table tbody tr:hover {
+            background: #FAFBFC;
+        }
+
+        .ch-table tbody tr.row-unset {
+            background: #FFFBEB;
+        }
+
+            .ch-table tbody tr.row-unset:hover {
+                background: #FEF3C7;
+            }
+
+    .ch-table td {
+        padding: 10px 12px;
+        vertical-align: middle;
+    }
+
+.ch-col-type {
+    text-align: center;
+    color: #6B7280;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.ch-col-name {
+    font-weight: 600;
+    color: #1F2937;
+}
+
+.ch-col-code {
+    font-family: 'Vazirmatn', monospace;
+}
+
+.ch-col-status {
+    text-align: center;
+}
+
+.ch-col-actions {
+    text-align: center;
+}
+
+.ch-code {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: #EEF2FF;
+    color: #4338CA;
+    font-weight: 700;
+    font-size: 12px;
+    font-family: 'Vazirmatn', monospace;
+    direction: ltr;
+}
+
+.ch-code-empty {
+    color: #9CA3AF;
+}
+
+.ch-hesab-name {
+    color: #374151;
+}
+
+.ch-unset {
+    color: #D97706;
+    font-style: italic;
+    font-size: 12px;
+}
+
+.ch-badge {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 900;
+    text-align: center;
+}
+
+.ch-badge-ok {
+    background: #D1FAE5;
+    color: #059669;
+}
+
+.ch-badge-warn {
+    background: #FEF3C7;
+    color: #D97706;
+}
+
+.ch-btn {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #E5E7EB;
+    background: #fff;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    transition: all .15s;
+    margin: 0 2px;
+}
+
+    .ch-btn:hover {
+        background: #F3F4F6;
+        transform: translateY(-1px);
+    }
+
+.ch-btn-pick:hover {
+    background: #EEF2FF;
+    border-color: #6366F1;
+}
+
+.ch-btn-clear:hover {
+    background: #FEF2F2;
+    border-color: #EF4444;
+}
+
+.ch-table-wrap .loading,
+.ch-table-wrap .empty {
+    padding: 40px;
+    text-align: center;
+    color: #9CA3AF;
+}
+
+@media (max-width: 768px) {
+    .ch-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .ch-table {
+        font-size: 12px;
+    }
+
+        .ch-table td, .ch-table th {
+            padding: 8px 6px;
+        }
+
+    .ch-col-type {
+        display: none;
+    }
+}

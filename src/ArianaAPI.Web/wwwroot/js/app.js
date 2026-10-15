@@ -754,6 +754,7 @@ window.App = Object.assign(window.App || {}, {
             'factor-profit-loss': 'سود و زیان فاکتوری',
             'article-stock': 'گزارش موجودی کالا',
             //
+            'const-hesab':'حسابهای پیش فرض',
             'stock-type': 'انبارها / اموال',
             'article-group': 'گروه‌های کالا',
             'bank': 'بانک‌ها',
@@ -783,6 +784,7 @@ window.App = Object.assign(window.App || {}, {
             case 'hesab': window.App.Features.Hesab.render(); break;
             case 'tafzili': window.App.Features.Tafzili.render(); break;
             case 'tafzili2': window.App.Features.Tafzili2.render(); break;
+            case 'const-hesab': window.App.Features.ConstHesab.render(); break;
             case 'stock-type': window.App.Features.StockType.render(); break; 
             case 'article-group': window.App.Features.ArticleGroup.render(); break;
             case 'unit': window.App.Features.Unit.render(); break;

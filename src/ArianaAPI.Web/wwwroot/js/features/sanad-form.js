@@ -505,12 +505,14 @@ window.App.Features.SanadForm = (function () {
                                 <button type="button" class="sf-pick-btn" data-idx="${idx}" data-pick="moein" title="انتخاب معین">🔍</button>
                             </div>
                         </div>
-                         <div class="sf-field">
+                        <div class="sf-field">
                             <label>تفصیلی ۱ ${requireTafzil1 ? '<span class="sf-hint sf-stock-req">*</span>' : ''}</label>
                             <div class="sf-input-with-btn">
-                                <input type="number" class="sf-tafzil num-input" data-idx="${idx}"
-                                       value="${item.codeTafzil || ''}" placeholder="${requireTafzil1 ? 'اجباری' : 'کد'}"
+                                <input type="text" inputmode="numeric" class="sf-tafzil num-input" data-idx="${idx}"
+                                       value="${item.codeTafzil || ''}"
+                                       placeholder="${requireTafzil1 ? 'اجباری' : 'کد'}"
                                        ${canTafzil1 ? '' : 'disabled'}>
+                                <span class="sf-tafzil-name" data-idx="${idx}">${tafzilName ? H.esc(tafzilName) : ''}</span>
                                 ${canTafzil1 ? `<button type="button" class="sf-pick-btn" data-idx="${idx}" data-pick="tafzil">🔍</button>` : ''}
                             </div>
                         </div>
@@ -1247,7 +1249,19 @@ window.App.Features.SanadForm = (function () {
 
             _state.items[idx].meghdar = parseNum(newVal) || 0;
         } else if (t.classList.contains('sf-tafzil2')) {
-          _state.items[idx].codeTafzili2 = parseInt(t.value) || 0;
+            _state.items[idx].codeTafzili2 = parseInt(t.value) || 0;
+        } else if (t.classList.contains('sf-tafzil')) {
+            // ⭐ فقط ارقام رو نگه دار
+            const digits = normalizeDigits(t.value).replace(/\D/g, '');
+            const code = parseInt(digits) || 0;
+            _state.items[idx].codeTafzil = code;
+
+            // ⭐ آپدیت زنده‌ی نام کنار input
+            const wrap = document.getElementById('sfRowsWrap');
+            const nameSpan = wrap?.querySelector(`.sf-tafzil-name[data-idx="${idx}"]`);
+            if (nameSpan) {
+                nameSpan.textContent = code ? (findTafzilName(code) || '') : '';
+            }
         } else if (t.classList.contains('sf-dodate')) {
           _state.items[idx].doDate = t.value || '';
         }
@@ -1279,7 +1293,14 @@ window.App.Features.SanadForm = (function () {
         } else if (t.classList.contains('sf-tafzil2')) {
             _state.items[idx].codeTafzili2 = parseInt(t.value) || 0;
         } else if (t.classList.contains('sf-tafzil')) {
-            _state.items[idx].codeTafzil = parseInt(t.value) || 0;
+            const digits = normalizeDigits(t.value).replace(/\D/g, '');
+            const code = parseInt(digits) || 0;
+            _state.items[idx].codeTafzil = code;
+            // ⭐ reformat روی blur — اگه کاربر چیز اضافه تایپ کرد، تمیز شه
+            t.value = code || '';
+            const wrap = document.getElementById('sfRowsWrap');
+            const nameSpan = wrap?.querySelector(`.sf-tafzil-name[data-idx="${idx}"]`);
+            if (nameSpan) nameSpan.textContent = code ? (findTafzilName(code) || '') : '';
         } else if (t.classList.contains('sf-dook')) {
             _state.items[idx].doOK = !!t.checked;
         }

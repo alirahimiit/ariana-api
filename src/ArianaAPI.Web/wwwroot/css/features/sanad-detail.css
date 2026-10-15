@@ -1764,3 +1764,24 @@ tr.row-selected {
         flex: 1 1 45% !important;
     }
 }
+/* ⭐ نام تفضیلی ۱ کنار input */
+.sf-tafzil-name {
+    display: inline-block;
+    font-size: 11px;
+    color: #4B5563;
+    background: #F3F4F6;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin: 0 4px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+    line-height: 1.6;
+    flex-shrink: 0;
+}
+
+    .sf-tafzil-name:empty {
+        display: none;
+    }

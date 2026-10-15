@@ -67,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<ILocationRepository, LocationRepository>();
         services.AddScoped<ITafzili2Repository, Tafzili2Repository>();
         services.AddScoped<IBankRepository, BankRepository>();
+        services.AddScoped<IConstHesabRepository, ConstHesabRepository>();
 
         // ═══ Support Relay Client ═══
         services.AddHttpClient<SupportRelayClient>((sp, http) =>
