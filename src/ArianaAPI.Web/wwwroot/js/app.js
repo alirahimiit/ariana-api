@@ -773,6 +773,8 @@ window.App = Object.assign(window.App || {}, {
             case 'profitloss': window.App.Features.ProfitLoss.render(); break;
             case 'bilan': window.App.Features.Bilan.render(); break;
             case 'daybook': window.App.Features.DayBook.render(); break;
+            case 'pay-cash': window.App.Features.TreasuryCash.render(0); break;
+            case 'receive-cash': window.App.Features.TreasuryCash.render(1); break;
             case 'factor': window.App.Features.Factor.render(); break;
             case 'factor-buy': window.App.Features.Factor.render(0); break;
             case 'factor-sell': window.App.Features.Factor.render(1); break;

@@ -1,0 +1,480 @@
+﻿/* ═══════════════════════════════════════════════════
+   Treasury Cash — دریافت/پرداخت نقدی
+   ═══════════════════════════════════════════════════ */
+
+.tc-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    padding: 0 4px;
+}
+
+    .tc-page-header h2 {
+        font-size: 18px;
+        margin: 0;
+        color: var(--text-primary, #1e293b);
+    }
+
+/* ─── Filter Card ─── */
+.tc-filter-card {
+    margin-bottom: 14px;
+    transition: all 0.2s;
+}
+
+.tc-filter-toggle {
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+}
+
+.tc-filter-icon {
+    transition: transform 0.2s;
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.tc-filter-card.collapsed .tc-filter-icon {
+    transform: rotate(-90deg);
+}
+
+.tc-filter-card.collapsed .tc-filter-body {
+    display: none;
+}
+
+.tc-filter-body {
+    padding-top: 12px;
+    border-top: 1px solid var(--border, #e2e8f0);
+    margin-top: 12px;
+}
+
+.tc-filters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.tc-col-2 {
+    grid-column: span 2;
+}
+
+.tc-filter-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+/* ─── Account Row ─── */
+.tc-account-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.tc-account-label {
+    font-size: 12px;
+    color: #4f46e5;
+    font-weight: 600;
+    padding: 4px 8px;
+    background: #eef2ff;
+    border-radius: 6px;
+    display: none;
+}
+
+/* ─── Table ─── */
+.tc-table .tc-hesab-name {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tc-table .tc-descript {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #64748b;
+    font-size: 12px;
+}
+
+.tc-table .tc-actions {
+    white-space: nowrap;
+}
+
+/* ─── Form ─── */
+.tc-form {
+    padding: 4px;
+}
+
+.tc-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.tc-form-section {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+}
+
+.tc-form-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 10px;
+}
+
+.tc-hesab-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+    .tc-hesab-row input {
+        flex: 1;
+        min-width: 80px;
+    }
+
+.tc-hesab-preview {
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #4f46e5;
+    min-height: 28px;
+}
+
+/* ─── Amount Words ─── */
+.tc-amount-words {
+    font-size: 11px;
+    color: #059669;
+    margin-top: 4px;
+    min-height: 16px;
+    font-weight: 500;
+}
+
+/* ─── Sanad Section ─── */
+.tc-form-sanad {
+    background: #fffbeb;
+    border-color: #fde68a;
+}
+
+.tc-sanad-row {
+    display: flex;
+    gap: 20px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.tc-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.tc-sanad-combo-wrap {
+    flex: 1;
+    min-width: 240px;
+}
+
+    .tc-sanad-combo-wrap label {
+        display: block;
+        font-size: 12px;
+        margin-bottom: 4px;
+        color: #64748b;
+    }
+
+.tc-select {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13px;
+    background: #fff;
+}
+
+    .tc-select:disabled {
+        background: #f1f5f9;
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+.tc-hint {
+    font-size: 11px;
+    color: #92400e;
+    margin: 8px 0 0;
+}
+
+/* ─── Footer ─── */
+.tc-form-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-start;
+    padding-top: 14px;
+    border-top: 1px solid #e2e8f0;
+    margin-top: 4px;
+}
+
+/* ─── Amount Input ─── */
+.tc-amount-input {
+    font-size: 15px;
+    font-weight: 600;
+    color: #059669;
+    text-align: left;
+    direction: ltr;
+}
+
+/* ─── Mobile ─── */
+@media (max-width: 768px) {
+    .tc-page-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .tc-filter-card.collapsed {
+        /* در موبایل همیشه باز باشد */
+    }
+
+    .tc-col-2 {
+        grid-column: span 1;
+    }
+
+    .tc-form-grid,
+    .tc-filters-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .tc-hesab-row input {
+        min-width: 60px;
+    }
+
+    .tc-sanad-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .tc-form-footer {
+        flex-direction: column-reverse;
+    }
+
+        .tc-form-footer .btn {
+            width: 100%;
+        }
+}
+/* ═══════════════════════════════════════════════════
+   STANDALONE HESAB PICKER — overlay مستقل
+   (طبق قانون طلایی: هرگز openModal برای مودال تودرتو)
+   ═══════════════════════════════════════════════════ */
+
+.tc-hp-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    animation: tcHpFadeIn 0.15s ease;
+}
+
+@keyframes tcHpFadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.tc-hp-box {
+    background: #fff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 680px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+    animation: tcHpSlideIn 0.2s ease;
+}
+
+@keyframes tcHpSlideIn {
+    from {
+        transform: translateY(-12px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.tc-hp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid #e2e8f0;
+    font-weight: 700;
+    font-size: 14px;
+    color: #1e293b;
+    background: linear-gradient(135deg, #eef2ff, #f5f3ff);
+}
+
+.tc-hp-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #64748b;
+    padding: 4px 10px;
+    border-radius: 6px;
+    transition: all 0.15s;
+}
+
+    .tc-hp-close:hover {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+
+.tc-hp-search-wrap {
+    padding: 10px 14px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+    .tc-hp-search-wrap input {
+        width: 100%;
+        padding: 9px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 13px;
+        direction: rtl;
+        background: #fff;
+        transition: all 0.15s;
+    }
+
+        .tc-hp-search-wrap input:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+        }
+
+.tc-hp-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+    min-height: 200px;
+}
+
+.tc-hp-group-title {
+    padding: 7px 18px;
+    background: #f1f5f9;
+    font-size: 11px;
+    font-weight: 700;
+    color: #475569;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.tc-hp-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 18px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.12s;
+}
+
+    .tc-hp-item:hover {
+        background: #eef2ff;
+    }
+
+.tc-hp-badge {
+    display: inline-block;
+    min-width: 80px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: #4f46e5;
+    background: #eef2ff;
+    padding: 3px 8px;
+    border-radius: 5px;
+    text-align: center;
+    direction: ltr;
+}
+
+.tc-hp-name {
+    font-size: 13px;
+    color: #1e293b;
+    flex: 1;
+}
+
+.tc-hp-tag {
+    font-size: 10px;
+    color: #f59e0b;
+    background: #fef3c7;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.tc-hp-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 13px;
+}
+
+.tc-hp-footer {
+    padding: 10px 18px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+}
+
+.tc-hp-hint {
+    font-size: 11px;
+    color: #64748b;
+}
+
+/* ─── Mobile ─── */
+@media (max-width: 600px) {
+    .tc-hp-box {
+        max-height: 92vh;
+        border-radius: 12px;
+    }
+
+    .tc-hp-badge {
+        min-width: 65px;
+        font-size: 11px;
+    }
+
+    .tc-hp-name {
+        font-size: 12px;
+    }
+}
