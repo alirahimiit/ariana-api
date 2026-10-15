@@ -15,6 +15,17 @@
         margin: 0;
         color: var(--text-primary, #1e293b);
     }
+/* ─── دکمه جدید در card-title ─── */
+.card-title .btn {
+    flex-shrink: 0;
+}
+
+/* ─── Date input ─── */
+#tcfDateIn {
+    font-family: 'Consolas', 'Monaco', monospace;
+    text-align: center;
+    letter-spacing: 1px;
+}
 
 /* ─── Filter Card ─── */
 .tc-filter-card {
@@ -476,5 +487,47 @@
 
     .tc-hp-name {
         font-size: 12px;
+    }
+}
+
+/* ─── سه فیلد حساب + دکمه ─── */
+.tc-hesab-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+}
+
+.tc-hesab-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+    .tc-hesab-field > label {
+        font-size: 11px;
+        color: #64748b;
+        padding-right: 2px;
+    }
+
+.tc-hesab-input {
+    display: flex;
+    gap: 4px;
+}
+
+    .tc-hesab-input input {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .tc-hesab-input .tc-pick-h {
+        flex-shrink: 0;
+        padding: 4px 8px;
+        font-size: 14px;
+    }
+
+@media (max-width: 768px) {
+    .tc-hesab-row {
+        grid-template-columns: 1fr 1fr;
     }
 }

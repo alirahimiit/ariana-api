@@ -71,7 +71,7 @@ public class ResidCreateDto
     /// <summary>اگر null باشد → خودکار محاسبه می‌شود</summary>
     public int? ResidNumber { get; set; }
 
-    public string DateIn { get; set; } = "";
+    public string? DateIn { get; set; } = "";
     public decimal CashCost { get; set; }
     public string Descript { get; set; } = "";
 

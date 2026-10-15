@@ -12,14 +12,11 @@ window.App.Features.TreasuryCash = (function () {
     const H = window.App.Helpers;
     const S = window.App.State;
 
-    // ═══ STATE ═══
     let _kind = 0;
     let _items = [];
     let _page = 1;
     let _accFilter = { codeCol: 0, codeMoein: 0, codeTafzil: 0, label: '' };
     let _hesabTreeCache = null;
-
-    // ⭐ نام آخرین انتخاب از picker (برای نمایش بدون API)
     let _lastPickedName = '';
     let _lastPickedCodeCol = 0;
     let _lastPickedCodeMoein = 0;
@@ -41,13 +38,6 @@ window.App.Features.TreasuryCash = (function () {
 
         const c = document.getElementById('content');
         c.innerHTML = `
-            <div class="tc-page-header">
-                <h2>${_icon()} ${_title()}</h2>
-                <button class="btn btn-primary btn-sm" data-permission="146" id="tcNewBtn">
-                    ➕ رسید جدید
-                </button>
-            </div>
-
             <div class="card tc-filter-card" id="tcFilterCard">
                 <div class="card-title tc-filter-toggle" id="tcFilterToggle">
                     <span>🔍 فیلترها</span>
@@ -57,11 +47,11 @@ window.App.Features.TreasuryCash = (function () {
                     <div class="tc-filters-grid">
                         <div class="form-group">
                             <label>از تاریخ</label>
-                            <input type="text" id="tcFromDate" placeholder="1404/01/01" class="num-input" dir="ltr">
+                            <input type="text" id="tcFromDate" placeholder="1404/01/01" dir="ltr">
                         </div>
                         <div class="form-group">
                             <label>تا تاریخ</label>
-                            <input type="text" id="tcToDate" placeholder="1404/12/29" class="num-input" dir="ltr">
+                            <input type="text" id="tcToDate" placeholder="1404/12/29" dir="ltr">
                         </div>
                         <div class="form-group">
                             <label>از شماره</label>
@@ -98,7 +88,6 @@ window.App.Features.TreasuryCash = (function () {
             <div id="tcListContainer"></div>
         `;
 
-        document.getElementById('tcNewBtn')?.addEventListener('click', () => openForm(null));
         document.getElementById('tcRunBtn')?.addEventListener('click', () => { _page = 1; loadList(); });
         document.getElementById('tcResetBtn')?.addEventListener('click', resetFilters);
         document.getElementById('tcPickAccountBtn')?.addEventListener('click', openAccountFilterPicker);
@@ -170,55 +159,51 @@ window.App.Features.TreasuryCash = (function () {
         };
     }
 
-    function renderList(r) {
-        const container = document.getElementById('tcListContainer');
-        const items = r.items || [];
+    // ⭐ تابع مستقل برای رندر کارت + دکمه
+    function buildListCard(result) {
+        const items = result?.items || [];
+        const page = result?.page || 1;
+        const pageSize = result?.pageSize || 100;
+        const total = result?.totalCount || 0;
 
+        // ─── بدنه (جدول یا خالی) ───
+        let bodyHtml;
         if (items.length === 0) {
-            container.innerHTML = `
-                <div class="card">
-                    <div class="empty" style="padding:60px;text-align:center;color:#94A3B8;">
-                        <div style="font-size:56px;opacity:0.4;">${_icon()}</div>
-                        <p style="margin-top:12px;">رسیدی یافت نشد</p>
-                    </div>
+            bodyHtml = `
+                <div class="empty" style="padding:60px;text-align:center;color:#94A3B8;">
+                    <div style="font-size:56px;opacity:0.4;">${_icon()}</div>
+                    <p style="margin-top:12px;">رسیدی یافت نشد</p>
+                    <p style="margin-top:6px; font-size:12px; color:#94A3B8;">
+                        برای شروع، دکمه «رسید جدید» را بزنید
+                    </p>
                 </div>`;
-            return;
-        }
+        } else {
+            const rows = items.map(it => {
+                const noSanad = it.noSanad ? `✅ ${H.fmt(it.noSanad)}` : '🚫';
+                const lock = (it.sanadVazeit === 2) ? ' 🔒' : '';
+                return `
+                    <tr data-id="${it.id}">
+                        <td class="num text-center">${H.fmt(it.residNumber)}</td>
+                        <td class="num text-center">${H.esc(it.dateIn || '-')}</td>
+                        <td class="num text-center">${it.codeCol || '-'}</td>
+                        <td class="num text-center">${it.codeMoein || '-'}</td>
+                        <td class="num text-center">${it.codeTafzili || '-'}</td>
+                        <td class="tc-hesab-name">${H.esc(it.hesabNameCalc || '-')}</td>
+                        <td class="tc-descript">${H.esc(it.descript || '-')}</td>
+                        <td class="num text-left"><strong>${H.fmt(it.cashCost)}</strong></td>
+                        <td class="text-center">${noSanad}${lock}</td>
+                        <td class="text-center tc-actions">
+                            <button class="btn btn-sm btn-ghost" title="ویرایش"
+                                    onclick="event.stopPropagation();App.Features.TreasuryCash.openForm(${it.id})"
+                                    data-permission="147">✏️</button>
+                            <button class="btn btn-sm btn-ghost" title="حذف"
+                                    onclick="event.stopPropagation();App.Features.TreasuryCash.removeItem(${it.id})"
+                                    style="color:var(--danger);" data-permission="148">🗑️</button>
+                        </td>
+                    </tr>`;
+            }).join('');
 
-        const rows = items.map(it => {
-            const noSanad = it.noSanad ? `✅ ${H.fmt(it.noSanad)}` : '🚫';
-            const lock = (it.sanadVazeit === 2) ? ' 🔒' : '';
-            return `
-                <tr data-id="${it.id}">
-                    <td class="num text-center">${H.fmt(it.residNumber)}</td>
-                    <td class="num text-center">${H.esc(it.dateIn || '-')}</td>
-                    <td class="num text-center">${it.codeCol || '-'}</td>
-                    <td class="num text-center">${it.codeMoein || '-'}</td>
-                    <td class="num text-center">${it.codeTafzili || '-'}</td>
-                    <td class="tc-hesab-name">${H.esc(it.hesabNameCalc || '-')}</td>
-                    <td class="tc-descript">${H.esc(it.descript || '-')}</td>
-                    <td class="num text-left"><strong>${H.fmt(it.cashCost)}</strong></td>
-                    <td class="text-center">${noSanad}${lock}</td>
-                    <td class="text-center tc-actions">
-                        <button class="btn btn-sm btn-ghost" title="ویرایش"
-                                onclick="event.stopPropagation();App.Features.TreasuryCash.openForm(${it.id})"
-                                data-permission="147">✏️</button>
-                        <button class="btn btn-sm btn-ghost" title="حذف"
-                                onclick="event.stopPropagation();App.Features.TreasuryCash.removeItem(${it.id})"
-                                style="color:var(--danger);" data-permission="148">🗑️</button>
-                    </td>
-                </tr>`;
-        }).join('');
-
-        const page = r.page || 1;
-        const pageSize = r.pageSize || 100;
-        const total = r.totalCount || 0;
-
-        container.innerHTML = `
-            <div class="card">
-                <div class="card-title">
-                    <span>${_icon()} لیست ${_title()} (${H.fmt(total)})</span>
-                </div>
+            bodyHtml = `
                 <div class="table-wrapper">
                     <table class="tc-table">
                         <thead>
@@ -238,11 +223,36 @@ window.App.Features.TreasuryCash = (function () {
                         <tbody>${rows}</tbody>
                     </table>
                 </div>
-                <div id="tcPagination"></div>
+                <div id="tcPagination"></div>`;
+        }
+
+        // ⭐ کارت کامل با دکمه در card-title
+        return `
+            <div class="card">
+                <div class="card-title">
+                    <span>${_icon()} لیست ${_title()} (${H.fmt(total)})</span>
+                    <button class="btn btn-primary btn-sm" data-permission="146" id="tcNewBtn">
+                        ➕ رسید جدید
+                    </button>
+                </div>
+                ${bodyHtml}
             </div>
         `;
+    }
+
+    function renderList(result) {
+        const container = document.getElementById('tcListContainer');
+        container.innerHTML = buildListCard(result);
+
+        // بایند دکمه جدید
+        document.getElementById('tcNewBtn')?.addEventListener('click', () => openForm(null));
 
         if (window.App.UI.PermissionGuard) window.App.UI.PermissionGuard.apply(container);
+
+        const items = result.items || [];
+        const total = result.totalCount || 0;
+        const pageSize = result.pageSize || 100;
+        const page = result.page || 1;
 
         const totalPages = Math.ceil(total / pageSize);
         if (totalPages > 1) {
@@ -250,7 +260,7 @@ window.App.Features.TreasuryCash = (function () {
             if (pgEl) pgEl.innerHTML = buildPagination(page, totalPages, total, items.length);
         }
 
-        if (typeof Exporter !== 'undefined' && Exporter.attach) {
+        if (items.length > 0 && typeof Exporter !== 'undefined' && Exporter.attach) {
             Exporter.attach(container, {
                 title: `لیست ${_title()}`,
                 subtitle: subtitle(),
@@ -330,7 +340,6 @@ window.App.Features.TreasuryCash = (function () {
         try { sanadList = await window.App.Http.api('/api/resid/sanad-list'); }
         catch (e) { sanadList = []; }
 
-        // ⭐ ریست نام پیک
         _lastPickedName = '';
         _lastPickedCodeCol = 0;
         _lastPickedCodeMoein = 0;
@@ -347,7 +356,9 @@ window.App.Features.TreasuryCash = (function () {
     function buildFormHtml(data, isEdit, sanadList) {
         const today = H.todayPersian ? H.todayPersian() : '';
         const dateIn = data.dateIn || today;
-        const cost = data.cashCost || 0;
+        const costRaw = parseFloat(data.cashCost);
+        const costVal = !isNaN(costRaw) && costRaw > 0 ? costRaw : 0;
+        const costStr = costVal > 0 ? costVal.toLocaleString('en-US') : '';
         const hasSanad = (data.parentSanadID || 0) > 0;
 
         const sanadOptions = ['<option value="">— بدون سند —</option>']
@@ -366,26 +377,46 @@ window.App.Features.TreasuryCash = (function () {
                     </div>
                     <div class="form-group">
                         <label>تاریخ <span class="req">*</span></label>
-                        <input type="text" id="tcfDateIn" value="${H.esc(dateIn)}" class="num-input" dir="ltr" placeholder="1404/01/01">
+                        <input type="text" id="tcfDateIn" value="${H.esc(dateIn)}" dir="ltr" placeholder="1404/01/01">
                     </div>
                     <div class="form-group">
                         <label>مبلغ <span class="req">*</span></label>
-                        <input type="text" id="tcfCashCost" value="${H.fmt(cost)}" class="num-input tc-amount-input" dir="ltr">
+                        <input type="text" id="tcfCashCost" value="${costStr}" class="num-input tc-amount-input" dir="ltr">
                         <div class="tc-amount-words" id="tcfAmountWords"></div>
                     </div>
                 </div>
 
-                <div class="tc-form-section">
-                    <div class="tc-form-section-title">💼 حساب ${_partyLabel()}</div>
-                    <div class="tc-hesab-row">
-                        <input type="number" id="tcfCodeCol" value="${data.codeCol || ''}" placeholder="کد کل" class="num-input" dir="ltr">
-                        <input type="number" id="tcfCodeMoein" value="${data.codeMoein || ''}" placeholder="کد معین" class="num-input" dir="ltr">
-                        <input type="number" id="tcfCodeTafzili" value="${data.codeTafzili || ''}" placeholder="کد تفصیلی" class="num-input" dir="ltr">
-                        <button type="button" class="btn btn-ghost btn-sm" id="tcfPickPersonBtn">🏦 انتخاب</button>
-                        <button type="button" class="btn btn-ghost btn-sm" id="tcfDefaultPersonBtn" title="حساب پیش‌فرض">⚙️</button>
+                    <div class="tc-form-section">
+                        <div class="tc-form-section-title">💼 حساب ${_partyLabel()}</div>
+                        <div class="tc-hesab-row">
+                            <div class="tc-hesab-field">
+                                <label>کد کل</label>
+                                <div class="tc-hesab-input">
+                                    <input type="number" id="tcfCodeCol" value="${data.codeCol || ''}" class="num-input" dir="ltr" placeholder="مثلاً 103">
+                                    <button type="button" class="btn btn-ghost btn-sm tc-pick-h" data-level="col" title="انتخاب کل">🏦</button>
+                                </div>
+                            </div>
+                            <div class="tc-hesab-field">
+                                <label>کد معین</label>
+                                <div class="tc-hesab-input">
+                                    <input type="number" id="tcfCodeMoein" value="${data.codeMoein || ''}" class="num-input" dir="ltr" placeholder="مثلاً 4">
+                                    <button type="button" class="btn btn-ghost btn-sm tc-pick-h" data-level="moein" title="انتخاب معین">🏦</button>
+                                </div>
+                            </div>
+                            <div class="tc-hesab-field">
+                                <label>کد تفصیلی (مستقل)</label>
+                                <div class="tc-hesab-input">
+                                    <input type="number" id="tcfCodeTafzili" value="${data.codeTafzili || ''}" class="num-input" dir="ltr" placeholder="مثلاً 2116">
+                                    <button type="button" class="btn btn-ghost btn-sm tc-pick-h" data-level="tafzil" title="انتخاب تفصیلی">🏦</button>
+                                </div>
+                            </div>
+                            <div class="tc-hesab-field">
+                                <label>&nbsp;</label>
+                                <button type="button" class="btn btn-ghost btn-sm" id="tcfDefaultPersonBtn" title="حساب پیش‌فرض">⚙️</button>
+                            </div>
+                        </div>
+                        <div class="tc-hesab-preview" id="tcfPersonName">—</div>
                     </div>
-                    <div class="tc-hesab-preview" id="tcfPersonName">—</div>
-                </div>
 
                 <div class="tc-form-section">
                     <div class="form-group">
@@ -419,23 +450,30 @@ window.App.Features.TreasuryCash = (function () {
         `;
     }
 
-    // ═══════════════════════════════════════════════════
-    //  BIND FORM
-    // ═══════════════════════════════════════════════════
     let _formKeyHandler = null;
 
     function bindFormEvents(data, isEdit) {
         const costInput = document.getElementById('tcfCashCost');
-        costInput?.addEventListener('input', () => {
-            const val = H.parseNumber(costInput.value) || 0;
+        costInput?.addEventListener('input', function () {
+            // ⭐ فقط ارقام رو نگه‌دار
+            const digitsOnly = this.value.replace(/[^\d]/g, '');
+            const numVal = digitsOnly ? parseInt(digitsOnly, 10) : 0;
+
+            // ⭐ فرمت زنده — با حفظ cursor
+            const formatted = numVal > 0 ? numVal.toLocaleString('en-US') : '';
+            this.value = formatted;
+
+            // cursor آخرین جا
+            try { this.setSelectionRange(formatted.length, formatted.length); } catch { }
+
+            // ⭐ مبلغ به حروف
             const el = document.getElementById('tcfAmountWords');
-            if (el) el.textContent = val > 0 ? toPersianWords(val) : '';
+            if (el) el.textContent = numVal > 0 ? toPersianWords(numVal) : '';
         });
-        costInput?.addEventListener('blur', () => {
-            const val = H.parseNumber(costInput.value) || 0;
-            costInput.value = H.fmt(val);
-        });
-        costInput?.dispatchEvent(new Event('input'));
+        // ⭐ فقط اگه مقدار داره، input event بزن
+        if (costInput && costInput.value.trim()) {
+            costInput.dispatchEvent(new Event('input'));
+        }
 
         function refreshPersonName() {
             const c = parseInt(document.getElementById('tcfCodeCol').value) || 0;
@@ -460,21 +498,55 @@ window.App.Features.TreasuryCash = (function () {
         });
         if (data.codeCol) refreshPersonName();
 
-        // ─── Picker ───
-        document.getElementById('tcfPickPersonBtn')?.addEventListener('click', async () => {
-            const picked = await pickHesabStandalone();
-            if (!picked) return;
-            document.getElementById('tcfCodeCol').value = picked.codeCol || 0;
-            document.getElementById('tcfCodeMoein').value = picked.codeMoein || 0;
-            document.getElementById('tcfCodeTafzili').value = picked.codeTafzil || 0;
-            _lastPickedCodeCol = picked.codeCol;
-            _lastPickedCodeMoein = picked.codeMoein;
-            _lastPickedCodeTafzil = picked.codeTafzil;
-            _lastPickedName = picked.name || '';
-            refreshPersonName();
-        });
+        // ⭐ سه دکمه مستقل: کل / معین / تفصیلی
+        // از HesabPicker مشترک پروژه استفاده می‌کنیم (مثل article-form.js)
+        document.querySelectorAll('.tc-pick-h').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const level = btn.dataset.level;
+                let result = null;
 
-        // ─── حساب پیش‌فرض ───
+                try {
+                    if (level === 'col') {
+                        result = await window.App.UI.HesabPicker.open({
+                            mode: 'col',
+                            title: '🔍 انتخاب کد کل'
+                        });
+                        if (!result) return;
+                        document.getElementById('tcfCodeCol').value = result.codeCol || 0;
+                        // ⚠️ معین و تفصیلی رو پاک نکن — کاربر ممکنه قبلاً انتخاب کرده باشه
+                        _lastPickedCodeCol = result.codeCol || 0;
+                        _lastPickedName = result.name || '';
+
+                    } else if (level === 'moein') {
+                        result = await window.App.UI.HesabPicker.open({
+                            mode: 'moein',
+                            title: '🔍 انتخاب کد معین'
+                        });
+                        if (!result) return;
+                        document.getElementById('tcfCodeCol').value = result.codeCol || 0;
+                        document.getElementById('tcfCodeMoein').value = result.codeMoein || 0;
+                        // ⚠️ تفصیلی مستقل هست — پاکش نکن
+                        _lastPickedCodeCol = result.codeCol || 0;
+                        _lastPickedCodeMoein = result.codeMoein || 0;
+                        _lastPickedName = result.name || '';
+
+                    } else if (level === 'tafzil') {
+                        result = await window.App.UI.HesabPicker.open({
+                            mode: 'tafzil',
+                            title: '🔍 انتخاب کد تفصیلی'
+                        });
+                        if (!result) return;
+                        document.getElementById('tcfCodeTafzili').value = result.codeTafzil || 0;
+                        _lastPickedCodeTafzil = result.codeTafzil || 0;
+                        _lastPickedName = result.name || '';
+                    }
+
+                    refreshPersonName();
+                } catch (err) {
+                    window.App.toast('خطا در انتخاب: ' + err.message, 'error');
+                }
+            });
+        });
         document.getElementById('tcfDefaultPersonBtn')?.addEventListener('click', async () => {
             try {
                 const list = await window.App.Http.api('/api/const-hesab/list');
@@ -508,10 +580,8 @@ window.App.Features.TreasuryCash = (function () {
         document.getElementById('tcfSaveBtn')?.addEventListener('click', () => saveForm(data, isEdit));
         document.getElementById('tcfCancelBtn')?.addEventListener('click', () => window.App.closeModal());
 
-        // ⭐ F2 / Esc — با چک overlay picker
         if (_formKeyHandler) document.removeEventListener('keydown', _formKeyHandler);
         _formKeyHandler = (e) => {
-            // اگه picker باز باشه، به مودال پدر کاری نداشته باش
             if (document.getElementById('tcHpStandalone')) return;
 
             if (e.key === 'F2') { e.preventDefault(); saveForm(data, isEdit); }
@@ -523,9 +593,6 @@ window.App.Features.TreasuryCash = (function () {
         document.addEventListener('keydown', _formKeyHandler);
     }
 
-    // ═══════════════════════════════════════════════════
-    //  SAVE
-    // ═══════════════════════════════════════════════════
     async function saveForm(oldData, isEdit) {
         const g = id => document.getElementById(id);
         const gi = id => parseInt(g(id)?.value) || 0;
@@ -542,7 +609,6 @@ window.App.Features.TreasuryCash = (function () {
         const saveWithSanad = g('tcfSaveSanad').checked;
         const parentSanadID = saveWithSanad ? (parseInt(g('tcfParentSanadID').value) || 0) : 0;
 
-        // ⭐ اگه شماره صفره، از سرور بگیر
         if (residNumber <= 0) {
             try {
                 const nr = await window.App.Http.api(`/api/resid/next-number?checkKind=${_kind}`);
@@ -553,15 +619,34 @@ window.App.Features.TreasuryCash = (function () {
             }
         }
 
-        if (!dateIn) { window.App.toast('تاریخ الزامی است', 'error'); return; }
+        // ⭐ اعتبارسنجی سختگیرانه‌ی تاریخ
+        if (!dateIn) {
+            window.App.toast('تاریخ الزامی است', 'error');
+            g('tcfDateIn')?.focus();
+            return;
+        }
+        if (dateIn.includes('?') || dateIn.includes('_')) {
+            window.App.toast('تاریخ وارد شده معتبر نیست', 'error');
+            g('tcfDateIn')?.focus();
+            return;
+        }
+        // ⭐ چک فرمت ۱۴۰۵/۰۷/۲۳ (با ارقام لاتین یا فارسی)
+        const normalized = dateIn
+            .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+            .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+        if (!/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(normalized)) {
+            window.App.toast('فرمت تاریخ باید 1404/01/01 باشد', 'error');
+            g('tcfDateIn')?.focus();
+            return;
+        }
+
         if (cashCost <= 0) { window.App.toast('مبلغ باید بزرگ‌تر از صفر باشد', 'error'); return; }
         if (codeCol <= 0) { window.App.toast('کد کل طرف حساب الزامی است', 'error'); return; }
 
-        // ⭐ NoSanad: اگه سند خودکار می‌خوایم و شماره خاصی نداده، null بفرست
         const payload = {
             checkKind: _kind,
             residNumber,
-            dateIn,
+            dateIn: normalized,     // ⭐ ارسال با ارقام لاتین
             cashCost,
             descript,
             codeCol,
@@ -603,9 +688,6 @@ window.App.Features.TreasuryCash = (function () {
         }
     }
 
-    // ═══════════════════════════════════════════════════
-    //  DELETE
-    // ═══════════════════════════════════════════════════
     async function removeItem(id) {
         const item = _items.find(x => x.id === id);
         const amount = item ? H.fmt(item.cashCost) : '';
@@ -627,9 +709,6 @@ window.App.Features.TreasuryCash = (function () {
         }
     }
 
-    // ═══════════════════════════════════════════════════
-    //  HESAB TREE
-    // ═══════════════════════════════════════════════════
     async function loadHesabTree() {
         if (_hesabTreeCache) return _hesabTreeCache;
         const tree = await window.App.Http.api('/api/hesab/tree');
@@ -638,185 +717,29 @@ window.App.Features.TreasuryCash = (function () {
     }
 
     // ═══════════════════════════════════════════════════
-    //  ⭐ STANDALONE PICKER — overlay مستقل (قانون طلایی)
-    //  مودال پدر رو نمی‌بنده — z-index بالاتر
+    //  PICKER — استفاده از HesabPicker مشترک پروژه
+    //  قانون: سرچ + دستی + همه‌ی سطوح (کل/معین/تفضیلی/تفضیلی۲)
     // ═══════════════════════════════════════════════════
-    function pickHesabStandalone() {
-        return new Promise((resolve) => {
-
-            document.getElementById('tcHpStandalone')?.remove();
-
-            const overlay = document.createElement('div');
-            overlay.id = 'tcHpStandalone';
-            overlay.className = 'tc-hp-overlay';
-            overlay.style.zIndex = '11000';        // ⭐ بالاتر از مودال پدر
-            overlay.innerHTML = `
-                <div class="tc-hp-box">
-                    <div class="tc-hp-header">
-                        <span>🏦 انتخاب حساب</span>
-                        <button type="button" class="tc-hp-close" id="tcHpClose">✕</button>
-                    </div>
-                    <div class="tc-hp-search-wrap">
-                        <input type="text" id="tcHpSearch"
-                               placeholder="🔍 جستجو در کد یا نام..."
-                               autocomplete="off">
-                    </div>
-                    <div class="tc-hp-body" id="tcHpList">
-                        <div class="tc-hp-empty">در حال بارگذاری...</div>
-                    </div>
-                    <div class="tc-hp-footer">
-                        <span class="tc-hp-hint">
-                            💡 برای انتخاب تفضیلی، مستقیم روی ردیف تفضیلی کلیک کنید
-                        </span>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(overlay);
-
-            const closeOverlay = (result) => {
-                document.removeEventListener('keydown', escHandler, true);
-                overlay.remove();
-                resolve(result);
-            };
-
-            const escHandler = (e) => {
-                if (e.key === 'Escape') {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    closeOverlay(null);
-                }
-            };
-            document.addEventListener('keydown', escHandler, true);
-
-            // کلیک روی backdrop → بستن
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) closeOverlay(null);
-            });
-
-            overlay.querySelector('#tcHpClose')?.addEventListener('click', () => closeOverlay(null));
-
-            // ─── بارگذاری درخت ───
-            (async () => {
-                let tree;
-                try {
-                    tree = await loadHesabTree();
-                } catch (err) {
-                    document.getElementById('tcHpList').innerHTML =
-                        `<div class="tc-hp-empty">خطا: ${H.esc(err.message)}</div>`;
-                    return;
-                }
-
-                const cols = (tree || []).filter(x => x.level === 'col');
-                const moeins = (tree || []).filter(x => x.level === 'moein');
-                const tafzils = (tree || []).filter(x =>
-                    x.level === 'tafzil' || x.level === 'tafzili' || x.level === 'tafzili1');
-
-                const list = document.getElementById('tcHpList');
-                const search = document.getElementById('tcHpSearch');
-
-                function render(filter = '') {
-                    const f = filter.trim().toLowerCase();
-                    let html = '';
-
-                    const fCols = !f ? cols.slice(0, 100) : cols.filter(x =>
-                        String(x.codeCol).includes(f) ||
-                        (x.name || '').toLowerCase().includes(f)
-                    ).slice(0, 100);
-
-                    const fMoeins = !f ? moeins.slice(0, 200) : moeins.filter(x =>
-                        String(x.codeMoein).includes(f) ||
-                        String(x.codeCol).includes(f) ||
-                        (x.name || '').toLowerCase().includes(f)
-                    ).slice(0, 200);
-
-                    const fTafzils = !f ? tafzils.slice(0, 200) : tafzils.filter(x =>
-                        String(x.codeTafzil || 0).includes(f) ||
-                        String(x.codeCol || 0).includes(f) ||
-                        String(x.codeMoein || 0).includes(f) ||
-                        (x.name || '').toLowerCase().includes(f)
-                    ).slice(0, 200);
-
-                    if (fCols.length > 0) {
-                        html += '<div class="tc-hp-group-title">🔷 حساب‌های کل</div>';
-                        html += fCols.map(c => `
-                            <div class="tc-hp-item"
-                                 data-col="${c.codeCol}" data-moein="0" data-tafzil="0"
-                                 data-name="${H.esc(c.name || '')}">
-                                <span class="tc-hp-badge">${c.codeCol}</span>
-                                <span class="tc-hp-name">${H.esc(c.name || '')}</span>
-                            </div>`).join('');
-                    }
-
-                    if (fMoeins.length > 0) {
-                        html += '<div class="tc-hp-group-title">🔶 حساب‌های معین</div>';
-                        html += fMoeins.map(m => `
-                            <div class="tc-hp-item"
-                                 data-col="${m.codeCol}" data-moein="${m.codeMoein}" data-tafzil="0"
-                                 data-name="${H.esc(m.name || '')}">
-                                <span class="tc-hp-badge">${m.codeCol} / ${m.codeMoein}</span>
-                                <span class="tc-hp-name">${H.esc(m.name || '')}</span>
-                                ${m.hasTafzili ? '<span class="tc-hp-tag">تفضیلی دارد</span>' : ''}
-                            </div>`).join('');
-                    }
-
-                    if (fTafzils.length > 0) {
-                        html += '<div class="tc-hp-group-title">👤 تفضیلی‌ها</div>';
-                        html += fTafzils.map(t => {
-                            const code = t.codeTafzil || t.codeTafzili || 0;
-                            return `
-                                <div class="tc-hp-item"
-                                     data-col="${t.codeCol || -1}"
-                                     data-moein="${t.codeMoein || 0}"
-                                     data-tafzil="${code}"
-                                     data-name="${H.esc(t.name || '')}">
-                                    <span class="tc-hp-badge">${code}</span>
-                                    <span class="tc-hp-name">${H.esc(t.name || '')}</span>
-                                </div>`;
-                        }).join('');
-                    }
-
-                    if (!html) html = '<div class="tc-hp-empty">موردی یافت نشد</div>';
-                    list.innerHTML = html;
-                }
-
-                render();
-                search.addEventListener('input', () => render(search.value));
-
-                list.addEventListener('click', (e) => {
-                    const item = e.target.closest('.tc-hp-item');
-                    if (!item) return;
-
-                    const c = parseInt(item.dataset.col) || 0;
-                    const m = parseInt(item.dataset.moein) || 0;
-                    const t = parseInt(item.dataset.tafzil) || 0;
-                    const name = item.dataset.name || '';
-
-                    // اگه کد کل -1 باشه (تفضیلی)، روی معین 0 می‌ذاریم
-                    const finalCol = (c === -1) ? 0 : c;
-
-                    closeOverlay({
-                        codeCol: finalCol,
-                        codeMoein: m,
-                        codeTafzil: t,
-                        name: name
-                    });
-                });
-
-                search.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        const first = list.querySelector('.tc-hp-item');
-                        if (first) first.click();
-                    }
-                });
-
-                setTimeout(() => search.focus(), 50);
-            })();
+    async function openAccountFilterPicker() {
+        const picked = await window.App.UI.HesabPicker.open({
+            mode: 'moein',
+            title: '🔍 انتخاب حساب برای فیلتر'
         });
+        if (!picked) return;
+        _accFilter = {
+            codeCol: picked.codeCol || 0,
+            codeMoein: picked.codeMoein || 0,
+            codeTafzil: 0,
+            label: picked.name || [picked.codeCol, picked.codeMoein].filter(x => x > 0).join(' / ')
+        };
+        updateAccountBar();
+        _page = 1;
+        loadList();
     }
+    // ═══════════════════════════════════════════════════
+    //  FALLBACK — اگه HesabPicker مشترک لود نشده بود
+    // ═══════════════════════════════════════════════════
 
-    // ═══════════════════════════════════════════════════
-    //  ACCOUNT FILTER (بالای صفحه)
-    // ═══════════════════════════════════════════════════
     async function openAccountFilterPicker() {
         const picked = await pickHesabStandalone();
         if (!picked) return;
@@ -825,8 +748,7 @@ window.App.Features.TreasuryCash = (function () {
             codeMoein: picked.codeMoein,
             codeTafzil: picked.codeTafzil,
             label: picked.name ||
-                [picked.codeCol, picked.codeMoein, picked.codeTafzil]
-                    .filter(x => x > 0).join(' / ')
+                [picked.codeCol, picked.codeMoein, picked.codeTafzil].filter(x => x > 0).join(' / ')
         };
         updateAccountBar();
         _page = 1;
@@ -855,9 +777,6 @@ window.App.Features.TreasuryCash = (function () {
         }
     }
 
-    // ═══════════════════════════════════════════════════
-    //  مبلغ به حروف
-    // ═══════════════════════════════════════════════════
     function toPersianWords(n) {
         if (!n) return '';
         const yekan = ['', 'یک', 'دو', 'سه', 'چهار', 'پنج', 'شش', 'هفت', 'هشت', 'نه'];
@@ -894,9 +813,6 @@ window.App.Features.TreasuryCash = (function () {
         return parts.join(' و ') + ' ریال';
     }
 
-    // ═══════════════════════════════════════════════════
-    //  EXPOSE
-    // ═══════════════════════════════════════════════════
     return {
         render,
         loadList,
