@@ -71,7 +71,7 @@ public class TreasurySanadService : ITreasurySanadService
         OUTPUT INSERTED.ParentSanadID
         VALUES
             (@noSanad, @dateIn, @sharh, 0,
-             1, 0,
+             0, 0,
              @residPayId, @residRecId, @residPayNo, @residRecNo,
              @userCode, 0, 0, 0, 0,
              @userCode, @today, @time)";

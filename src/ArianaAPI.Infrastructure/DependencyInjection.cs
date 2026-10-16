@@ -70,6 +70,10 @@ public static class DependencyInjection
         services.AddScoped<IConstHesabRepository, ConstHesabRepository>();
         services.AddScoped<ITreasurySanadService, TreasurySanadService>();
         services.AddScoped<IResidRepository, ResidRepository>();
+        // ═══ چک‌ها (Pay + Receive) ═══
+        services.AddScoped<IChequeSanadService, ChequeSanadService>();
+        services.AddScoped<IChequePayRepository, ChequePayRepository>();
+        services.AddScoped<IChequeReceiveRepository, ChequeReceiveRepository>();
 
 
         // ═══ Support Relay Client ═══

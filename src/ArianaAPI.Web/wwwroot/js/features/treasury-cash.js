@@ -21,6 +21,12 @@ window.App.Features.TreasuryCash = (function () {
     let _lastPickedCodeCol = 0;
     let _lastPickedCodeMoein = 0;
     let _lastPickedCodeTafzil = 0;
+    // ⭐ جدید: کش نام‌ها از tree
+    let _hesabNameCache = {
+        col: {},       // { 103: 'حساب‌های دریافتنی تجاری' }
+        moein: {},     // { '103_4': 'حساب‌های دریافتنی تجاری' }
+        tafzil: {}     // { 2116: 'علی رضا حاجیان فر' }
+    };
 
     function _isPay() { return _kind === 0; }
     function _title() { return _isPay() ? 'پرداخت نقدی' : 'دریافت نقدی'; }
@@ -475,14 +481,23 @@ window.App.Features.TreasuryCash = (function () {
             costInput.dispatchEvent(new Event('input'));
         }
 
-        function refreshPersonName() {
-            const c = parseInt(document.getElementById('tcfCodeCol').value) || 0;
-            const m = parseInt(document.getElementById('tcfCodeMoein').value) || 0;
-            const t = parseInt(document.getElementById('tcfCodeTafzili').value) || 0;
+        async function refreshPersonName() {
+            const cEl = document.getElementById('tcfCodeCol');
+            const mEl = document.getElementById('tcfCodeMoein');
+            const tEl = document.getElementById('tcfCodeTafzili');
             const el = document.getElementById('tcfPersonName');
             if (!el) return;
-            if (c <= 0) { el.textContent = '—'; return; }
 
+            const c = parseInt(cEl?.value) || 0;
+            const m = parseInt(mEl?.value) || 0;
+            const t = parseInt(tEl?.value) || 0;
+
+            if (c <= 0 && t <= 0) {
+                el.textContent = '—';
+                return;
+            }
+
+            // ⭐ اگه همین حالا از Picker انتخاب شده، مستقیم نام رو نشون بده
             if (_lastPickedName
                 && _lastPickedCodeCol === c
                 && _lastPickedCodeMoein === m
@@ -490,13 +505,73 @@ window.App.Features.TreasuryCash = (function () {
                 el.textContent = _lastPickedName;
                 return;
             }
-            el.textContent = `${c}${m > 0 ? ' / ' + m : ''}${t > 0 ? ' / ' + t : ''}`;
+
+            // ⭐ در غیر این صورت، از tree نام رو پیدا کن
+            const name = await resolveHesabName(c, m, t);
+            if (name) {
+                el.textContent = name;
+            } else {
+                // fallback: اگه پیدا نشد، کد نشون بده
+                el.textContent = `${c}${m > 0 ? ' / ' + m : ''}${t > 0 ? ' / ' + t : ''}`;
+            }
         }
 
+        // ⭐ تابع کمکی: پیدا کردن نام از tree با کش
+        // منطق: هر سطحی که پرشده رو با " - " به هم بچسبون
+        async function resolveHesabName(codeCol, codeMoein, codeTafzil) {
+            let tree;
+            try { tree = await loadHesabTree(); }
+            catch { return null; }
+
+            const parts = [];
+
+            // ─── ۱. کل ───
+            if (codeCol > 0) {
+                const cKey = codeCol;
+                if (_hesabNameCache.col[cKey] === undefined) {
+                    const c = (tree || []).find(x =>
+                        x.level === 'col' && x.codeCol === codeCol
+                    );
+                    _hesabNameCache.col[cKey] = c ? (c.name || '') : '';
+                }
+                if (_hesabNameCache.col[cKey]) parts.push(_hesabNameCache.col[cKey]);
+            }
+
+            // ─── ۲. معین ───
+            if (codeCol > 0 && codeMoein > 0) {
+                const mKey = `${codeCol}_${codeMoein}`;
+                if (_hesabNameCache.moein[mKey] === undefined) {
+                    const m = (tree || []).find(x =>
+                        x.level === 'moein' &&
+                        x.codeCol === codeCol &&
+                        x.codeMoein === codeMoein
+                    );
+                    _hesabNameCache.moein[mKey] = m ? (m.name || '') : '';
+                }
+                if (_hesabNameCache.moein[mKey]) parts.push(_hesabNameCache.moein[mKey]);
+            }
+
+            // ─── ۳. تفضیلی ───
+            if (codeTafzil > 0) {
+                const tKey = codeTafzil;
+                if (_hesabNameCache.tafzil[tKey] === undefined) {
+                    const t = (tree || []).find(x =>
+                        (x.level === 'tafzil' || x.level === 'tafzili') &&
+                        (x.codeTafzil === codeTafzil || x.codeTafzili === codeTafzil)
+                    );
+                    _hesabNameCache.tafzil[tKey] = t ? (t.name || '') : '';
+                }
+                if (_hesabNameCache.tafzil[tKey]) parts.push(_hesabNameCache.tafzil[tKey]);
+            }
+
+            return parts.length > 0 ? parts.join(' - ') : null;
+        }
         ['tcfCodeCol', 'tcfCodeMoein', 'tcfCodeTafzili'].forEach(id => {
-            document.getElementById(id)?.addEventListener('blur', refreshPersonName);
+            document.getElementById(id)?.addEventListener('blur', async () => {   // ⭐ async
+                await refreshPersonName();
+            });
         });
-        if (data.codeCol) refreshPersonName();
+        if (data.codeCol || data.codeTafzili) refreshPersonName();
 
         // ⭐ سه دکمه مستقل: کل / معین / تفصیلی
         // از HesabPicker مشترک پروژه استفاده می‌کنیم (مثل article-form.js)
@@ -541,7 +616,7 @@ window.App.Features.TreasuryCash = (function () {
                         _lastPickedName = result.name || '';
                     }
 
-                    refreshPersonName();
+                    await refreshPersonName();    // ⭐ await اضافه شد
                 } catch (err) {
                     window.App.toast('خطا در انتخاب: ' + err.message, 'error');
                 }
@@ -564,7 +639,7 @@ window.App.Features.TreasuryCash = (function () {
                 _lastPickedCodeCol = target.codeCol;
                 _lastPickedCodeMoein = target.codeMoein;
                 _lastPickedCodeTafzil = target.codeTafzil;
-                refreshPersonName();
+                await refreshPersonName();    // ⭐ await اضافه شد
             } catch (err) {
                 window.App.toast('خطا: ' + err.message, 'error');
             }

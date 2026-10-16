@@ -775,6 +775,8 @@ window.App = Object.assign(window.App || {}, {
             case 'daybook': window.App.Features.DayBook.render(); break;
             case 'pay-cash': window.App.Features.TreasuryCash.render(0); break;
             case 'receive-cash': window.App.Features.TreasuryCash.render(1); break;
+            case 'pay-cheque': window.App.Features.TreasuryCheque.render(0); break;
+            case 'receive-cheque': window.App.Features.TreasuryCheque.render(1); break;
             case 'factor': window.App.Features.Factor.render(); break;
             case 'factor-buy': window.App.Features.Factor.render(0); break;
             case 'factor-sell': window.App.Features.Factor.render(1); break;
