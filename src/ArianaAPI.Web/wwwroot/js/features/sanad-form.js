@@ -59,6 +59,8 @@ window.App.Features.SanadForm = (function () {
         selectedRows: new Set()
     };
     let _cache = { cols: [], moeins: [], tafzils: [], loaded: false };
+    // ⭐ کش شرح‌ها (datalist شرح سند و شرح ردیف)
+    let _sharhCache = { parents: null, rows: null };
     
 
     // ═══ UTILS ═══
@@ -153,6 +155,43 @@ window.App.Features.SanadForm = (function () {
         } catch (err) { console.error('Lookup load failed:', err); }
     }
 
+    // ═══ SHARH DATALISTS (شرح سند + شرح ردیف) ═══
+    async function ensureSharhLists() {
+        if (_sharhCache.parents !== null && _sharhCache.rows !== null) {
+            return _sharhCache;
+        }
+        try {
+            const [parents, rows] = await Promise.all([
+                window.App.Http.api('/api/sanad/distinct-parent-sharh', { silent: true }).catch(() => []),
+                window.App.Http.api('/api/sanad/distinct-row-sharh', { silent: true }).catch(() => [])
+            ]);
+            _sharhCache.parents = Array.isArray(parents) ? parents : [];
+            _sharhCache.rows = Array.isArray(rows) ? rows : [];
+        } catch (e) {
+            console.warn('[Sharh list load]', e);
+            _sharhCache.parents = _sharhCache.parents || [];
+            _sharhCache.rows = _sharhCache.rows || [];
+        }
+        return _sharhCache;
+    }
+
+    function populateSharhDatalists() {
+        if (_sharhCache.parents === null && _sharhCache.rows === null) return;
+        fillDatalist('sfParentSharhList', _sharhCache.parents || []);
+        fillDatalist('sfRowSharhList', _sharhCache.rows || []);
+    }
+
+    function fillDatalist(id, items) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = (items || [])
+            .map(x => {
+                const s = String(x ?? '').trim();
+                if (!s) return '';
+                return `<option value="${H.esc(s)}"></option>`;
+            })
+            .join('');
+    }
     function moeinsOfCol(codeCol) {
         return _cache.moeins.filter(m => m.codeCol === codeCol);
     }
@@ -204,6 +243,10 @@ window.App.Features.SanadForm = (function () {
         };
         // ⭐ _clipboard رو دست نزن — بین اسناد حفظ می‌شه
         await ensureLookups();
+
+        // ⭐ شروع بارگذاری شرح‌ها — fire-and-forget (منتظر نمونه)
+        ensureSharhLists().then(populateSharhDatalists).catch(() => { });
+
         const body = buildFormHtml({
             noSanad: '', dateIn: today(), otherParentSharh: '', vazeit: 0, kindSanad: 0
         });
@@ -211,7 +254,10 @@ window.App.Features.SanadForm = (function () {
         document.querySelector('.modal-box')?.classList.add('wide-modal');
         bindEvents();
         renderRows();
-        focusRow(0, 'bed');   // ⭐
+        focusRow(0, 'bed');
+
+        // ⭐ اگه cache از قبل لود شده بود، همین الان پر کن
+        populateSharhDatalists();
     }
 
     async function openEdit(id) {
@@ -255,6 +301,8 @@ window.App.Features.SanadForm = (function () {
                 window.App.Http.api(`/api/sanad/${id}`),
                 window.App.Http.api(`/api/sanad/${id}/items`)
             ]);
+            // ⭐ شروع بارگذاری شرح‌ها — fire-and-forget
+            ensureSharhLists().then(populateSharhDatalists).catch(() => { });
             _state = {
                 isEdit: true,
                 parentSanadId: id,
@@ -293,6 +341,7 @@ window.App.Features.SanadForm = (function () {
             bindEvents();
             renderRows();
             focusRow(0, 'bed');   // ⭐
+            populateSharhDatalists();
         } catch (err) {
             window.App.toast('خطا: ' + err.message, 'error');
         }
@@ -349,6 +398,9 @@ window.App.Features.SanadForm = (function () {
 
         return `
             <div class="sanad-form" data-help="sanad-form">
+                <!-- ⭐ Datalists برای شرح سند و ردیف -->
+                <datalist id="sfParentSharhList"></datalist>
+                <datalist id="sfRowSharhList"></datalist>
                 <div class="sanad-form-header">
                     <div class="sf-field">
                         <label>شماره سند</label>
@@ -368,7 +420,7 @@ window.App.Features.SanadForm = (function () {
                     </div>
                     <div class="sf-field sf-field-wide">
                         <label>شرح سند</label>
-                        <input type="text" id="sfParentSharh" value="${H.esc(h.otherParentSharh)}" placeholder="شرح کلی سند">
+                        <input type="text" id="sfParentSharh" list="sfParentSharhList" value="${H.esc(h.otherParentSharh)}" placeholder="شرح کلی سند">
                     </div>
                     <button type="button" class="sf-help-btn" id="sfHelpBtn" title="راهنمای کلیدهای میان‌بر">⌨️</button>
                 </div>
@@ -549,7 +601,7 @@ window.App.Features.SanadForm = (function () {
                         </div>
                         <div class="sf-field sf-field-sharh">
                             <label>شرح ردیف</label>
-                            <input type="text" class="sf-sharh" data-idx="${idx}" value="${H.esc(item.otherSharh || '')}" placeholder="شرح ردیف">
+                            <input type="text" class="sf-sharh" data-idx="${idx}" list="sfRowSharhList" value="${H.esc(item.otherSharh || '')}" placeholder="شرح ردیف">
                         </div>
 
                         <div class="sf-field sf-field-dodate">

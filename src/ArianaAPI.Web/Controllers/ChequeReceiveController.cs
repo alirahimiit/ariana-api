@@ -35,6 +35,16 @@ public class ChequeReceiveController : ControllerBase
         var fyId = User.GetFyId();
         return Ok(await _repo.GetListAsync(orgId, fyId, filter, ct));
     }
+    /// <summary>خلاصه‌ی گزارش چک‌های دریافتی (بدون pagination)</summary>
+    [HttpPost("report-summary")]
+    public async Task<ActionResult<ChequeReportSummaryDto>> GetReportSummary(
+        [FromBody] ChequeReceiveFilterDto filter,
+        CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+        return Ok(await _repo.GetReportSummaryAsync(orgId, fyId, filter, ct));
+    }
 
     [HttpGet("{id:long}")]
     public async Task<ActionResult<ChequeReceiveDetailDto>> GetById(long id, CancellationToken ct)

@@ -35,4 +35,6 @@ public class SanadListDto
 
     [JsonPropertyName("totalErrorCount")]
     public int TotalErrorCount { get; set; }
+
+    public int ItemCount { get; set; }
 }

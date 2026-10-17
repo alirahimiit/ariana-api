@@ -174,6 +174,107 @@ public class ChequeReceiveRepository : IChequeReceiveRepository
     }
 
     // ═══════════════════════════════════════════════════════════════
+    //  READ — خلاصه گزارش (Summary) — ChequeOK + WasExpended
+    // ═══════════════════════════════════════════════════════════════
+    public async Task<ChequeReportSummaryDto> GetReportSummaryAsync(
+        long orgId, long fyId,
+        ChequeReceiveFilterDto filter,
+        CancellationToken ct = default)
+    {
+        // ─── همان WHERE لیست ───
+        var where = new StringBuilder(" WHERE 1=1 ");
+        var p = new DynamicParameters();
+
+        if (filter.FromNumber.HasValue) { where.Append(" AND CR.ResidNumber >= @fromNumber "); p.Add("fromNumber", filter.FromNumber.Value); }
+        if (filter.ToNumber.HasValue) { where.Append(" AND CR.ResidNumber <= @toNumber "); p.Add("toNumber", filter.ToNumber.Value); }
+
+        if (!string.IsNullOrWhiteSpace(filter.FromDate)) { where.Append(" AND CR.ResidDate >= @fromDate "); p.Add("fromDate", filter.FromDate.Trim()); }
+        if (!string.IsNullOrWhiteSpace(filter.ToDate)) { where.Append(" AND CR.ResidDate <= @toDate "); p.Add("toDate", filter.ToDate.Trim()); }
+
+        if (!string.IsNullOrWhiteSpace(filter.CheckFromDate)) { where.Append(" AND CR.CheckDate >= @checkFromDate "); p.Add("checkFromDate", filter.CheckFromDate.Trim()); }
+        if (!string.IsNullOrWhiteSpace(filter.CheckToDate)) { where.Append(" AND CR.CheckDate <= @checkToDate "); p.Add("checkToDate", filter.CheckToDate.Trim()); }
+
+        if (!string.IsNullOrWhiteSpace(filter.CheckFromSerial)) { where.Append(" AND CR.CheckSeries >= @checkFromSerial "); p.Add("checkFromSerial", filter.CheckFromSerial.Trim()); }
+        if (!string.IsNullOrWhiteSpace(filter.CheckToSerial)) { where.Append(" AND CR.CheckSeries <= @checkToSerial "); p.Add("checkToSerial", filter.CheckToSerial.Trim()); }
+
+        if (!string.IsNullOrWhiteSpace(filter.Descript)) { where.Append(" AND CR.ResidDes LIKE @descript "); p.Add("descript", "%" + filter.Descript.Trim() + "%"); }
+
+        if (filter.BankId is > 0) { where.Append(" AND CR.BankID = @bankId "); p.Add("bankId", filter.BankId.Value); }
+        if (!string.IsNullOrWhiteSpace(filter.BankBrunch)) { where.Append(" AND CR.BankBrunch LIKE @bankBrunch "); p.Add("bankBrunch", "%" + filter.BankBrunch.Trim() + "%"); }
+        if (!string.IsNullOrWhiteSpace(filter.NoHesabCheck)) { where.Append(" AND CR.NoHesabCheck LIKE @noHesab "); p.Add("noHesab", "%" + filter.NoHesabCheck.Trim() + "%"); }
+
+        if (filter.CodeCol is > 0) { where.Append(" AND CR.Code_Col = @codeCol "); p.Add("codeCol", filter.CodeCol.Value); }
+        if (filter.CodeMoein is > 0) { where.Append(" AND CR.Code_Moein = @codeMoein "); p.Add("codeMoein", filter.CodeMoein.Value); }
+        if (filter.CodeTafzil is > 0) { where.Append(" AND CR.Code_Tafzil = @codeTafzil "); p.Add("codeTafzil", filter.CodeTafzil.Value); }
+
+        // ─── GROUP BY ChequeOK + WasExpended (یک پاس) ───
+        var sql = $@"
+            SELECT
+                ISNULL(CR.ChequeOK, 0)    AS ChequeOK,
+                ISNULL(CR.WasExpended, 0) AS WasExpended,
+                COUNT(*)                  AS [Count],
+                ISNULL(SUM(CR.CheckMab), 0) AS Amount
+            FROM CheckRecive CR
+            {where}
+            GROUP BY ISNULL(CR.ChequeOK, 0), ISNULL(CR.WasExpended, 0)";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        var rows = (await conn.QueryAsync<dynamic>(
+            new CommandDefinition(sql, p, cancellationToken: ct))).ToList();
+
+        var statusLabels = new Dictionary<int, string>
+        {
+            [0] = "در جریان",
+            [1] = "وصول‌شده",
+            [2] = "برگشتی"
+        };
+        var expendedLabels = new Dictionary<int, string>
+        {
+            [0] = "آزاد",
+            [1] = "خرج قطعی",
+            [2] = "در جریان وصول"
+        };
+
+        // ─── byStatus (ChequeOK) ───
+        var byStatus = new List<ChequeStatusGroupDto>();
+        foreach (var status in new[] { 0, 1, 2 })
+        {
+            var matching = rows.Where(r => (int)(decimal)r.ChequeOK == status).ToList();
+            byStatus.Add(new ChequeStatusGroupDto
+            {
+                Status = status,
+                Label = statusLabels[status],
+                Count = matching.Sum(r => (int)(decimal)r.Count),
+                Amount = matching.Sum(r => (decimal)r.Amount)
+            });
+        }
+
+        // ─── byExpended (WasExpended) ───
+        var byExpended = new List<ChequeStatusGroupDto>();
+        foreach (var status in new[] { 0, 1, 2 })
+        {
+            var matching = rows.Where(r => (int)(decimal)r.WasExpended == status).ToList();
+            byExpended.Add(new ChequeStatusGroupDto
+            {
+                Status = status,
+                Label = expendedLabels[status],
+                Count = matching.Sum(r => (int)(decimal)r.Count),
+                Amount = matching.Sum(r => (decimal)r.Amount)
+            });
+        }
+
+        var totalCount = rows.Sum(r => (int)(decimal)r.Count);
+        var totalAmount = rows.Sum(r => (decimal)r.Amount);
+
+        return new ChequeReportSummaryDto
+        {
+            TotalCount = totalCount,
+            TotalAmount = totalAmount,
+            ByStatus = byStatus,
+            ByExpended = byExpended
+        };
+    }
+    // ═══════════════════════════════════════════════════════════════
     //  DETAIL
     // ═══════════════════════════════════════════════════════════════
     public async Task<ChequeReceiveDetailDto?> GetByIdAsync(

@@ -80,6 +80,7 @@ public class SanadRepository : ISanadRepository
         int pageSize = 100,
         bool? onlyWithErrors = null,
         int? codeCol = null, int? codeMoein = null, int? codeTafzil = null,
+        string? sharh = null, string? rowSharh = null,
         CancellationToken ct = default)
     {
         var where = new StringBuilder(" WHERE 1=1 ");
@@ -114,6 +115,19 @@ public class SanadRepository : ISanadRepository
         {
             where.Append(" AND P.KindSanad = @kindSanad ");
             parameters.Add("kindSanad", kindSanad.Value);
+        }
+        // ⭐ فیلتر شرح سند (Header)
+        if (!string.IsNullOrWhiteSpace(sharh))
+        {
+            where.Append(" AND P.OtherParentSharh LIKE @sharh ");
+            parameters.Add("sharh", "%" + sharh.Trim() + "%");
+        }
+
+        // ⭐ فیلتر شرح ردیف (Subquery)
+        if (!string.IsNullOrWhiteSpace(rowSharh))
+        {
+            where.Append(" AND P.ParentSanadID IN (SELECT DISTINCT ParentSanadCode FROM Sanad WHERE OtherSharh LIKE @rowSharh) ");
+            parameters.Add("rowSharh", "%" + rowSharh.Trim() + "%");
         }
 
         // ⭐ فیلتر فقط اسناد دارای خطا
@@ -181,6 +195,7 @@ public class SanadRepository : ISanadRepository
                     P.KindSanad,
                     ISNULL(S.SumBed, 0) AS Mab_Bed,
                     ISNULL(S.SumBes, 0) AS Mab_Bes,
+                    ISNULL(S.ItemCount, 0) AS ItemCount,
                     ISNULL(E.CodingErrors, 0)  AS CodingErrorCount,
                     ISNULL(E.MoeinErrors, 0)   AS MoeinErrorCount,
                     (ISNULL(E.CodingErrors, 0) + ISNULL(E.MoeinErrors, 0)) AS TotalErrorCount,
@@ -188,6 +203,7 @@ public class SanadRepository : ISanadRepository
                 FROM ParentSanad P
                 LEFT JOIN (
                     SELECT ParentSanadCode,
+                           COUNT(*) AS ItemCount,
                            SUM(Mab_Bed) AS SumBed,
                            SUM(Mab_Bes) AS SumBes
                     FROM Sanad
@@ -1500,5 +1516,42 @@ public class SanadRepository : ISanadRepository
             try { tx.Rollback(); } catch { }
             throw;
         }
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  📋 Distinct Sharh lists (برای datalist)
+    // ═══════════════════════════════════════════════════
+    public async Task<List<string>> GetDistinctParentSharhAsync(
+        long orgId, long fyId, CancellationToken ct = default)
+    {
+        const string sql = @"
+            SELECT TOP 200 OtherParentSharh AS Sharh
+            FROM ParentSanad
+            WHERE OtherParentSharh IS NOT NULL 
+              AND LTRIM(RTRIM(OtherParentSharh)) <> ''
+            GROUP BY OtherParentSharh
+            ORDER BY COUNT(*) DESC";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        var list = await conn.QueryAsync<string>(
+            new CommandDefinition(sql, cancellationToken: ct));
+        return list.ToList();
+    }
+
+    public async Task<List<string>> GetDistinctRowSharhAsync(
+        long orgId, long fyId, CancellationToken ct = default)
+    {
+        const string sql = @"
+            SELECT TOP 300 OtherSharh AS Sharh
+            FROM Sanad
+            WHERE OtherSharh IS NOT NULL 
+              AND LTRIM(RTRIM(OtherSharh)) <> ''
+            GROUP BY OtherSharh
+            ORDER BY COUNT(*) DESC";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        var list = await conn.QueryAsync<string>(
+            new CommandDefinition(sql, cancellationToken: ct));
+        return list.ToList();
     }
 }

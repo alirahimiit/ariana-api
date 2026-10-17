@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- خاموش کردن چک کردن اینترنت برای آسیب‌پذیری پکیج‌ها -->
+    <NuGetAudit>false</NuGetAudit>
+    <NoWarn>$(NoWarn);NU1900</NoWarn>
+  </PropertyGroup>
+</Project>

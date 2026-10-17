@@ -176,6 +176,90 @@ public class ChequeExpendRepository : IChequeExpendRepository
     }
 
     // ═══════════════════════════════════════════════════════════════
+    //  READ — خلاصه گزارش (Summary) — GROUP BY WasDuring
+    //  مبلغ از CR.CheckMab (چون CheckExpend خودش مبلغ ندارد)
+    // ═══════════════════════════════════════════════════════════════
+    public async Task<ChequeReportSummaryDto> GetReportSummaryAsync(
+        long orgId, long fyId,
+        ChequeExpendFilterDto filter,
+        CancellationToken ct = default)
+    {
+        // ─── همان WHERE لیست ───
+        var where = new StringBuilder(" WHERE 1=1 ");
+        var p = new DynamicParameters();
+
+        if (filter.FromNumber.HasValue) { where.Append(" AND CE.ResidNumber >= @fromNumber "); p.Add("fromNumber", filter.FromNumber.Value); }
+        if (filter.ToNumber.HasValue) { where.Append(" AND CE.ResidNumber <= @toNumber "); p.Add("toNumber", filter.ToNumber.Value); }
+
+        if (!string.IsNullOrWhiteSpace(filter.FromDate)) { where.Append(" AND CE.ResidDate >= @fromDate "); p.Add("fromDate", filter.FromDate.Trim()); }
+        if (!string.IsNullOrWhiteSpace(filter.ToDate)) { where.Append(" AND CE.ResidDate <= @toDate "); p.Add("toDate", filter.ToDate.Trim()); }
+
+        if (!string.IsNullOrWhiteSpace(filter.CheckFromDate)) { where.Append(" AND CR.CheckDate >= @checkFromDate "); p.Add("checkFromDate", filter.CheckFromDate.Trim()); }
+        if (!string.IsNullOrWhiteSpace(filter.CheckToDate)) { where.Append(" AND CR.CheckDate <= @checkToDate "); p.Add("checkToDate", filter.CheckToDate.Trim()); }
+
+        if (!string.IsNullOrWhiteSpace(filter.CheckFromSerial)) { where.Append(" AND CR.CheckSeries >= @checkFromSerial "); p.Add("checkFromSerial", filter.CheckFromSerial.Trim()); }
+        if (!string.IsNullOrWhiteSpace(filter.CheckToSerial)) { where.Append(" AND CR.CheckSeries <= @checkToSerial "); p.Add("checkToSerial", filter.CheckToSerial.Trim()); }
+
+        if (!string.IsNullOrWhiteSpace(filter.Descript)) { where.Append(" AND CE.ResidDes LIKE @descript "); p.Add("descript", "%" + filter.Descript.Trim() + "%"); }
+
+        if (filter.CodeCol is > 0) { where.Append(" AND CE.Code_Col = @codeCol "); p.Add("codeCol", filter.CodeCol.Value); }
+        if (filter.CodeMoein is > 0) { where.Append(" AND CE.Code_Moein = @codeMoein "); p.Add("codeMoein", filter.CodeMoein.Value); }
+        if (filter.CodeTafzil is > 0) { where.Append(" AND CE.Code_Tafzil = @codeTafzil "); p.Add("codeTafzil", filter.CodeTafzil.Value); }
+        if (filter.WasDuring.HasValue) { where.Append(" AND CE.WasDuring = @wasDuring "); p.Add("wasDuring", filter.WasDuring.Value); }
+
+        // ─── GROUP BY WasDuring — مبلغ از CR ───
+        var sql = $@"
+            SELECT
+                ISNULL(CE.WasDuring, 0) AS Status,
+                COUNT(*)                AS [Count],
+                ISNULL(SUM(CR.CheckMab), 0) AS Amount
+            FROM CheckExpend CE
+            LEFT JOIN CheckRecive CR ON CR.ID = CE.CheuqeReceiveID
+            {where}
+            GROUP BY ISNULL(CE.WasDuring, 0)
+            ORDER BY Status";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        var rows = (await conn.QueryAsync<dynamic>(
+            new CommandDefinition(sql, p, cancellationToken: ct))).ToList();
+
+        var labels = new Dictionary<int, string>
+        {
+            [0] = "خرج قطعی",
+            [1] = "در جریان وصول"
+        };
+
+        var byStatus = new List<ChequeStatusGroupDto>();
+        int totalCount = 0;
+        decimal totalAmount = 0m;
+
+        foreach (var status in new[] { 0, 1 })
+        {
+            var row = rows.FirstOrDefault(r => (int)(decimal)r.Status == status);
+            var cnt = row != null ? (int)(decimal)row.Count : 0;
+            var amt = row != null ? (decimal)row.Amount : 0m;
+
+            byStatus.Add(new ChequeStatusGroupDto
+            {
+                Status = status,
+                Label = labels[status],
+                Count = cnt,
+                Amount = amt
+            });
+
+            totalCount += cnt;
+            totalAmount += amt;
+        }
+
+        return new ChequeReportSummaryDto
+        {
+            TotalCount = totalCount,
+            TotalAmount = totalAmount,
+            ByStatus = byStatus,
+            ByExpended = null
+        };
+    }
+    // ═══════════════════════════════════════════════════════════════
     //  DETAIL
     // ═══════════════════════════════════════════════════════════════
     public async Task<ChequeExpendDetailDto?> GetByIdAsync(

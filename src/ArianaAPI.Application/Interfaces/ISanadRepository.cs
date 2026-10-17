@@ -21,6 +21,8 @@ public interface ISanadRepository
         int? codeCol = null,        
         int? codeMoein = null,      
         int? codeTafzil = null,
+        string? sharh = null,
+        string? rowSharh = null,
         CancellationToken ct = default);
 
     Task<SanadDetailDto?> GetByIdAsync(
@@ -74,4 +76,9 @@ public interface ISanadRepository
     long orgId, long fyId,
     List<long> sanadIds, int targetVazeit,
     long userCode, CancellationToken ct = default);
+    Task<List<string>> GetDistinctParentSharhAsync(
+        long orgId, long fyId, CancellationToken ct = default);
+
+    Task<List<string>> GetDistinctRowSharhAsync(
+        long orgId, long fyId, CancellationToken ct = default);
 }

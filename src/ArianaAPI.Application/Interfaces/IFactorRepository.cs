@@ -49,4 +49,8 @@ public interface IFactorRepository
     // ─── چک حساب‌های ویژه قبل از ثبت سند ───
     Task<List<string>> CheckConstHesabsAsync(
         long orgId, long fyId, int factorKind, CancellationToken ct = default);
+
+    // ⭐ جدید — لیست اسناد برای dropdown فرم فاکتور
+    Task<List<FactorSanadListItemDto>> GetSanadListAsync(
+        long orgId, long fyId, CancellationToken ct = default);
 }

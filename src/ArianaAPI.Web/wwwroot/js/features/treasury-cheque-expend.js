@@ -574,7 +574,7 @@ window.App.Features.TreasuryChequeExpend = (function () {
         const sanadOptions = ['<option value="">— بدون سند —</option>']
             .concat((sanadList || []).map(s =>
                 `<option value="${s.parentSanadID}" ${s.parentSanadID === data.parentSanadId ? 'selected' : ''}>
-                    ${H.fmt(s.noSanad)} — ${H.esc((s.sharh || '').substring(0, 40))}
+                    ${H.fmt(s.noSanad)} — ${H.esc(s.dateIn || '')} — ${H.esc((s.sharh || '').substring(0, 30))}
                 </option>`)).join('');
 
         const hasSanad = (data.parentSanadId || 0) > 0;

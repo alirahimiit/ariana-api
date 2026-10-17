@@ -14,6 +14,11 @@ public interface IChequeExpendRepository
         ChequeExpendFilterDto filter,
         CancellationToken ct = default);
 
+    Task<ChequeReportSummaryDto> GetReportSummaryAsync(
+    long orgId, long fyId,
+    ChequeExpendFilterDto filter,
+    CancellationToken ct = default);
+
     Task<ChequeExpendDetailDto?> GetByIdAsync(
         long orgId, long fyId, long id,
         CancellationToken ct = default);

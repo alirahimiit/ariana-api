@@ -14,6 +14,11 @@ public interface IChequePayRepository
         ChequePayFilterDto filter,
         CancellationToken ct = default);
 
+    Task<ChequeReportSummaryDto> GetReportSummaryAsync(
+    long orgId, long fyId,
+    ChequePayFilterDto filter,
+    CancellationToken ct = default);
+
     Task<ChequePayDetailDto?> GetByIdAsync(
         long orgId, long fyId, long id,
         CancellationToken ct = default);
@@ -25,6 +30,9 @@ public interface IChequePayRepository
     Task<IEnumerable<ChequeSanadComboDto>> GetParentSanadListAsync(
         long orgId, long fyId,
         CancellationToken ct = default);
+
+    Task<IEnumerable<string>> GetDistinctPersonListAsync(
+    long orgId, long fyId, CancellationToken ct = default);
 
     // ─── WRITE ───
     Task<ChequePayCreateResultDto> CreateAsync(

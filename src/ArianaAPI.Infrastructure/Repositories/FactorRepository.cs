@@ -918,13 +918,16 @@ public class FactorRepository : IFactorRepository
         // ─── ۴. پاک کردن سند قبلی (ParentSanad قدیمی — orphan رو تمیز می‌کنیم) ───
         // نکته: SP خودش Sanad ها رو DELETE می‌کنه، ولی ParentSanad قدیمی رو نمی‌زنه.
         // اگه قبلاً سند داشته، اول ParentSanad قدیمی رو پاک می‌کنیم.
+        // ─── ۴. قطع ارتباط با سند قبلی (بدون حذف سند — جلوگیری از فاجعه داده) ───
+        // ⚠️ ما هرگز سند قبلی (Sanad و ParentSanad) را پاک نمی‌کنیم. 
+        // فقط ارتباط فاکتور را با آن قطع می‌کنیم تا سند جدید ساخته شود.
         var existingParentId = fd["Parent_Sanad_ID"];
         if (existingParentId != null && existingParentId != DBNull.Value)
         {
             var oldPid = Convert.ToInt64(existingParentId);
             if (oldPid > 0)
             {
-                // اگه Vazeit=2 (قطعی) باشه، اجازه‌ی حذف نده
+                // چک وضعیت سند قبلی (اگر قطعی باشد، اجازه تغییر نده)
                 var vazeit = await conn.ExecuteScalarAsync<int?>(
                     new CommandDefinition(
                         "SELECT Vazeit FROM ParentSanad WHERE ParentSanadID = @pid",
@@ -936,19 +939,12 @@ public class FactorRepository : IFactorRepository
                     return result;
                 }
 
-                // پاک کردن Sanad های قدیمی + ParentSanad قدیمی
-                await conn.ExecuteAsync(new CommandDefinition(
-                    "DELETE FROM Sanad WHERE ParentSanadCode = @pid",
-                    new { pid = oldPid }, cancellationToken: ct));
-
-                await conn.ExecuteAsync(new CommandDefinition(
-                    "DELETE FROM ParentSanad WHERE ParentSanadID = @pid",
-                    new { pid = oldPid }, cancellationToken: ct));
-
-                // خالی کردن فیلد فاکتور
+                // فقط فیلد ارتباطی در فاکتور را خالی می‌کنیم. سند در دیتابیس کاملاً سالم می‌ماند.
                 await conn.ExecuteAsync(new CommandDefinition(
                     "UPDATE FactorParent SET Parent_Sanad_ID = NULL WHERE ID = @fid",
                     new { fid = factorId }, cancellationToken: ct));
+
+                // ⚠️ خطوط DELETE مربوط به Sanad و ParentSanad به طور کامل حذف شدند
             }
         }
 
@@ -1278,19 +1274,28 @@ public class FactorRepository : IFactorRepository
         await using var tx = conn.BeginTransaction();
         try
         {
-            // ─── حذف ردیف‌های سند ───
+            // ⭐ تغییر: فقط ردیف‌هایی که مربوط به این فاکتور است حذف شود (نه کل سند)
             await conn.ExecuteAsync(
                 new CommandDefinition(
-                    "DELETE FROM Sanad WHERE ParentSanadCode = @parentId",
-                    new { parentId }, transaction: tx, cancellationToken: ct));
+                    "DELETE FROM Sanad WHERE ParentSanadCode = @parentId AND FactorID = @factorId",
+                    new { parentId, factorId }, transaction: tx, cancellationToken: ct));
 
-            // ─── حذف سرسند ───
-            await conn.ExecuteAsync(
+            // ⭐ چک: آیا ردیف دیگری از فاکتورهای دیگر در این سند باقی مانده است؟
+            var remainingRows = await conn.ExecuteScalarAsync<int>(
                 new CommandDefinition(
-                    "DELETE FROM ParentSanad WHERE ParentSanadID = @parentId",
+                    "SELECT COUNT(*) FROM Sanad WHERE ParentSanadCode = @parentId",
                     new { parentId }, transaction: tx, cancellationToken: ct));
 
-            // ─── خالی کردن فیلد فاکتور ───
+            if (remainingRows == 0)
+            {
+                // فقط اگر هیچ ردیفی باقی نمانده بود (سند کاملاً خالی شد)، ParentSanad را حذف کن
+                await conn.ExecuteAsync(
+                    new CommandDefinition(
+                        "DELETE FROM ParentSanad WHERE ParentSanadID = @parentId",
+                        new { parentId }, transaction: tx, cancellationToken: ct));
+            }
+
+            // ─── قطع ارتباط فاکتور با سند ───
             await conn.ExecuteAsync(
                 new CommandDefinition(
                     "UPDATE FactorParent SET Parent_Sanad_ID = NULL WHERE ID = @factorId",
@@ -1499,5 +1504,30 @@ public class FactorRepository : IFactorRepository
         }
 
         return missing;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  لیست اسناد برای dropdown فرم فاکتور
+    //  مرتب‌سازی: پیش‌نویس‌ها بالا، بقیه پایین
+    // ═══════════════════════════════════════════════════════════
+    public async Task<List<FactorSanadListItemDto>> GetSanadListAsync(
+        long orgId, long fyId, CancellationToken ct = default)
+    {
+        const string sql = @"
+            SELECT TOP 500
+                P.ParentSanadID                     AS ParentSanadId,
+                CAST(P.NO_Sanad AS BIGINT)          AS NoSanad,
+                P.Date_IN                           AS DateIn,
+                ISNULL(P.OtherParentSharh, '')      AS Sharh,
+                ISNULL(P.Vazeit, 0)                 AS Vazeit
+            FROM ParentSanad P
+            ORDER BY 
+                CASE WHEN ISNULL(P.Vazeit, 0) = 0 THEN 0 ELSE 1 END,
+                P.NO_Sanad DESC";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        var list = await conn.QueryAsync<FactorSanadListItemDto>(
+            new CommandDefinition(sql, cancellationToken: ct));
+        return list.ToList();
     }
 }

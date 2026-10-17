@@ -75,6 +75,18 @@ public class FactorController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>لیست اسناد برای dropdown فرم فاکتور</summary>
+    [HttpGet("sanad-list")]
+    public async Task<ActionResult<List<FactorSanadListItemDto>>> GetSanadList(
+        CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        var list = await _repo.GetSanadListAsync(orgId, fyId, ct);
+        return Ok(list);
+    }
+
     /// <summary>اطلاعات محاسباتی یک کالا برای ردیف فاکتور</summary>
     [HttpGet("article/{articleId:long}/calc")]
     public async Task<ActionResult<FactorArticleCalcDto>> GetArticleCalc(

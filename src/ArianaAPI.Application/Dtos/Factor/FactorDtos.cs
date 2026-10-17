@@ -145,3 +145,13 @@ public class FactorListResultDto
     public int TotalCount { get; set; }
     public int TotalPages { get; set; }
 }
+
+// ⭐ جدید — برای لیست کشویی اسناد در فرم فاکتور
+public class FactorSanadListItemDto
+{
+    public long ParentSanadId { get; set; }
+    public long NoSanad { get; set; }
+    public string? DateIn { get; set; }
+    public string? Sharh { get; set; }
+    public int Vazeit { get; set; }
+}

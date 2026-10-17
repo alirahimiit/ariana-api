@@ -41,6 +41,8 @@ window.App.Features.FactorForm = (function () {
     // ═══════════════════════════════════════════════════
     //  STATE
     // ═══════════════════════════════════════════════════
+    // ⭐ کش لیست اسناد برای dropdown فرم (per-form-load، نه session)
+    let _sanadListForForm = [];
     let _state = {
         mode: 'create',           // create | edit
         factorId: null,
@@ -67,6 +69,42 @@ window.App.Features.FactorForm = (function () {
         }
         return _state.lookups;
     }
+    // ═══ SANAD LIST (برای dropdown شماره سند) ═══
+    async function loadSanadListForForm() {
+        try {
+            const list = await window.App.Http.api('/api/factor/sanad-list', { silent: true });
+            _sanadListForForm = Array.isArray(list) ? list : [];
+        } catch (err) {
+            console.warn('[Factor sanad-list]', err);
+            _sanadListForForm = [];
+        }
+        return _sanadListForForm;
+    }
+
+    function buildSanadOptions(currentNo) {
+        const list = _sanadListForForm || [];
+        let html = '<option value="0"' + (currentNo === 0 ? ' selected' : '') +
+            '>0 — سند جدید خودکار</option>';
+
+        list.forEach(s => {
+            const vazeitLabel = s.vazeit === 0 ? '📝 پیش‌نویس'
+                : s.vazeit === 1 ? '⏳ رسیدگی'
+                    : s.vazeit === 2 ? '🔒 قطعی'
+                        : '❓';
+            const parts = [vazeitLabel, '#' + s.noSanad];
+            if (s.dateIn) parts.push(s.dateIn);
+            if (s.sharh) parts.push((s.sharh || '').substring(0, 30));
+
+            const label = parts.join(' — ');
+            const sel = s.noSanad === currentNo ? ' selected' : '';
+            // ⭐ غیرپیش‌نویس‌ها disable، مگر در حالت ویرایش که مقدار فعلیه
+            const dis = (s.vazeit > 0 && s.noSanad !== currentNo) ? ' disabled' : '';
+
+            html += '<option value="' + s.noSanad + '"' + sel + dis + '>'
+                + H.esc(label) + '</option>';
+        });
+        return html;
+    }
 
     // ═══════════════════════════════════════════════════
     //  OPEN — CREATE
@@ -80,13 +118,18 @@ window.App.Features.FactorForm = (function () {
         try {
             await ensureLookups();
 
-            // شماره خودکار
+            // ⭐ لود لیست اسناد + شماره بعدی به‌صورت موازی
             let nextNo = 0;
-            try {
-                const r = await window.App.Http.api(
-                    '/api/factor/next-no?factorKind=' + factorKind);
-                nextNo = r.noFactor;
-            } catch (e) { /* ignore */ }
+            await Promise.all([
+                (async () => {
+                    try {
+                        const r = await window.App.Http.api(
+                            '/api/factor/next-no?factorKind=' + factorKind);
+                        nextNo = r.noFactor;
+                    } catch (e) { /* ignore */ }
+                })(),
+                loadSanadListForForm()
+            ]);
 
             _state = {
                 mode: 'create',
@@ -130,13 +173,30 @@ window.App.Features.FactorForm = (function () {
         try {
             await ensureLookups();
 
-            const detail = await window.App.Http.api('/api/factor/' + factorId);
+            // ⭐ لود detail + لیست اسناد به‌صورت موازی
+            const [detail] = await Promise.all([
+                window.App.Http.api('/api/factor/' + factorId),
+                loadSanadListForForm()
+            ]);
+
             if (!detail || !detail.header) {
                 window.App.toast('فاکتور یافت نشد', 'error');
                 return;
             }
 
             const h = detail.header;
+
+            // ⭐ اگه سند فعلی فاکتور در لیست نیست (مثلاً رسیدگی/قطعی)، اضافه‌اش کن
+            //    تا در dropdown دیده بشه و کاربر بی‌دلیل از دستش نده
+            if (h.noSanad > 0 && !_sanadListForForm.find(x => x.noSanad === h.noSanad)) {
+                _sanadListForForm.unshift({
+                    parentSanadId: 0,
+                    noSanad: h.noSanad,
+                    dateIn: '',
+                    sharh: '(سند فعلی — وضعیت نامشخص)',
+                    vazeit: -1
+                });
+            }
 
             _state = {
                 mode: 'edit',
@@ -416,6 +476,10 @@ window.App.Features.FactorForm = (function () {
         const defaultChecked = h.withSanad !== false;
         const disabledAttr = defaultChecked ? '' : ' disabled';
 
+        // ⭐ ساخت options برای dropdown شماره سند
+        const currentNo = h.existingNoSanad || 0;
+        const sanadOptions = buildSanadOptions(currentNo);
+
         return '' +
             '<div class="ff-section ff-section-sanad">' +
             '<div class="ff-section-title">📄 سند حسابداری</div>' +
@@ -430,13 +494,13 @@ window.App.Features.FactorForm = (function () {
             '<p class="form-hint">در صورت فعال بودن، سند حسابداری به‌صورت خودکار صادر می‌شود</p>' +
             '</div>' +
 
+            // ⭐ input تبدیل به select
             '<div class="ff-field" id="ffNoSanadField">' +
             '<label>شماره سند</label>' +
-            '<input type="text" id="ffNoSanad" ' +
-            'value="' + (h.existingNoSanad || 0) + '" ' +
-            'class="num-input" dir="ltr" ' +
-            'placeholder="0 = خودکار"' + disabledAttr + '>' +
-            '<p class="form-hint">0 = شماره جدید، عدد = سند موجود</p>' +
+            '<select id="ffNoSanad" class="ff-select"' + disabledAttr + '>' +
+            sanadOptions +
+            '</select>' +
+            '<p class="form-hint">0 = سند جدید خودکار، یا انتخاب از لیست اسناد</p>' +
             '</div>' +
 
             (supportsMarketer ?
@@ -1166,7 +1230,7 @@ window.App.Features.FactorForm = (function () {
     //  SAVE
     // ═══════════════════════════════════════════════════
     async function save() {
-        // ─── اعتبارسنجی (بدون تغییر) ───
+        // ─── اعتبارسنجی ───
         const noFactor = parseInt(val('ffNoFactor'), 10);
         if (!noFactor || noFactor <= 0) {
             window.App.toast('شماره فاکتور الزامی است', 'error');
@@ -1186,6 +1250,32 @@ window.App.Features.FactorForm = (function () {
             return;
         }
 
+        // ─── سند خودکار (مقدار‌دهی اولیه) ───
+        const withSanadCb = document.getElementById('ffWithSanad');
+        const withSanad = withSanadCb ? withSanadCb.checked : false;
+        const withMarketerCb = document.getElementById('ffWithMarketer');
+        const withMarketer = withMarketerCb ? withMarketerCb.checked : false;
+        const noSanadInput = document.getElementById('ffNoSanad');
+        const noSanadValue = withSanad && noSanadInput
+            ? (parseInt(noSanadInput.value, 10) || 0)
+            : 0;
+
+        // ⭐ هشدار اگه کاربر سند غیرپیش‌نویس انتخاب کرده
+        if (withSanad && noSanadValue > 0) {
+            const picked = (_sanadListForForm || [])
+                .find(x => x.noSanad === noSanadValue);
+            if (picked && picked.vazeit > 0 &&
+                picked.noSanad !== (_state.header.existingNoSanad || 0)) {
+                const vLabel = picked.vazeit === 1 ? 'رسیدگی' : 'قطعی';
+                const ok = await _askConfirm(
+                    `سند انتخاب‌شده (#${picked.noSanad}) در وضعیت «${vLabel}» است.\n\n` +
+                    `آیا مطمئن هستید؟ این عمل ممکن است با خطا مواجه شود.`,
+                    { title: '⚠️ توجه', type: 'warning', okText: 'ادامه بده' }
+                );
+                if (!ok) return;
+            }
+        }
+
         // ─── Payload فاکتور ───
         const payload = {
             noFactor: noFactor,
@@ -1199,20 +1289,10 @@ window.App.Features.FactorForm = (function () {
             transCost: _state.header.transCost || 0,
             carInfo: val('ffCarInfo'),
             perOk: 0,
-            noFactorPer: _state.header.noFactorPer || 0,   // ⭐ مقدار اصلی حفظ می‌شه,
+            noFactorPer: _state.header.noFactorPer || 0,
             cost: _state.header.totalCost || 0,
             items: _state.items.map(mapLocalItemToServer)
         };
-
-        // ─── سند خودکار ───
-        const withSanadCb = document.getElementById('ffWithSanad');
-        const withSanad = withSanadCb ? withSanadCb.checked : false;
-        const withMarketerCb = document.getElementById('ffWithMarketer');
-        const withMarketer = withMarketerCb ? withMarketerCb.checked : false;
-        const noSanadInput = document.getElementById('ffNoSanad');
-        const noSanadValue = withSanad && noSanadInput
-            ? (parseInt(noSanadInput.value, 10) || 0)
-            : 0;
 
         const btn = document.getElementById('ffSaveBtn');
         const orig = btn.innerHTML;
@@ -1238,39 +1318,55 @@ window.App.Features.FactorForm = (function () {
                 window.App.toast('فاکتور به‌روزرسانی شد', 'success');
             }
 
-            // ─── ۲. سند خودکار ───
+            // ─── ۲. مدیریت سند خودکار ───
+
+            // حالت اول: اگر تیک سند خودکار برداشته شده و قبلاً سند داشت، سند را حذف کن
+            if (!withSanad && factorId && _state.header.existingNoSanad > 0) {
+                btn.innerHTML = '⏳ در حال حذف سند قبلی...';
+                try {
+                    await window.App.Http.api('/api/factor/' + factorId + '/sanad', {
+                        method: 'DELETE',
+                        successMsg: 'سند مرتبط با فاکتور حذف شد'
+                    });
+                    _state.header.existingNoSanad = 0;
+                    const noSanadSelect = document.getElementById('ffNoSanad');
+                    if (noSanadSelect) noSanadSelect.value = '0';
+                } catch (sanadErr) {
+                    window.App.toast('خطا در حذف سند: ' + sanadErr.message, 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+                    return; // توقف اگر حذف سند با خطا مواجه شد
+                }
+            }
+
+            // حالت دوم: صدور سند جدید (اگر تیک خورده باشد)
             if (withSanad && factorId) {
                 btn.innerHTML = '⏳ بررسی حساب‌های ویژه...';
 
-                // ⭐ چک ConstHesabs
                 try {
                     const check = await window.App.Http.api(
                         `/api/factor/${factorId}/check-sanad-ready`);
 
                     if (!check.ready) {
-                        const listHtml = check.missing
-                            .map(x => `• ${x}`).join('\n');
-
+                        const listHtml = check.missing.map(x => `• ${x}`).join('\n');
                         await window.App.alert.error(
                             `قبل از ثبت سند، حساب‌های ویژه‌ی زیر باید تعریف شوند:\n\n${listHtml}\n\n` +
                             `لطفاً به «اطلاعات پایه ← حساب‌های ویژه» بروید و آن‌ها را تعریف کنید.`,
                             { title: '🚫 حساب‌های ویژه ناقص' }
                         );
-
                         btn.disabled = false;
                         btn.innerHTML = orig;
                         return;
                     }
                 } catch (checkErr) {
                     console.warn('[Sanad check]', checkErr);
-                    // اگه endpoint خطا داد، سفت نگیر — ادامه بده
                 }
 
                 btn.innerHTML = '⏳ در حال ثبت سند...';
 
                 try {
                     const sanadResult = await window.App.Http.api(
-                        '/api/factor/' + factorId + '/create-sanad', 
+                        '/api/factor/' + factorId + '/create-sanad',
                         {
                             method: 'POST',
                             body: JSON.stringify({

@@ -39,7 +39,9 @@ public class SanadController : ControllerBase
         [FromQuery] bool? onlyWithErrors = null,
         [FromQuery] int? codeCol = null,        
         [FromQuery] int? codeMoein = null,    
-        [FromQuery] int? codeTafzil = null,   
+        [FromQuery] int? codeTafzil = null,
+        [FromQuery] string? sharh = null,   
+        [FromQuery] string? rowSharh = null,   
         CancellationToken ct = default)
     {
         var orgId = User.GetOrgId();
@@ -51,7 +53,7 @@ public class SanadController : ControllerBase
             sortBy, sortDir, page, pageSize,
             onlyWithErrors,
             codeCol, codeMoein, codeTafzil,
-            ct);
+            sharh, rowSharh,ct);
 
         return Ok(list);
     }
@@ -93,6 +95,32 @@ public class SanadController : ControllerBase
         return Ok(new { count });
     }
 
+
+    // ═══════════════════════════════════════════
+    //  ⭐⭐ جدید — Datalist شرح سند و ردیف
+    // ═══════════════════════════════════════════
+
+    /// <summary>لیست یکتای شرح‌های سند (ParentSanad.OtherParentSharh)</summary>
+    [HttpGet("distinct-parent-sharh")]
+    public async Task<ActionResult<List<string>>> GetDistinctParentSharh(CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        var list = await _repo.GetDistinctParentSharhAsync(orgId, fyId, ct);
+        return Ok(list);
+    }
+
+    /// <summary>لیست یکتای شرح‌های ردیف (Sanad.OtherSharh)</summary>
+    [HttpGet("distinct-row-sharh")]
+    public async Task<ActionResult<List<string>>> GetDistinctRowSharh(CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        var list = await _repo.GetDistinctRowSharhAsync(orgId, fyId, ct);
+        return Ok(list);
+    }
     // ═══════════════════════════════════════════
     //  WRITE (جدید - فاز ۱۱)
     // ═══════════════════════════════════════════

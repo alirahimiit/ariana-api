@@ -244,6 +244,92 @@ public class ChequePayRepository : IChequePayRepository
         };
     }
 
+
+    // ═══════════════════════════════════════════════════════════════
+    //  READ — خلاصه گزارش (Summary) — GROUP BY ChequeOK
+    // ═══════════════════════════════════════════════════════════════
+    public async Task<ChequeReportSummaryDto> GetReportSummaryAsync(
+        long orgId, long fyId,
+        ChequePayFilterDto filter,
+        CancellationToken ct = default)
+    {
+        // ─── همان WHERE لیست (بدون sort/page) ───
+        var where = new StringBuilder(" WHERE 1=1 ");
+        var p = new DynamicParameters();
+
+        if (filter.FromNumber.HasValue) { where.Append(" AND CP.ResidNumber >= @fromNumber "); p.Add("fromNumber", filter.FromNumber.Value); }
+        if (filter.ToNumber.HasValue) { where.Append(" AND CP.ResidNumber <= @toNumber "); p.Add("toNumber", filter.ToNumber.Value); }
+
+        if (!string.IsNullOrWhiteSpace(filter.FromDate)) { where.Append(" AND CP.ResidDate >= @fromDate "); p.Add("fromDate", filter.FromDate.Trim()); }
+        if (!string.IsNullOrWhiteSpace(filter.ToDate)) { where.Append(" AND CP.ResidDate <= @toDate "); p.Add("toDate", filter.ToDate.Trim()); }
+
+        if (!string.IsNullOrWhiteSpace(filter.CheckFromDate)) { where.Append(" AND CP.CheckDate >= @checkFromDate "); p.Add("checkFromDate", filter.CheckFromDate.Trim()); }
+        if (!string.IsNullOrWhiteSpace(filter.CheckToDate)) { where.Append(" AND CP.CheckDate <= @checkToDate "); p.Add("checkToDate", filter.CheckToDate.Trim()); }
+
+        if (!string.IsNullOrWhiteSpace(filter.CheckFromSerial)) { where.Append(" AND CP.CheckSeries >= @checkFromSerial "); p.Add("checkFromSerial", filter.CheckFromSerial.Trim()); }
+        if (!string.IsNullOrWhiteSpace(filter.CheckToSerial)) { where.Append(" AND CP.CheckSeries <= @checkToSerial "); p.Add("checkToSerial", filter.CheckToSerial.Trim()); }
+
+        if (!string.IsNullOrWhiteSpace(filter.Descript)) { where.Append(" AND CP.ResidDes LIKE @descript "); p.Add("descript", "%" + filter.Descript.Trim() + "%"); }
+
+        if (filter.BankAccId is > 0) { where.Append(" AND CP.BankAccID = @bankAccId "); p.Add("bankAccId", filter.BankAccId.Value); }
+
+        if (filter.CodeCol is > 0) { where.Append(" AND CP.Code_Col = @codeCol "); p.Add("codeCol", filter.CodeCol.Value); }
+        if (filter.CodeMoein is > 0) { where.Append(" AND CP.Code_Moein = @codeMoein "); p.Add("codeMoein", filter.CodeMoein.Value); }
+        if (filter.CodeTafzil is > 0) { where.Append(" AND CP.Code_Tafzil = @codeTafzil "); p.Add("codeTafzil", filter.CodeTafzil.Value); }
+
+        // ─── GROUP BY ChequeOK ───
+        var sql = $@"
+            SELECT
+                ISNULL(CP.ChequeOK, 0) AS Status,
+                COUNT(*)               AS [Count],
+                ISNULL(SUM(CP.CheckMab), 0) AS Amount
+            FROM CheckPay CP
+            {where}
+            GROUP BY ISNULL(CP.ChequeOK, 0)
+            ORDER BY Status";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        var rows = (await conn.QueryAsync<dynamic>(
+            new CommandDefinition(sql, p, cancellationToken: ct))).ToList();
+
+        // ─── برچسب‌ها ───
+        var labels = new Dictionary<int, string>
+        {
+            [0] = "در جریان",
+            [1] = "وصول‌شده",
+            [2] = "برگشتی"
+        };
+
+        var byStatus = new List<ChequeStatusGroupDto>();
+        int totalCount = 0;
+        decimal totalAmount = 0m;
+
+        foreach (var status in new[] { 0, 1, 2 })
+        {
+            var row = rows.FirstOrDefault(r => (int)(decimal)r.Status == status);
+            var cnt = row != null ? (int)(decimal)row.Count : 0;
+            var amt = row != null ? (decimal)row.Amount : 0m;
+
+            byStatus.Add(new ChequeStatusGroupDto
+            {
+                Status = status,
+                Label = labels[status],
+                Count = cnt,
+                Amount = amt
+            });
+
+            totalCount += cnt;
+            totalAmount += amt;
+        }
+
+        return new ChequeReportSummaryDto
+        {
+            TotalCount = totalCount,
+            TotalAmount = totalAmount,
+            ByStatus = byStatus,
+            ByExpended = null
+        };
+    }
     // ═══════════════════════════════════════════════════════════════
     //  READ — جزئیات
     // ═══════════════════════════════════════════════════════════════
@@ -392,6 +478,20 @@ public class ChequePayRepository : IChequePayRepository
             new CommandDefinition(sql, cancellationToken: ct));
     }
 
+
+    // ═══════════════════════════════════════════════════════════════
+    //  DATALIST — در وجه‌های متمایز از CheckPay
+    // ═══════════════════════════════════════════════════════════════
+    public async Task<IEnumerable<string>> GetDistinctPersonListAsync(
+        long orgId, long fyId, CancellationToken ct = default)
+    {
+        const string sql = @"
+            SELECT DISTINCT CheckPerson FROM CheckPay
+            WHERE CheckPerson IS NOT NULL AND LTRIM(RTRIM(CheckPerson)) <> ''
+            ORDER BY CheckPerson";
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        return await conn.QueryAsync<string>(new CommandDefinition(sql, cancellationToken: ct));
+    }
     // ═══════════════════════════════════════════════════════════════
     //  READ — وضعیت سند
     // ═══════════════════════════════════════════════════════════════

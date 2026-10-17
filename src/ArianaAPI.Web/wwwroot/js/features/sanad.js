@@ -89,7 +89,9 @@ window.App.Features.Sanad = (function () {
                     { name: 'fromDate', label: 'از تاریخ', type: 'date' },
                     { name: 'toDate', label: 'تا تاریخ', type: 'date' },
                     { name: 'noFrom', label: 'از شماره', type: 'number', placeholder: '۱' },
-                    { name: 'noTo', label: 'تا شماره', type: 'number' }
+                    { name: 'noTo', label: 'تا شماره', type: 'number' },
+                    { name: 'sharh', label: 'شرح سند', type: 'text', placeholder: 'جستجوی بخشی از شرح سند...' }, 
+                    { name: 'rowSharh', label: 'شرح ردیف', type: 'text', placeholder: 'جستجوی بخشی از شرح ردیف...' }
                 ]
             },
             {
@@ -178,6 +180,8 @@ window.App.Features.Sanad = (function () {
         if (f.noTo != null && f.noTo !== '') url += `&noTo=${parseInt(f.noTo)}`;
         if (f.vazeit != null && f.vazeit !== '') url += `&vazeit=${parseInt(f.vazeit)}`;
         if (f.kindSanad != null && f.kindSanad !== '') url += `&kindSanad=${parseInt(f.kindSanad)}`;
+        if (f.sharh) url += `&sharh=${encodeURIComponent(f.sharh.trim())}`;
+        if (f.rowSharh) url += `&rowSharh=${encodeURIComponent(f.rowSharh.trim())}`;
         if (_sort.by) url += `&sortBy=${_sort.by}&sortDir=${_sort.dir}`;
         if (f.onlyWithErrors === 'true') url += `&onlyWithErrors=true`;
         // ⭐ فیلتر کدینگ
@@ -202,7 +206,8 @@ window.App.Features.Sanad = (function () {
             const bes = s.mabBes || 0;
             const isUnbalanced = Math.abs(bed - bes) > 0.01;
             const hasErrors = (s.totalErrorCount || 0) > 0;
-            const rowClass = hasErrors ? 'row-has-errors' : (isUnbalanced ? 'row-unbalanced' : '');
+            const hasNoItems = (s.itemCount === 0); // ⭐ سند بدون ردیف
+            const rowClass = hasNoItems ? 'row-has-errors' : (hasErrors ? 'row-has-errors' : (isUnbalanced ? 'row-unbalanced' : ''));
             const isSel = _selected.has(s.parentSanadID);
 
             // ⭐ محاسبه دکمه‌های عملیات قبل از return
@@ -1020,6 +1025,11 @@ window.App.Features.Sanad = (function () {
                     </div>
                 </div>
             </div>`;
+        const emptyWarning = (items.length === 0) ? `
+            <div style="background:#FEF2F2; border:1px solid #FECACA; color:#991B1B; padding:12px; border-radius:8px; margin-bottom:16px; font-weight:600; text-align:center;">
+                ⛔ این سند هیچ ردیفی ندارد و فاقد اعتبار است. لطفاً آن را ویرایش کرده و ردیف اضافه کنید.
+            </div>
+        ` : '';
 
         const toolbar = `
             <div class="sd-toolbar">
@@ -1109,6 +1119,7 @@ window.App.Features.Sanad = (function () {
 
         return `<div class="sanad-detail-modal">
                 ${editHeader}
+                ${emptyWarning}
                 ${infoGrid}
                 ${toolbar}
                 ${tableBlock}
@@ -1241,6 +1252,11 @@ window.App.Features.Sanad = (function () {
     }
 
     function renderErrorBadge(s) {
+        // ⭐ اگر سند هیچ ردیفی ندارد
+        if (s.itemCount === 0) {
+            return '<span class="sanad-list-err" title="این سند هیچ ردیفی ندارد (خالی است)">⛔ خالی</span>';
+        }
+
         const total = s.totalErrorCount || 0;
         if (total === 0) return '<span class="sanad-list-ok" title="بدون ایراد">✅</span>';
         const coding = s.codingErrorCount || 0;
@@ -1251,7 +1267,6 @@ window.App.Features.Sanad = (function () {
         const title = 'ایرادها: ' + parts.join('، ');
         return `<span class="sanad-list-err" title="${H.esc(title)}">⚠️ ${H.fmt(total)}</span>`;
     }
-
     function subtitle() {
         const u = window.App.state.user || {};
         return (u.orgName || '') + ' - ' + (u.fyName || '');

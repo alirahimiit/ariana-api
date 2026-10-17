@@ -694,7 +694,7 @@ window.App.Features.TreasuryCheque = (function () {
         const sanadOptions = ['<option value="">— بدون سند —</option>']
             .concat((sanadList || []).map(s =>
                 `<option value="${s.parentSanadID}" ${s.parentSanadID === data.parentSanadId ? 'selected' : ''}>
-                    ${H.fmt(s.noSanad)} — ${H.esc((s.sharh || '').substring(0, 40))}
+                   ${H.fmt(s.noSanad)} — ${H.esc(s.dateIn || '')} — ${H.esc((s.sharh || '').substring(0, 30))}
                 </option>`)).join('');
 
         const hasSanad = (data.parentSanadId || 0) > 0;
@@ -723,7 +723,7 @@ window.App.Features.TreasuryCheque = (function () {
                             <input type="text" id="tqfCheckPerson" value="${H.esc(data.checkPerson || '')}" list="tqfPersonList" maxlength="50">
                             <datalist id="tqfPersonList">${personDatalist}</datalist>
                         </div>
-                        <div class="form-group tq-col-2">
+                        <div class="form-group">
                             <label>مبلغ <span class="req">*</span></label>
                             <input type="text" id="tqfCheckMab" value="${mabStr}" class="num-input tq-amount-input" dir="ltr">
                             <div class="tq-amount-words" id="tqfAmountWords"></div>
@@ -1092,7 +1092,7 @@ window.App.Features.TreasuryCheque = (function () {
         const sanadOptions = ['<option value="">— بدون سند —</option>']
             .concat((sanadList || []).map(s =>
                 `<option value="${s.parentSanadID}" ${s.parentSanadID === data.parentSanadOkId ? 'selected' : ''}>
-                    ${H.fmt(s.noSanad)} — ${H.esc((s.sharh || '').substring(0, 40))}
+                    ${H.fmt(s.noSanad)} — ${H.esc(s.dateIn || '')} — ${H.esc((s.sharh || '').substring(0, 30))}
                 </option>`)).join('');
 
         const hasSanad = (data.parentSanadOkId || 0) > 0;

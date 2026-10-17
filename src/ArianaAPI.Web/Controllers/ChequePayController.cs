@@ -48,6 +48,17 @@ public class ChequePayController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>خلاصه‌ی گزارش چک‌های پرداختی (بدون pagination)</summary>
+    [HttpPost("report-summary")]
+    public async Task<ActionResult<ChequeReportSummaryDto>> GetReportSummary(
+        [FromBody] ChequePayFilterDto filter,
+        CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+        return Ok(await _repo.GetReportSummaryAsync(orgId, fyId, filter, ct));
+    }
+
     /// <summary>جزئیات یک چک پرداختی</summary>
     [HttpGet("{id:long}")]
     public async Task<ActionResult<ChequePayDetailDto>> GetById(
@@ -83,6 +94,13 @@ public class ChequePayController : ControllerBase
         return Ok(list);
     }
 
+    [HttpGet("persons")]
+    public async Task<ActionResult<IEnumerable<string>>> GetPersons(CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+        return Ok(await _repo.GetDistinctPersonListAsync(orgId, fyId, ct));
+    }
     // ═══════════════════════════════════════════════════════════════
     //  WRITE — CRUD
     // ═══════════════════════════════════════════════════════════════

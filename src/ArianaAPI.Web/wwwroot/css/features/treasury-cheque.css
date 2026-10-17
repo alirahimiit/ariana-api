@@ -217,6 +217,9 @@
     font-weight: 600;
     text-align: left;
     direction: ltr;
+    max-width: 300px; /* ⭐ عرض حداکثری */
+    font-size: 15px; /* ⭐ سایز فونت استاندارد */
+    height: 38px; /* ⭐ ارتفاع استاندارد */
 }
 
 .tq-amount-words {
