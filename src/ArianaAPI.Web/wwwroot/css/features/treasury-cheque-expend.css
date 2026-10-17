@@ -1,0 +1,58 @@
+﻿/* ═══════════════════════════════════════════════════════════════
+   Treasury Cheque Expend — استایل اختصاصی خرج چک دریافتی
+   (مکمل treasury-cheque.css — همان کلاس‌های مشترک tq-*)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── نمایش چک انتخاب‌شده در فرم ─── */
+.tqe-cheque-display {
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+}
+
+.tqe-cheque-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+    .tqe-cheque-row:last-child {
+        margin-bottom: 0;
+    }
+
+.tqe-ch-lbl {
+    color: #64748B;
+    font-weight: 500;
+    margin-left: 4px;
+}
+
+.tqe-cheque-empty {
+    background: #F8FAFC;
+    border: 1px dashed #CBD5E1;
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    color: #94A3B8;
+    font-size: 13px;
+}
+
+.tqe-cheque-pick-btn {
+    font-size: 12px;
+    padding: 3px 10px;
+}
+
+/* ─── جدول داخل overlay انتخاب چک ─── */
+.tqe-chq-row:hover {
+    background: #DBEAFE !important;
+}
+
+/* ─── Badge وضعیت خرج در لیست ─── */
+.tq-badge-info {
+    background: #DBEAFE;
+    color: #1E40AF;
+}

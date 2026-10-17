@@ -743,6 +743,8 @@ window.App = Object.assign(window.App || {}, {
             'receive-cheque': 'دریافت چکی',
             'pay-cash': 'پرداخت نقدی',
             'pay-cheque': 'پرداخت چکی',
+            'cheque-expend': 'خرج چک‌های دریافتی',   
+
             // ⭐ گزارشات فاکتور
             'report-factor': 'گزارش فاکتورها',
             'report-sell-summary': 'خلاصه فروش',
@@ -777,6 +779,7 @@ window.App = Object.assign(window.App || {}, {
             case 'receive-cash': window.App.Features.TreasuryCash.render(1); break;
             case 'pay-cheque': window.App.Features.TreasuryCheque.render(0); break;
             case 'receive-cheque': window.App.Features.TreasuryCheque.render(1); break;
+            case 'cheque-expend': window.App.Features.TreasuryChequeExpend.render(); break; 
             case 'factor': window.App.Features.Factor.render(); break;
             case 'factor-buy': window.App.Features.Factor.render(0); break;
             case 'factor-sell': window.App.Features.Factor.render(1); break;

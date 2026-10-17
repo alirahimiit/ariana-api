@@ -92,6 +92,15 @@ public interface IChequeSanadService
         IDbConnection conn, IDbTransaction? tx,
         int codeCol, int codeMoein, int codeTafzil,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// سند خودکار «خرج چک دریافتی»
+    /// Row 1 (max+1): شخص (Code_Col/Moein/Tafzil) — Bed
+    /// Row 2 (max+2): اسناد دریافتنی (Code_Col_Pay/Moein_Pay/Tafzil_Pay) — Bes
+    /// </summary>
+    Task<ChequeOkSanadResult> CreateChequeExpendSanadAsync(
+        IDbConnection conn, IDbTransaction tx,
+        ChequeExpendSanadContext ctx, CancellationToken ct = default);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -224,4 +233,44 @@ public class ChequeOkSanadResult
     public int NoSanad { get; set; }
     public long SanadIdBed { get; set; }
     public long SanadIdBes { get; set; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Context جدید: خرج چک دریافتی
+// ═══════════════════════════════════════════════════════════════
+public class ChequeExpendSanadContext
+{
+    public long ChequeExpendId { get; set; }
+    public long ChequeReceiveId { get; set; }
+
+    public int ResidNumber { get; set; }
+    public string ResidDate { get; set; } = "";
+    public string ResidDes { get; set; } = "";
+
+    public decimal CheckMab { get; set; }
+    public string CheckSeries { get; set; } = "";
+    public string CheckDate { get; set; } = "";
+    public string CheckPerson { get; set; } = "";
+
+    // ─── شخص (کسی که چک بهش داده شده) ───
+    public int PersonCodeCol { get; set; }
+    public int PersonCodeMoein { get; set; }
+    public int PersonCodeTafzil { get; set; }
+    public string PersonName { get; set; } = "";
+
+    // ─── اسناد دریافتنی ───
+    public int ReceivableCodeCol { get; set; }
+    public int ReceivableCodeMoein { get; set; }
+    public int ReceivableCodeTafzil { get; set; }
+
+    // ─── وضعیت ───
+    public int WasDuring { get; set; }   // 0=خرج قطعی، 1=در جریان
+
+    // ─── Parent Sanad موجود (اختیاری) ───
+    public long? ExistingParentSanadID { get; set; }
+    public int? ExistingNoSanad { get; set; }
+
+    public string TimeOp { get; set; } = "";
+    public string TodayPersian { get; set; } = "";
+    public long UserCode { get; set; }
 }

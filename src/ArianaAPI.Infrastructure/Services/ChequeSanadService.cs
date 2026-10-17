@@ -342,6 +342,69 @@ public class ChequeSanadService : IChequeSanadService
         };
     }
 
+
+    // ═══════════════════════════════════════════════════════════════
+    //  ۷. CREATE — خرج چک دریافتی
+    //     Row 1 (max+1): شخص — Bed
+    //     Row 2 (max+2): اسناد دریافتنی — Bes
+    // ═══════════════════════════════════════════════════════════════
+    public async Task<ChequeOkSanadResult> CreateChequeExpendSanadAsync(
+        IDbConnection conn, IDbTransaction tx,
+        ChequeExpendSanadContext ctx, CancellationToken ct = default)
+    {
+        if (ctx.CheckMab <= 0)
+            throw new InvalidOperationException("مبلغ چک باید بزرگ‌تر از صفر باشد");
+        if (ctx.ChequeExpendId <= 0)
+            throw new InvalidOperationException("شناسه خرج چک نامعتبر است (باید اول چک درج شود)");
+
+        // ─── انتخاب شرح ParentSanad ───
+        var parentSharh = ctx.WasDuring == 1
+            ? "چک در جریان وصول"
+            : "خرج چک";
+
+        var (parentSanadId, noSanad) = await EnsureParentSanadAsync(
+            conn, tx,
+            ctx.ExistingParentSanadID, ctx.ExistingNoSanad,
+            ctx.ResidDate,
+            parentSharh,
+            ctx.TimeOp, ctx.TodayPersian, ctx.UserCode, ct);
+
+        var maxRowNum = await GetMaxRowNumAsync(conn, tx, parentSanadId, ct);
+
+        // ─── ردیف شخص (بدهکار) ───
+        var personSharh = $"خرج چک به {ctx.PersonName} " +
+                          $"به شماره سریال {ctx.CheckSeries} " +
+                          $"به تاریخ {ctx.CheckDate}";
+        if (!string.IsNullOrWhiteSpace(ctx.ResidDes))
+            personSharh += $" شرح {ctx.ResidDes}";
+
+        var sanadIdBed = await InsertChequeRowAsync(
+            conn, tx, parentSanadId, noSanad, maxRowNum + 1,
+            ctx.PersonCodeCol, ctx.PersonCodeMoein, ctx.PersonCodeTafzil,
+            personSharh, ctx.CheckMab, 0m,
+            chequePayId: 0, chequePayNo: "",
+            chequeRecId: 0, chequeRecNo: "",
+            residNumber: ctx.ResidNumber,
+            ctx: ctx.TimeOp, ctx.TodayPersian, ctx.UserCode, ct);
+
+        // ─── ردیف اسناد دریافتنی (بستانکار) ───
+        var sanadIdBes = await InsertChequeRowAsync(
+            conn, tx, parentSanadId, noSanad, maxRowNum + 2,
+            ctx.ReceivableCodeCol, ctx.ReceivableCodeMoein, ctx.ReceivableCodeTafzil,
+            "", 0m, ctx.CheckMab,
+            chequePayId: 0, chequePayNo: "",
+            chequeRecId: 0, chequeRecNo: "",
+            residNumber: ctx.ResidNumber,
+            ctx: ctx.TimeOp, ctx.TodayPersian, ctx.UserCode, ct);
+
+        return new ChequeOkSanadResult
+        {
+            ParentSanadID = parentSanadId,
+            NoSanad = noSanad,
+            SanadIdBed = sanadIdBed,
+            SanadIdBes = sanadIdBes
+        };
+    }
     // ═══════════════════════════════════════════════════════════════
     //  DELETE — حذف کامل ParentSanad + فرزندان
     // ═══════════════════════════════════════════════════════════════
