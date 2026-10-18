@@ -436,9 +436,9 @@ public class ResidRepository : IResidRepository
     //  UPDATE — مشابه Create: اول حذف سند قبلی، بعد آپدیت، بعد سند جدید
     // ═══════════════════════════════════════════════════════
     public async Task UpdateAsync(
-        long orgId, long fyId,
-        ResidUpdateDto dto, long userCode,
-        CancellationToken ct = default)
+       long orgId, long fyId,
+       ResidUpdateDto dto, long userCode,
+       CancellationToken ct = default)
     {
         if (dto.ID <= 0)
             throw new InvalidOperationException("شناسه رسید نامعتبر است");
@@ -451,15 +451,18 @@ public class ResidRepository : IResidRepository
         if (conn.State != ConnectionState.Open)
             await conn.OpenAsync(ct);
 
+        // ⭐ جدید: SanadCashID و SanadPersonID رو هم بگیر
         var current = await conn.QueryFirstOrDefaultAsync<dynamic>(
             new CommandDefinition(
-                "SELECT ID, ResidNumber, CheckKind, ParentSanadID FROM CheckResids WHERE ID = @id",
+                "SELECT ID, ResidNumber, CheckKind, ParentSanadID, SanadCashID, SanadPersonID FROM CheckResids WHERE ID = @id",
                 new { id = dto.ID }, cancellationToken: ct));
 
         if (current == null)
             throw new InvalidOperationException("رسید یافت نشد");
 
         long oldParentSanadID = (long)(decimal)(current.ParentSanadID ?? 0);
+        long oldSanadCashID = (long)(decimal)(current.SanadCashID ?? 0);
+        long oldSanadPersonID = (long)(decimal)(current.SanadPersonID ?? 0);
 
         if (oldParentSanadID > 0)
         {
@@ -491,28 +494,34 @@ public class ResidRepository : IResidRepository
         using var tx = conn.BeginTransaction();
         try
         {
-            // ═══ ۱. حذف سند قبلی ═══
+            // ═══ ۱. حذف سند قبلی (فقط ردیف‌های خود رسید) ═══
             if (oldParentSanadID > 0)
-                await _sanadService.DeleteResidSanadAsync(conn, tx, oldParentSanadID, ct);
+            {
+                await _sanadService.DeleteResidSanadAsync(
+                    conn, tx, oldParentSanadID,
+                    sanadCashId: oldSanadCashID,
+                    sanadPersonId: oldSanadPersonID,
+                    ct: ct);
+            }
 
-            // ═══ ۲. آپدیت رسید (بدون سند) ═══
+            // ═══ ۲. آپدیت رسید ═══
             await conn.ExecuteAsync(
                 new CommandDefinition(@"
-                UPDATE CheckResids
-                SET ResidNumber = @residNumber,
-                    Date_In     = @dateIn,
-                    Cash_Cost   = @cashCost,
-                    Descript    = @descript,
-                    Code_Col    = @codeCol,
-                    Code_Moein  = @codeMoein,
-                    Code_Tafzili= @codeTafzili,
-                    ParentSanadID = 0,
-                    SanadCashID   = 0,
-                    SanadPersonID = 0,
-                    Code_op     = @userCode,
-                    Date_op     = @today,
-                    Time_Op     = @now
-                WHERE ID = @id",
+            UPDATE CheckResids
+            SET ResidNumber = @residNumber,
+                Date_In     = @dateIn,
+                Cash_Cost   = @cashCost,
+                Descript    = @descript,
+                Code_Col    = @codeCol,
+                Code_Moein  = @codeMoein,
+                Code_Tafzili= @codeTafzili,
+                ParentSanadID = 0,
+                SanadCashID   = 0,
+                SanadPersonID = 0,
+                Code_op     = @userCode,
+                Date_op     = @today,
+                Time_Op     = @now
+            WHERE ID = @id",
                     new
                     {
                         id = dto.ID,
@@ -561,11 +570,11 @@ public class ResidRepository : IResidRepository
 
                 await conn.ExecuteAsync(
                     new CommandDefinition(@"
-                    UPDATE CheckResids
-                    SET ParentSanadID = @pid,
-                        SanadCashID   = @cashId,
-                        SanadPersonID = @personId
-                    WHERE ID = @id",
+                UPDATE CheckResids
+                SET ParentSanadID = @pid,
+                    SanadCashID   = @cashId,
+                    SanadPersonID = @personId
+                WHERE ID = @id",
                         new
                         {
                             id = dto.ID,
@@ -594,15 +603,18 @@ public class ResidRepository : IResidRepository
         if (conn.State != ConnectionState.Open)
             await conn.OpenAsync(ct);
 
+        // ⭐ جدید: SanadCashID و SanadPersonID رو هم بگیر
         var current = await conn.QueryFirstOrDefaultAsync<dynamic>(
             new CommandDefinition(
-                @"SELECT ID, ParentSanadID FROM CheckResids WHERE ID = @id",
+                @"SELECT ID, ParentSanadID, SanadCashID, SanadPersonID FROM CheckResids WHERE ID = @id",
                 new { id }, cancellationToken: ct));
 
         if (current == null)
             throw new InvalidOperationException("رسید یافت نشد");
 
         long parentSanadID = (long)(decimal)(current.ParentSanadID ?? 0);
+        long sanadCashID = (long)(decimal)(current.SanadCashID ?? 0);
+        long sanadPersonID = (long)(decimal)(current.SanadPersonID ?? 0);
 
         // ── چک قطعی نبودن سند ──
         if (parentSanadID > 0)
@@ -616,10 +628,14 @@ public class ResidRepository : IResidRepository
         using var tx = conn.BeginTransaction();
         try
         {
-            // ── حذف سند ──
+            // ── حذف سند (فقط ردیف‌های خود رسید) ──
             if (parentSanadID > 0)
             {
-                await _sanadService.DeleteResidSanadAsync(conn, tx, parentSanadID, ct);
+                await _sanadService.DeleteResidSanadAsync(
+                    conn, tx, parentSanadID,
+                    sanadCashId: sanadCashID,
+                    sanadPersonId: sanadPersonID,
+                    ct: ct);
             }
 
             // ── حذف رسید ──

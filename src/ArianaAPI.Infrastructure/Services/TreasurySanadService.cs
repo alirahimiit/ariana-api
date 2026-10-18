@@ -199,14 +199,28 @@ public class TreasurySanadService : ITreasurySanadService
     }
 
     // ═══ حذف سند رسید ═══
+    // ═══ حذف سند رسید — اصلاح‌شده ═══
     public async Task DeleteResidSanadAsync(
         IDbConnection conn, IDbTransaction tx,
-        long parentSanadId, CancellationToken ct = default)
+        long parentSanadId, long? sanadCashId, long? sanadPersonId,
+        CancellationToken ct = default)
     {
         if (parentSanadId <= 0) return;
 
-        // آرشیو
-        await conn.ExecuteAsync(new CommandDefinition(@"
+        // ═══ ۱. آرشیو و حذف فقط ردیف‌های این رسید ═══
+        var idsToDelete = new List<long>();
+        if (sanadCashId.HasValue && sanadCashId.Value > 0) idsToDelete.Add(sanadCashId.Value);
+        if (sanadPersonId.HasValue && sanadPersonId.Value > 0) idsToDelete.Add(sanadPersonId.Value);
+
+        if (idsToDelete.Count > 0)
+        {
+            var p = new DynamicParameters();
+            for (int i = 0; i < idsToDelete.Count; i++)
+                p.Add($"id{i}", idsToDelete[i]);
+            var idsSql = string.Join(",", Enumerable.Range(0, idsToDelete.Count).Select(i => $"@id{i}"));
+
+            // آرشیو
+            await conn.ExecuteAsync(new CommandDefinition($@"
             INSERT INTO RecycleSanad
                 (NO_Sanad, ParentSanadCode, Code_Col, Code_Moein, Code_Tafzil,
                  Code_Sharh, OtherSharh, Mab_Bed, Mab_Bes,
@@ -215,18 +229,30 @@ public class TreasurySanadService : ITreasurySanadService
                 NO_Sanad, ParentSanadCode, Code_Col, Code_Moein, Code_Tafzil,
                 Code_Sharh, OtherSharh, Mab_Bed, Mab_Bes,
                 Code_Op, Date_Op, Time_Op, ResidNum, CheckType
-            FROM Sanad WHERE ParentSanadCode = @id",
-            new { id = parentSanadId }, transaction: tx, cancellationToken: ct));
+            FROM Sanad WHERE SanadID IN ({idsSql})",
+                p, transaction: tx, cancellationToken: ct));
 
-        await conn.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM Sanad WHERE ParentSanadCode = @id",
-            new { id = parentSanadId }, transaction: tx, cancellationToken: ct));
+            // حذف
+            await conn.ExecuteAsync(new CommandDefinition(
+                $"DELETE FROM Sanad WHERE SanadID IN ({idsSql})",
+                p, transaction: tx, cancellationToken: ct));
+        }
 
-        await conn.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM ParentSanad WHERE ParentSanadID = @id",
-            new { id = parentSanadId }, transaction: tx, cancellationToken: ct));
+        // ═══ ۲. چک ردیف‌های باقی‌مانده ═══
+        var remaining = await conn.ExecuteScalarAsync<int>(
+            new CommandDefinition(
+                "SELECT COUNT(*) FROM Sanad WHERE ParentSanadCode = @id",
+                new { id = parentSanadId }, transaction: tx, cancellationToken: ct));
+
+        // ═══ ۳. اگه دیگه ردیفی نمونده، ParentSanad رو هم حذف کن ═══
+        if (remaining == 0)
+        {
+            await conn.ExecuteAsync(new CommandDefinition(
+                "DELETE FROM ParentSanad WHERE ParentSanadID = @id",
+                new { id = parentSanadId }, transaction: tx, cancellationToken: ct));
+        }
+        // ⭐ اگه ردیف هست، ParentSanad می‌مونه
     }
-
     // ═══ ConstHesabs.GetCashHesab ═══
     public async Task<(int CodeCol, int CodeMoein)> GetCashHesabAsync(
         IDbConnection conn, IDbTransaction? tx, CancellationToken ct = default)

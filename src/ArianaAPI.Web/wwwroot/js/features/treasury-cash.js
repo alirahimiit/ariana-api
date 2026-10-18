@@ -370,7 +370,7 @@ window.App.Features.TreasuryCash = (function () {
         const sanadOptions = ['<option value="">— بدون سند —</option>']
             .concat((sanadList || []).map(s =>
                 `<option value="${s.parentSanadID}" ${s.parentSanadID === data.parentSanadID ? 'selected' : ''}>
-                    ${H.fmt(s.noSanad)} — ${H.esc((s.sharh || '').substring(0, 40))}
+                    ${H.fmt(s.noSanad)} — ${H.esc(s.dateIn || '')} — ${H.esc((s.sharh || '').substring(0, 40))}
                  </option>`
             )).join('');
 

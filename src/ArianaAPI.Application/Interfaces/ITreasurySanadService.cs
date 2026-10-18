@@ -8,27 +8,29 @@ namespace ArianaAPI.Application.Interfaces;
 /// </summary>
 public interface ITreasurySanadService
 {
-    /// <summary>ساخت سند خودکار رسید نقدی — بعد از درج رسید فراخوانی شود (تا ResidId معلوم باشد).</summary>
     Task<ResidSanadResult> CreateResidSanadAsync(
         IDbConnection conn,
         IDbTransaction tx,
         ResidSanadContext ctx,
         CancellationToken ct = default);
 
-    /// <summary>حذف سند رسید (Sanad + ParentSanad + RecycleSanad).</summary>
+    /// <summary>
+    /// حذف سند رسید — فقط ردیف‌های مربوط به این رسید (SanadCashID و SanadPersonID).
+    /// اگه ParentSanad دیگه ردیفی نداره، خودش هم حذف می‌شه.
+    /// </summary>
     Task DeleteResidSanadAsync(
         IDbConnection conn,
         IDbTransaction tx,
         long parentSanadId,
+        long? sanadCashId,
+        long? sanadPersonId,
         CancellationToken ct = default);
 
-    /// <summary>حساب صندوق از ConstHesabs.</summary>
     Task<(int CodeCol, int CodeMoein)> GetCashHesabAsync(
         IDbConnection conn,
         IDbTransaction? tx,
         CancellationToken ct = default);
 
-    /// <summary>نام حساب (کل/معین/تفصیلی).</summary>
     Task<string> GetHesabNameAsync(
         IDbConnection conn,
         IDbTransaction? tx,

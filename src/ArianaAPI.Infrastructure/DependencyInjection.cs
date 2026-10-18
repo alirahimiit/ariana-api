@@ -76,7 +76,7 @@ public static class DependencyInjection
         services.AddScoped<IChequeReceiveRepository, ChequeReceiveRepository>();
         // ⭐ فاز ۳: خرج چک دریافتی
         services.AddScoped<IChequeExpendRepository, ChequeExpendRepository>();
-
+        services.AddScoped<IChequeReportExtendedRepository, ChequeReportExtendedRepository>();
 
         // ═══ Support Relay Client ═══
         services.AddHttpClient<SupportRelayClient>((sp, http) =>
