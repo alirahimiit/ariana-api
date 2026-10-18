@@ -765,9 +765,10 @@ window.App = Object.assign(window.App || {}, {
             'article-group': 'گروه‌های کالا',
             'bank': 'بانک‌ها',
             'bank-acc': 'حساب‌های بانکی',
-
+            'sanad-renumber': 'مرتب‌ساز اطلاعات',
             // * مودیان
             'moadian': '🏛️ سامانه مودیان'
+
         };
         document.getElementById('pageTitle').textContent = titles[page] || page;
 
@@ -812,6 +813,7 @@ window.App = Object.assign(window.App || {}, {
             case 'article-stock': window.App.Features.ArticleStock.render(); break;
             case 'bank': window.App.Features.Bank.render(); break;
             case 'bank-acc': window.App.Features.BankAcc.render(); break;
+            case 'sanad-renumber': window.App.Features.SanadRenumber.render(); break;
             case 'moadian': window.App.Features.Moadian.render(); break;
             // ⭐ صفحات در حال توسعه — placeholder نمایش می‌ده
             default:
