@@ -46,12 +46,27 @@ public class MoadianRepository : IMoadianRepository
 
     public async Task UpdateSettingAsync(long orgId, long fyId, TaxSetting s, CancellationToken ct = default)
     {
+        // ⭐ منطق هوشمند: اگر ردیفی نبود INSERT، اگر بود UPDATE (فقط یک ردیف)
         const string sql = @"
-            UPDATE tax_setting SET
-                tax_user_name = @TaxUserName,
-                private_key   = @PrivateKey,
-                code_egtesadi = @CodeEgtesadi,
-                is_sandbox    = @IsSandbox";
+            IF NOT EXISTS (SELECT 1 FROM tax_setting)
+            BEGIN
+                INSERT INTO tax_setting (
+                    tax_user_name, private_key, code_egtesadi, is_sandbox, invoice, stuff, customer
+                ) VALUES (
+                    @TaxUserName, @PrivateKey, @CodeEgtesadi, @IsSandbox, @Invoice, @Stuff, @Customer
+                );
+            END
+            ELSE
+            BEGIN
+                UPDATE tax_setting SET
+                    tax_user_name = @TaxUserName,
+                    private_key   = @PrivateKey,
+                    code_egtesadi = @CodeEgtesadi,
+                    is_sandbox    = @IsSandbox,
+                    invoice       = @Invoice,
+                    stuff         = @Stuff,
+                    customer      = @Customer;
+            END";
 
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         await conn.ExecuteAsync(new CommandDefinition(sql, s, cancellationToken: ct));

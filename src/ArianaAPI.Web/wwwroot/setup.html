@@ -1,0 +1,476 @@
+﻿<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>راه‌اندازی دوره مالی - آریانا</title>
+    <link rel="stylesheet" href="/css/01-base.css">
+    <link rel="stylesheet" href="/css/03-components.css">
+    <link rel="stylesheet" href="/css/04-forms.css">
+    <link rel="stylesheet" href="/css/toast-alert.css">
+    <style>
+        body {
+            background: #F3F4F6;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .setup-card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 800px;
+            padding: 30px;
+            position: relative;
+        }
+
+        .setup-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+            .setup-header h1 {
+                color: #1E293B;
+                font-size: 24px;
+                margin-bottom: 8px;
+            }
+
+            .setup-header p {
+                color: #64748B;
+                font-size: 14px;
+            }
+
+        .step-section {
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .step-title {
+            font-weight: 700;
+            color: #3B82F6;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cascade-group {
+            background: #F8FAFC;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+
+            .cascade-group label {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                margin-bottom: 6px;
+                font-size: 13px;
+            }
+
+            .cascade-group input[type="checkbox"]:disabled + span {
+                color: #94A3B8;
+            }
+
+        .alert-warning {
+            background: #FEF3C7;
+            color: #92400E;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            border-right: 4px solid #F59E0B;
+            margin-top: 15px;
+        }
+
+        .license-info {
+            font-size: 12px;
+            color: #3B82F6;
+            margin-top: 5px;
+        }
+
+        /* ⭐ استایل دکمه خروج */
+        .btn-exit {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: #FEE2E2;
+            color: #991B1B;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: 0.2s;
+        }
+
+            .btn-exit:hover {
+                background: #FECACA;
+            }
+
+        /* ⭐ استایل لودینگ */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255,255,255,0.9);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #E2E8F0;
+            border-top-color: #3B82F6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ⭐ لودینگ اوورلی -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <h2 style="color: #1E293B; margin-bottom: 10px;">در حال ساخت دیتابیس...</h2>
+        <p style="color: #64748B;">این عملیات ممکن است چند دقیقه طول بکشد. لطفاً صفحه را نبندید.</p>
+    </div>
+
+    <div class="setup-card">
+        <!-- ⭐ دکمه خروج -->
+        <button class="btn-exit" onclick="window.location.href='/index.html'">
+            🚪 خروج و بازگشت
+        </button>
+
+        <div class="setup-header" style="margin-top: 20px;">
+            <h1>⚙️ راه‌اندازی دوره مالی جدید</h1>
+            <p>جهت ورود، اطلاعات امنیتی را وارد کنید.</p>
+        </div>
+
+        <!-- بخش لاگین -->
+        <div id="loginSection">
+            <div class="form-group">
+                <label>API Key (کلید امنیتی)</label>
+                <input type="text" id="setupApiKey" class="form-control" value="dev-api-key-change-in-production" dir="ltr">
+            </div>
+            <div class="form-group">
+                <label>نام کاربری</label>
+                <input type="text" id="setupUser" class="form-control" value="admin">
+            </div>
+            <div class="form-group">
+                <label>رمز عبور</label>
+                <input type="password" id="setupPass" class="form-control" value="1234">
+            </div>
+            <button class="btn btn-primary" style="width:100%;" onclick="doLogin()">🔐 ورود به تنظیمات</button>
+        </div>
+
+        <!-- بخش اصلی (بعد از لاگین) -->
+        <div id="mainForm" style="display: none;">
+            <div class="step-section">
+                <div class="step-title">🏢 مرحله ۱: انتخاب سازمان جدید</div>
+                <div class="form-group">
+                    <label>سازمان</label>
+                    <select id="sazmanSelect" class="form-control" onchange="onSazmanChange()"></select>
+                    <div class="license-info" id="licenseInfo"></div>
+                </div>
+                <div id="newSazmanFields" style="display: none;">
+                    <div class="form-group">
+                        <label>نام سازمان جدید</label>
+                        <input type="text" id="newSazmanName" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>کد سازمان (Licence)</label>
+                        <input type="text" id="newSazmanCode" class="form-control">
+                    </div>
+                </div>
+            </div>
+
+            <div class="step-section">
+                <div class="step-title">📅 مرحله ۲: اطلاعات دوره مالی</div>
+                <div class="form-group">
+                    <label>آیا این اولین دوره مالی این سازمان است؟</label>
+                    <select id="isFirstDoreh" class="form-control" onchange="onFirstDorehChange()">
+                        <option value="true">بله (ساخت از فایل خام)</option>
+                        <option value="false">خیر (کپی از دوره قبل)</option>
+                    </select>
+                </div>
+
+                <div id="priorDorehFields" style="display: none; background: #F8FAFC; padding: 10px; border-radius: 6px;">
+                    <div class="form-group">
+                        <label>انتخاب سازمان دوره قبلی</label>
+                        <select id="priorSazmanSelect" class="form-control" onchange="loadPriorDorehMalis()"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>انتخاب دوره مالی قبلی</label>
+                        <select id="priorDorehSelect" class="form-control"></select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>نام دوره جدید</label>
+                    <input type="text" id="dorehName" class="form-control" placeholder="مثلاً: سال مالی 1405">
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <div class="form-group" style="flex:1;">
+                        <label>تاریخ شروع</label>
+                        <input type="text" id="beginDate" class="form-control" placeholder="1405/01/01" dir="ltr">
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label>تاریخ پایان</label>
+                        <input type="text" id="endDate" class="form-control" placeholder="1405/12/29" dir="ltr">
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <div class="form-group" style="flex:1;">
+                        <label>نرخ مالیات (%)</label>
+                        <input type="number" id="taxPer" class="form-control" value="0">
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label>نرخ عوارض (%)</label>
+                        <input type="number" id="avarezPer" class="form-control" value="0">
+                    </div>
+                </div>
+            </div>
+
+            <div class="step-section">
+                <div class="step-title">📦 مرحله ۳: انتقال داده‌های پایه</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <div class="cascade-group">
+                        <label><input type="checkbox" id="copyHesabs" onchange="cascade('hesab')" checked> <span>حساب‌ها (کل و معین)</span></label>
+                        <label style="margin-right:20px;"><input type="checkbox" id="copyTafzili" checked> <span>تفضیلی ۱</span></label>
+                        <label style="margin-right:20px;"><input type="checkbox" id="copyTafzili2" checked> <span>تفضیلی ۲</span></label>
+                        <label style="margin-right:20px;"><input type="checkbox" id="copyConstHesabs" checked> <span>حساب‌های پیش‌فرض</span></label>
+                    </div>
+                    <div class="cascade-group">
+                        <label><input type="checkbox" id="copyArticle" onchange="cascade('article')" checked> <span>کالاها</span></label>
+                        <label style="margin-right:20px;"><input type="checkbox" id="copyArticleGroup" checked disabled> <span>گروه‌های کالا</span></label>
+                        <label style="margin-right:20px;"><input type="checkbox" id="copyStockType" checked disabled> <span>انبارها</span></label>
+                        <label style="margin-right:20px;"><input type="checkbox" id="copyArticleUnit" checked disabled> <span>واحدها</span></label>
+                    </div>
+                    <div class="cascade-group">
+                        <label><input type="checkbox" id="copyBank" onchange="cascade('bank')" checked> <span>بانک‌ها</span></label>
+                        <label style="margin-right:20px;"><input type="checkbox" id="copyBankAcc" checked disabled> <span>حساب‌های بانکی</span></label>
+                    </div>
+                    <div class="cascade-group">
+                        <label><input type="checkbox" id="copyUsers"> <span>کاربران و دسترسی‌ها</span></label>
+                        <label><input type="checkbox" id="copySetting"> <span>تنظیمات برنامه</span></label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step-section">
+                <div class="step-title">📄 مرحله ۴: سند افتتاحیه</div>
+                <label><input type="checkbox" id="createSanadEftetah"> <span>ایجاد سند افتتاحیه به صورت خودکار</span></label>
+                <div class="alert-warning">
+                    ⚠️ توجه: پیاده‌سازی سند افتتاحیه در جلسه ۵۳ انجام می‌شود. در حال حاضر این گزینه غیرفعال است.
+                </div>
+            </div>
+
+            <button class="btn btn-primary" style="width:100%; font-size:16px; padding:12px;" onclick="submitSetup()">
+                🚀 ایجاد دیتابیس و دوره مالی
+            </button>
+        </div>
+    </div>
+
+    <script src="/js/ui/toast.js"></script>
+    <script src="/js/ui/alert.js"></script>
+    <script>
+        let apiKey = '';
+        let setupUser = '';
+        let setupPass = '';
+        let allSazmans = [];
+
+        async function doLogin() {
+            apiKey = document.getElementById('setupApiKey').value.trim();
+            setupUser = document.getElementById('setupUser').value.trim();
+            setupPass = document.getElementById('setupPass').value.trim();
+
+            if (!apiKey || !setupUser || !setupPass) return alert('همه فیلدها الزامی است');
+
+            try {
+                const res = await fetch('/api/setup/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
+                    body: JSON.stringify({ username: setupUser, password: setupPass })
+                });
+
+                if (!res.ok) throw new Error('نام کاربری یا رمز عبور اشتباه است');
+
+                document.getElementById('loginSection').style.display = 'none';
+                document.getElementById('mainForm').style.display = 'block';
+                await loadSazmans();
+            } catch (err) {
+                App.alert.error(err.message);
+            }
+        }
+
+        async function loadSazmans() {
+            try {
+                const res = await fetch('/api/setup/sazmans', { headers: { 'X-Api-Key': apiKey } });
+                if (!res.ok) throw new Error('خطا در دریافت لیست سازمان‌ها');
+
+                const data = await res.json();
+                allSazmans = data.existingSazmans;
+
+                const select = document.getElementById('sazmanSelect');
+                const priorSelect = document.getElementById('priorSazmanSelect');
+                const info = document.getElementById('licenseInfo');
+
+                info.innerHTML = `تعداد سازمان‌های مجاز در لایسنس: ${data.totalAuthorized} | ایجاد شده: ${data.usedCount}`;
+
+                select.innerHTML = '';
+                priorSelect.innerHTML = '';
+
+                if (data.canCreateNew) {
+                    select.innerHTML += `<option value="0">➕ ایجاد سازمان جدید (ID مجاز بعدی: ${data.nextAvailableId})</option>`;
+                } else {
+                    select.innerHTML += `<option value="" disabled>⛔ محدودیت لایسنس: تمام سازمان‌های مجاز ایجاد شده‌اند</option>`;
+                    info.style.color = 'red';
+                }
+
+                allSazmans.forEach(s => {
+                    select.innerHTML += `<option value="${s.id}">${s.name} (ID: ${s.id})</option>`;
+                    priorSelect.innerHTML += `<option value="${s.id}">${s.name} (ID: ${s.id})</option>`;
+                });
+
+            } catch (err) {
+                App.alert.error(err.message);
+            }
+        }
+
+        async function onSazmanChange() {
+            const val = parseInt(document.getElementById('sazmanSelect').value);
+            const newFields = document.getElementById('newSazmanFields');
+            const priorFields = document.getElementById('priorDorehFields');
+            const isFirst = document.getElementById('isFirstDoreh').value === 'true';
+
+            if (val === 0) {
+                newFields.style.display = 'block';
+                priorFields.style.display = 'none';
+                document.getElementById('isFirstDoreh').value = 'true';
+            } else {
+                newFields.style.display = 'none';
+                document.getElementById('priorSazmanSelect').value = val;
+                if (!isFirst) await loadPriorDorehMalis();
+            }
+        }
+
+        function onFirstDorehChange() {
+            const isFirst = document.getElementById('isFirstDoreh').value === 'true';
+            const priorFields = document.getElementById('priorDorehFields');
+            priorFields.style.display = isFirst ? 'none' : 'block';
+            if (!isFirst) loadPriorDorehMalis();
+        }
+
+        async function loadPriorDorehMalis() {
+            const priorSazmanId = document.getElementById('priorSazmanSelect').value;
+            if (!priorSazmanId) return;
+
+            try {
+                const res = await fetch(`/api/setup/doreh-malis?sazmanId=${priorSazmanId}`, { headers: { 'X-Api-Key': apiKey } });
+                const list = await res.json();
+                const select = document.getElementById('priorDorehSelect');
+                if (list.length === 0) {
+                    select.innerHTML = `<option value="">هیچ دوره‌ای یافت نشد</option>`;
+                } else {
+                    select.innerHTML = list.map(d => `<option value="${d.id}">${d.name} (شروع: ${d.beginDate})</option>`).join('');
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        function cascade(type) {
+            if (type === 'hesab') {
+                document.getElementById('copyTafzili').checked = document.getElementById('copyHesabs').checked;
+                document.getElementById('copyTafzili2').checked = document.getElementById('copyHesabs').checked;
+                document.getElementById('copyConstHesabs').checked = document.getElementById('copyHesabs').checked;
+            } else if (type === 'article') {
+                const chk = document.getElementById('copyArticle').checked;
+                document.getElementById('copyArticleGroup').checked = chk;
+                document.getElementById('copyStockType').checked = chk;
+                document.getElementById('copyArticleUnit').checked = chk;
+            } else if (type === 'bank') {
+                document.getElementById('copyBankAcc').checked = document.getElementById('copyBank').checked;
+            }
+        }
+
+        async function submitSetup() {
+            if (document.getElementById('createSanadEftetah').checked) {
+                App.alert.warning('سند افتتاحیه در جلسه ۵۳ پیاده‌سازی می‌شود و فعلاً ایجاد نمی‌گردد.');
+            }
+
+            const payload = {
+                Username: setupUser, Password: setupPass,
+                SazmanId: parseInt(document.getElementById('sazmanSelect').value) || 0,
+                SazmanName: document.getElementById('newSazmanName').value,
+                SazmanCode: document.getElementById('newSazmanCode').value,
+                Name: document.getElementById('dorehName').value,
+                BeginDate: document.getElementById('beginDate').value,
+                EndDate: document.getElementById('endDate').value,
+                Tax_Per: parseFloat(document.getElementById('taxPer').value) || 0,
+                Avarez_Per: parseFloat(document.getElementById('avarezPer').value) || 0,
+                PriorSazmanCode: parseInt(document.getElementById('priorSazmanSelect').value) || 0,
+                PriorDorehMaliCode: parseInt(document.getElementById('priorDorehSelect').value) || 0,
+                IsFirstDoreh: document.getElementById('isFirstDoreh').value === 'true',
+                CopyHesabs: document.getElementById('copyHesabs').checked,
+                CopyTafzili: document.getElementById('copyTafzili').checked,
+                CopyTafzili2: document.getElementById('copyTafzili2').checked,
+                CopyUsers: document.getElementById('copyUsers').checked,
+                CopyBank: document.getElementById('copyBank').checked,
+                CopyArticle: document.getElementById('copyArticle').checked,
+                CopyConstHesabs: document.getElementById('copyConstHesabs').checked,
+                CopySetting: document.getElementById('copySetting').checked,
+                CreateSanadEftetah: document.getElementById('createSanadEftetah').checked
+            };
+
+            if (!payload.Name || !payload.BeginDate || !payload.EndDate) {
+                App.alert.error('لطفاً فیلدهای ضروری (نام، تاریخ شروع، تاریخ پایان) را پر کنید.');
+                return;
+            }
+
+            if (!payload.IsFirstDoreh && !payload.PriorDorehMaliCode) {
+                App.alert.error('لطفاً دوره مالی قبلی را انتخاب کنید.');
+                return;
+            }
+
+            // ⭐ نمایش لودینگ
+            document.getElementById('loadingOverlay').style.display = 'flex';
+
+            try {
+                const res = await fetch('/api/setup/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                document.getElementById('loadingOverlay').style.display = 'none';
+
+                if (!res.ok) throw new Error(data.error);
+
+                App.toast('دوره مالی با موفقیت ایجاد شد!', 'success');
+                setTimeout(() => window.location.href = '/index.html', 3000);
+            } catch (err) {
+                document.getElementById('loadingOverlay').style.display = 'none';
+                App.alert.error('خطا: ' + err.message);
+            }
+        }
+    </script>
+</body>
+</html>

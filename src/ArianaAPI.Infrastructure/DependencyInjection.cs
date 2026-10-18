@@ -78,9 +78,10 @@ public static class DependencyInjection
         services.AddScoped<IChequeExpendRepository, ChequeExpendRepository>();
         services.AddScoped<IChequeReportExtendedRepository, ChequeReportExtendedRepository>();
 
-        // ⭐ جلسه ۵۱: مرتب‌ساز اطلاعات
+        // ⭐  مرتب‌ساز اطلاعات
         services.AddScoped<ISanadRenumberRepository, SanadRenumberRepository>();
-
+        // ⭐  راه‌اندازی اولیه
+        services.AddScoped<ISetupRepository, SetupRepository>();
 
         // ═══ Support Relay Client ═══
         services.AddHttpClient<SupportRelayClient>((sp, http) =>
