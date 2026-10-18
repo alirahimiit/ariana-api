@@ -13,6 +13,7 @@
             padding: 40px 20px;
             display: flex;
             justify-content: center;
+            font-family: Vazirmatn, sans-serif;
         }
 
         .setup-card {
@@ -92,7 +93,6 @@
             margin-top: 5px;
         }
 
-        /* ⭐ استایل دکمه خروج */
         .btn-exit {
             position: absolute;
             top: 20px;
@@ -115,7 +115,6 @@
                 background: #FECACA;
             }
 
-        /* ⭐ استایل لودینگ */
         .loading-overlay {
             position: fixed;
             inset: 0;
@@ -146,7 +145,6 @@
 </head>
 <body>
 
-    <!-- ⭐ لودینگ اوورلی -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="spinner"></div>
         <h2 style="color: #1E293B; margin-bottom: 10px;">در حال ساخت دیتابیس...</h2>
@@ -154,7 +152,6 @@
     </div>
 
     <div class="setup-card">
-        <!-- ⭐ دکمه خروج -->
         <button class="btn-exit" onclick="window.location.href='/index.html'">
             🚪 خروج و بازگشت
         </button>
@@ -164,7 +161,6 @@
             <p>جهت ورود، اطلاعات امنیتی را وارد کنید.</p>
         </div>
 
-        <!-- بخش لاگین -->
         <div id="loginSection">
             <div class="form-group">
                 <label>API Key (کلید امنیتی)</label>
@@ -181,10 +177,9 @@
             <button class="btn btn-primary" style="width:100%;" onclick="doLogin()">🔐 ورود به تنظیمات</button>
         </div>
 
-        <!-- بخش اصلی (بعد از لاگین) -->
         <div id="mainForm" style="display: none;">
             <div class="step-section">
-                <div class="step-title">🏢 مرحله ۱: انتخاب سازمان جدید</div>
+                <div class="step-title">🏢 مرحله ۱: انتخاب سازمان</div>
                 <div class="form-group">
                     <label>سازمان</label>
                     <select id="sazmanSelect" class="form-control" onchange="onSazmanChange()"></select>
@@ -230,11 +225,13 @@
                 <div style="display:flex; gap:10px;">
                     <div class="form-group" style="flex:1;">
                         <label>تاریخ شروع</label>
-                        <input type="text" id="beginDate" class="form-control" placeholder="1405/01/01" dir="ltr">
+                        <!-- ⭐ تغییرات: maxlength و inputmode برای جلوگیری از تایپ حروف و کنترل طول -->
+                        <input type="text" id="beginDate" class="form-control" placeholder="14050101" maxlength="10" inputmode="numeric" dir="ltr">
                     </div>
                     <div class="form-group" style="flex:1;">
                         <label>تاریخ پایان</label>
-                        <input type="text" id="endDate" class="form-control" placeholder="1405/12/29" dir="ltr">
+                        <!-- ⭐ تغییرات: maxlength و inputmode برای جلوگیری از تایپ حروف و کنترل طول -->
+                        <input type="text" id="endDate" class="form-control" placeholder="14051229" maxlength="10" inputmode="numeric" dir="ltr">
                     </div>
                 </div>
                 <div style="display:flex; gap:10px;">
@@ -297,6 +294,45 @@
         let setupPass = '';
         let allSazmans = [];
 
+        // ⭐ تابع ماسک تاریخ: فقط عدد می‌گیرد و خودکار اسلش می‌گذارد
+        function formatDateInput(e) {
+            let value = e.target.value.replace(/\D/g, ''); // حذف هر کاراکتر غیر عددی
+            if (value.length > 8) value = value.slice(0, 8); // حداکثر ۸ رقم (YYYYMMDD)
+
+            let formatted = '';
+            if (value.length > 0) formatted = value.slice(0, 4);
+            if (value.length > 4) formatted += '/' + value.slice(4, 6);
+            if (value.length > 6) formatted += '/' + value.slice(6, 8);
+
+            e.target.value = formatted;
+        }
+
+        // ⭐ تابع اعتبارسنجی تاریخ شمسی
+        function isValidPersianDate(dateStr) {
+            if (!dateStr) return false;
+            const parts = dateStr.split('/');
+            if (parts.length !== 3) return false;
+
+            const y = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10);
+            const d = parseInt(parts[2], 10);
+
+            if (isNaN(y) || isNaN(m) || isNaN(d)) return false;
+            if (y < 1300 || y > 1500) return false;
+            if (m < 1 || m > 12) return false;
+            if (d < 1 || d > 31) return false;
+
+            // بررسی تعداد روزهای ماه‌های مختلف (تقریبی برای اسفند)
+            if (m >= 7 && m <= 11 && d > 30) return false;
+            if (m === 12 && d > 30) return false;
+
+            return true;
+        }
+
+        // اتصال رویداد ماسک به فیلدهای تاریخ
+        document.getElementById('beginDate').addEventListener('input', formatDateInput);
+        document.getElementById('endDate').addEventListener('input', formatDateInput);
+
         async function doLogin() {
             apiKey = document.getElementById('setupApiKey').value.trim();
             setupUser = document.getElementById('setupUser').value.trim();
@@ -311,7 +347,10 @@
                     body: JSON.stringify({ username: setupUser, password: setupPass })
                 });
 
-                if (!res.ok) throw new Error('نام کاربری یا رمز عبور اشتباه است');
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'نام کاربری یا رمز عبور اشتباه است');
+                }
 
                 document.getElementById('loginSection').style.display = 'none';
                 document.getElementById('mainForm').style.display = 'block';
@@ -415,14 +454,31 @@
                 App.alert.warning('سند افتتاحیه در جلسه ۵۳ پیاده‌سازی می‌شود و فعلاً ایجاد نمی‌گردد.');
             }
 
+            const beginDateVal = document.getElementById('beginDate').value;
+            const endDateVal = document.getElementById('endDate').value;
+
+            // ⭐ اعتبارسنجی تاریخ‌ها قبل از ارسال به سرور
+            if (!isValidPersianDate(beginDateVal)) {
+                App.alert.error('تاریخ شروع نامعتبر است. لطفاً یک تاریخ صحیح شمسی وارد کنید (مثال: 1405/01/01).');
+                return;
+            }
+            if (!isValidPersianDate(endDateVal)) {
+                App.alert.error('تاریخ پایان نامعتبر است. لطفاً یک تاریخ صحیح شمسی وارد کنید (مثال: 1405/12/29).');
+                return;
+            }
+            if (beginDateVal >= endDateVal) {
+                App.alert.error('تاریخ پایان باید بعد از تاریخ شروع باشد.');
+                return;
+            }
+
             const payload = {
                 Username: setupUser, Password: setupPass,
                 SazmanId: parseInt(document.getElementById('sazmanSelect').value) || 0,
                 SazmanName: document.getElementById('newSazmanName').value,
                 SazmanCode: document.getElementById('newSazmanCode').value,
                 Name: document.getElementById('dorehName').value,
-                BeginDate: document.getElementById('beginDate').value,
-                EndDate: document.getElementById('endDate').value,
+                BeginDate: beginDateVal,
+                EndDate: endDateVal,
                 Tax_Per: parseFloat(document.getElementById('taxPer').value) || 0,
                 Avarez_Per: parseFloat(document.getElementById('avarezPer').value) || 0,
                 PriorSazmanCode: parseInt(document.getElementById('priorSazmanSelect').value) || 0,
@@ -439,8 +495,8 @@
                 CreateSanadEftetah: document.getElementById('createSanadEftetah').checked
             };
 
-            if (!payload.Name || !payload.BeginDate || !payload.EndDate) {
-                App.alert.error('لطفاً فیلدهای ضروری (نام، تاریخ شروع، تاریخ پایان) را پر کنید.');
+            if (!payload.Name) {
+                App.alert.error('لطفاً نام دوره را وارد کنید.');
                 return;
             }
 
@@ -449,7 +505,6 @@
                 return;
             }
 
-            // ⭐ نمایش لودینگ
             document.getElementById('loadingOverlay').style.display = 'flex';
 
             try {

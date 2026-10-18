@@ -121,6 +121,7 @@ public class SetupRepository : ISetupRepository
             throw new UnauthorizedAccessException("نام کاربری یا رمز عبور نامعتبر است.");
 
         long finalSazmanId = req.SazmanId;
+
         await using var permConn = new SqlConnection(_permanentConnectionString);
         await permConn.OpenAsync(ct);
 
@@ -131,7 +132,9 @@ public class SetupRepository : ISetupRepository
                 new CommandDefinition("SELECT SazmanID FROM Sazman", cancellationToken: ct))).ToList();
 
             var availableIds = authorizedIds.Except(existingIds).ToList();
-            if (!availableIds.Any()) throw new Exception("محدودیت لایسنس: تمام سازمان‌های مجاز ایجاد شده‌اند.");
+
+            if (!availableIds.Any())
+                throw new Exception("محدودیت لایسنس: شما به حداکثر تعداد سازمان‌های مجاز رسیده‌اید.");
 
             finalSazmanId = availableIds.First();
 
@@ -143,11 +146,24 @@ public class SetupRepository : ISetupRepository
             await permConn.ExecuteAsync(new CommandDefinition("SET IDENTITY_INSERT Sazman OFF", cancellationToken: ct));
         }
 
+        // ⭐ دریافت تاریخ و ساعت شمسی برای ثبت در دیتابیس
+        var pc = new System.Globalization.PersianCalendar();
+        var now = DateTime.Now;
+        var todayPersian = $"{pc.GetYear(now):D4}/{pc.GetMonth(now):D2}/{pc.GetDayOfMonth(now):D2}";
+        var currentTime = now.ToString("HH:mm");
+
+        // ⭐ اصلاح کوئری INSERT با اضافه کردن تمام ستون‌ها و مقداردهی پیش‌فرض (صفر یا رشته خالی)
         var newFyId = await permConn.ExecuteScalarAsync<long>(
             new CommandDefinition(@"
-                INSERT INTO DorehMali (Name, BeginDate, EndDate, SazmanCode, PriorDorehMaliCode, Tax_Per, Avarez_Per, UpDate_Database)
+                INSERT INTO DorehMali (
+                    Name, BeginDate, EndDate, SazmanCode, PriorDorehMaliCode, Tax_Per, Avarez_Per, UpDate_Database,
+                    Discript, AddedHesabs, AddedUsers, AddedSetting, Code_Op, Date_Op, Time_Op, EndSanadNum, BeginSanadNum
+                )
                 OUTPUT INSERTED.DorehMaliID
-                VALUES (@Name, @BeginDate, @EndDate, @SazmanCode, @Prior, @Tax, @Avarez, @Ver)",
+                VALUES (
+                    @Name, @BeginDate, @EndDate, @SazmanCode, @Prior, @Tax, @Avarez, @Ver,
+                    '', 0, 0, 0, 0, @TodayPersian, @CurrentTime, 0, 0
+                )",
                 new
                 {
                     Name = req.Name,
@@ -157,7 +173,9 @@ public class SetupRepository : ISetupRepository
                     Prior = req.PriorDorehMaliCode,
                     Tax = req.Tax_Per,
                     Avarez = req.Avarez_Per,
-                    Ver = DatabaseUpdater.C_VERSION_DATABASE
+                    Ver = DatabaseUpdater.C_VERSION_DATABASE,
+                    TodayPersian = todayPersian,
+                    CurrentTime = currentTime
                 }, cancellationToken: ct));
 
         var newDbName = $"{_prefix}{finalSazmanId}_{newFyId}";
@@ -166,9 +184,11 @@ public class SetupRepository : ISetupRepository
         await masterConn.OpenAsync(ct);
 
         var dbExists = await masterConn.ExecuteScalarAsync<int>(
-            new CommandDefinition("SELECT COUNT(*) FROM sys.databases WHERE name = @name", new { name = newDbName }, cancellationToken: ct));
+            new CommandDefinition("SELECT COUNT(*) FROM sys.databases WHERE name = @name",
+            new { name = newDbName }, cancellationToken: ct));
 
-        if (dbExists > 0) throw new InvalidOperationException($"دیتابیس {newDbName} از قبل وجود دارد.");
+        if (dbExists > 0)
+            throw new InvalidOperationException($"دیتابیس {newDbName} از قبل وجود دارد.");
 
         string? priorDbName = null;
         if (req.IsFirstDoreh)
@@ -180,23 +200,55 @@ public class SetupRepository : ISetupRepository
         {
             var sourceSazmanId = req.PriorSazmanCode > 0 ? req.PriorSazmanCode : finalSazmanId;
             priorDbName = $"{_prefix}{sourceSazmanId}_{req.PriorDorehMaliCode}";
+
             var tempBak = Path.Combine(Path.GetTempPath(), $"{newDbName}_temp.bak");
 
-            await masterConn.ExecuteAsync(new CommandDefinition($"BACKUP DATABASE [{priorDbName}] TO DISK = N'{tempBak}' WITH INIT", commandTimeout: 300, cancellationToken: ct));
+            await masterConn.ExecuteAsync(new CommandDefinition(
+                $"BACKUP DATABASE [{priorDbName}] TO DISK = N'{tempBak}' WITH INIT",
+                commandTimeout: 300, cancellationToken: ct));
+
             await RestoreDatabaseAsync(masterConn, newDbName, tempBak, ct);
+
             if (File.Exists(tempBak)) File.Delete(tempBak);
         }
 
-        await DatabaseUpdater.RunUpdaterAsync(_permanentConnectionString, isPermanent: true, ct);
+        // ⭐ اجرای آپدیتر روی Permanent (با مدیریت خطا)
+        try
+        {
+            await DatabaseUpdater.RunUpdaterAsync(_permanentConnectionString, isPermanent: true, ct);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Setup Repo Permanent Update Error] {ex.Message}");
+        }
 
-        var newDbConnStr = BuildConnStr(_config["Database:Server"] ?? "localhost", newDbName, _config["Database:UserId"] ?? "sa", _config["Database:Password"] ?? "");
-        await DatabaseUpdater.RunUpdaterAsync(newDbConnStr, isPermanent: false, ct);
+        var newDbConnStr = BuildConnStr(
+            _config["Database:Server"] ?? "localhost",
+            newDbName,
+            _config["Database:UserId"] ?? "sa",
+            _config["Database:Password"] ?? "");
+
+        // ⭐ اجرای آپدیتر روی دیتابیس دوره جدید (با مدیریت خطا)
+        try
+        {
+            await DatabaseUpdater.RunUpdaterAsync(newDbConnStr, isPermanent: false, ct);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Setup Repo Tenant Update Error] {ex.Message}");
+        }
 
         await using var newConn = new SqlConnection(newDbConnStr);
         await newConn.OpenAsync(ct);
         await ProcessDataCopyAndCleanupAsync(newConn, req, priorDbName, ct);
 
-        return new SetupResultDto { Success = true, Message = "دوره مالی با موفقیت ایجاد شد.", NewDorehMaliId = newFyId, NewDbName = newDbName };
+        return new SetupResultDto
+        {
+            Success = true,
+            Message = "دوره مالی با موفقیت ایجاد شد.",
+            NewDorehMaliId = newFyId,
+            NewDbName = newDbName
+        };
     }
 
     private async Task RestoreDatabaseAsync(SqlConnection conn, string newDbName, string bakPath, CancellationToken ct)
@@ -226,38 +278,67 @@ public class SetupRepository : ISetupRepository
         using var tx = conn.BeginTransaction();
         try
         {
-            // ۱. غیرفعال کردن موقت Foreign Key ها
+            // ⭐ ۱. غیرفعال کردن موقت Foreign Key ها
             await conn.ExecuteAsync(new CommandDefinition("EXEC sp_MSforeachtable \"ALTER TABLE ? NOCHECK CONSTRAINT all\"", transaction: tx, cancellationToken: ct));
 
-            // ۲. حذف اسناد غیر مرتبط با چک‌ها
-            // ⚠️ توجه: فقط اسنادی پاک می‌شوند که به CheckPay، CheckRecive یا CheckExpend متصل نیستند.
+            // ⭐ ۲. محاسبه مانده واقعی کالاها و انتقال به موجودی اولیه (قبل از حذف اسناد و فاکتورها)
+            if (req.CopyArticle)
+            {
+                await conn.ExecuteAsync(new CommandDefinition(@"
+                    UPDATE A
+                    SET 
+                        -- محاسبه مانده مقداری (خرید + رسید + برگشت خرید + رسید برگشتی - فروش - حواله - ضایعات)
+                        A.AmountFirst = 
+                            ISNULL(A.AmountFirst, 0) 
+                            + ISNULL((SELECT SUM(ArticleCount) FROM FactorDetail fd INNER JOIN FactorParent fp ON fp.ID = fd.FactorID WHERE fd.ArticleID = A.ID AND fp.FactorKind = 0), 0)
+                            + ISNULL((SELECT SUM(Val) FROM Stock_Factor_Mat sfm INNER JOIN Stock_Factor sf ON sf.ID = sfm.StockFacorID WHERE sfm.ArticleID = A.ID AND sf.Kind = 0), 0)
+                            + ISNULL((SELECT SUM(ArticleCount) FROM FactorDetail fd INNER JOIN FactorParent fp ON fp.ID = fd.FactorID WHERE fd.ArticleID = A.ID AND fp.FactorKind = 2), 0)
+                            + ISNULL((SELECT SUM(Val) FROM Stock_Factor_Mat sfm INNER JOIN Stock_Factor sf ON sf.ID = sfm.StockFacorID WHERE sfm.ArticleID = A.ID AND sf.Kind = 2), 0)
+                            - ISNULL((SELECT SUM(ArticleCount) FROM FactorDetail fd INNER JOIN FactorParent fp ON fp.ID = fd.FactorID WHERE fd.ArticleID = A.ID AND fp.FactorKind = 1), 0)
+                            - ISNULL((SELECT SUM(Val) FROM Stock_Factor_Mat sfm INNER JOIN Stock_Factor sf ON sf.ID = sfm.StockFacorID WHERE sfm.ArticleID = A.ID AND sf.Kind = 1), 0)
+                            - ISNULL((SELECT SUM(Val) FROM Stock_Factor_Mat sfm INNER JOIN Stock_Factor sf ON sf.ID = sfm.StockFacorID WHERE sfm.ArticleID = A.ID AND sf.Kind = 3), 0),
+                        
+                        -- محاسبه مانده ریالی (اگر FinalVal1 صفر بود، همان CostFirst قبلی می‌ماند)
+                        A.CostFirst = COALESCE(NULLIF(A.FinalVal1, 0), A.CostFirst, 0),
+
+                        -- صفر کردن فیلدهای تراکنشی برای شروع سال جدید
+                        A.inAmount1 = 0, A.OutAmount1 = 0, A.BackAmount1 = 0, A.FinalAmount1 = 0,
+                        A.inVal1 = 0, A.OutVal1 = 0, A.BackVal1 = 0, A.FinalVal1 = 0
+                    FROM ArticleNew A
+                ", transaction: tx, cancellationToken: ct));
+            }
+            else
+            {
+                // اگر تیک انتقال کالا زده نشده، کالاها را کاملاً پاک کن
+                await conn.ExecuteAsync(new CommandDefinition("DELETE FROM ArticleNew", transaction: tx, cancellationToken: ct));
+                await conn.ExecuteAsync(new CommandDefinition("DELETE FROM ArticleGroup", transaction: tx, cancellationToken: ct));
+                await conn.ExecuteAsync(new CommandDefinition("DELETE FROM StockType", transaction: tx, cancellationToken: ct));
+                await conn.ExecuteAsync(new CommandDefinition("DELETE FROM ArticleUnit", transaction: tx, cancellationToken: ct));
+            }
+
+            // ⭐ ۳. قطع ارتباط چک‌ها با اسناد
             await conn.ExecuteAsync(new CommandDefinition(@"
-                DELETE FROM Sanad 
-                WHERE ParentSanadCode NOT IN (
-                    SELECT ParentSanadID FROM CheckPay WHERE ParentSanadID IS NOT NULL
-                    UNION
-                    SELECT ParentSanadID FROM CheckRecive WHERE ParentSanadID IS NOT NULL
-                    UNION
-                    SELECT ParentSanadID FROM CheckExpend WHERE ParentSanadID IS NOT NULL
-                );
-                DELETE FROM ParentSanad WHERE ParentSanadID NOT IN (SELECT ParentSanadCode FROM Sanad);
-                DELETE FROM FactorDetail;
-                DELETE FROM FactorParent;
-                DELETE FROM FactorDetailTemp;
-                DELETE FROM FactorParentTemp;
-                DELETE FROM SanadTemp;
-                DELETE FROM SanadMovaghat;
-                DELETE FROM SanadCopyTemp;
-                DELETE FROM RecycleSanad;
-                DELETE FROM RecycleParentSanad;
-                DELETE FROM tax_body;
-                DELETE FROM tax_header;
+                UPDATE CheckPay SET ParentSanadID = NULL, ParentSanadOKID = NULL;
+                UPDATE CheckRecive SET ParentSanadID = NULL, ParentSanadOKID = NULL, UnOkParentSanadID = NULL;
+                UPDATE CheckExpend SET ParentSanadID = NULL;
             ", transaction: tx, cancellationToken: ct));
 
-            // ۳. حذف جداول چاپی و رسیدها با چک کردن وجود جدول (رفع خطای Invalid object name)
+            // ⭐ ۴. حذف کامل تمام اسناد (هیچ سندی منتقل نمی‌شود)
+            await conn.ExecuteAsync(new CommandDefinition(@"
+                DELETE FROM Sanad;
+                DELETE FROM ParentSanad;
+                DELETE FROM RecycleSanad;
+                DELETE FROM RecycleParentSanad;
+            ", transaction: tx, cancellationToken: ct));
+
+            // ⭐ ۵. حذف فاکتورها، اسناد موقت و جداول چاپی
             var tablesToClear = new[] {
+                "FactorDetail", "FactorParent", "FactorDetailTemp", "FactorParentTemp",
+                "SanadTemp", "SanadMovaghat", "SanadCopyTemp",
+                "tax_body", "tax_header",
                 "BilanPrint", "DaftarColPrint", "DaftarColPrintFinall",
-                "DaftarRoozNamehPrint", "TarazPrint", "TavaliAsnad", "HesabPrint2", "CheckResids"
+                "DaftarRoozNamehPrint", "TarazPrint", "TavaliAsnad", "HesabPrint2", "CheckResids",
+                "Stock_Factor", "Stock_Factor_Mat"
             };
 
             foreach (var tbl in tablesToClear)
@@ -265,7 +346,7 @@ public class SetupRepository : ISetupRepository
                 await conn.ExecuteAsync(new CommandDefinition($"IF OBJECT_ID('{tbl}') IS NOT NULL DELETE FROM [{tbl}]", transaction: tx, cancellationToken: ct));
             }
 
-            // ۴. پاکسازی جداول پایه (طبق تیک‌های کاربر)
+            // ⭐ ۶. پاکسازی جداول پایه (طبق تیک‌های کاربر)
             if (!req.CopyHesabs)
             {
                 await conn.ExecuteAsync(new CommandDefinition("DELETE FROM Hesab", transaction: tx, cancellationToken: ct));
@@ -285,19 +366,12 @@ public class SetupRepository : ISetupRepository
                 await conn.ExecuteAsync(new CommandDefinition("DELETE FROM Bank", transaction: tx, cancellationToken: ct));
                 await conn.ExecuteAsync(new CommandDefinition("DELETE FROM BankAcc", transaction: tx, cancellationToken: ct));
             }
-            if (!req.CopyArticle)
-            {
-                await conn.ExecuteAsync(new CommandDefinition("DELETE FROM ArticleNew", transaction: tx, cancellationToken: ct));
-                await conn.ExecuteAsync(new CommandDefinition("DELETE FROM ArticleGroup", transaction: tx, cancellationToken: ct));
-                await conn.ExecuteAsync(new CommandDefinition("DELETE FROM StockType", transaction: tx, cancellationToken: ct));
-                await conn.ExecuteAsync(new CommandDefinition("DELETE FROM ArticleUnit", transaction: tx, cancellationToken: ct));
-            }
             if (!req.CopyConstHesabs)
                 await conn.ExecuteAsync(new CommandDefinition("DELETE FROM ConstHesabs", transaction: tx, cancellationToken: ct));
             if (!req.CopySetting)
                 await conn.ExecuteAsync(new CommandDefinition("DELETE FROM Setting", transaction: tx, cancellationToken: ct));
 
-            // ۵. فعال کردن مجدد Foreign Key ها
+            // ⭐ ۷. فعال کردن مجدد Foreign Key ها
             await conn.ExecuteAsync(new CommandDefinition("EXEC sp_MSforeachtable \"ALTER TABLE ? CHECK CONSTRAINT all\"", transaction: tx, cancellationToken: ct));
 
             tx.Commit();

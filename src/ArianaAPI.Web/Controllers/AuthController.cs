@@ -1,8 +1,11 @@
 ﻿using ArianaAPI.Application.DTOs.Auth;
 using ArianaAPI.Application.Interfaces;
+using ArianaAPI.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 
 namespace ArianaAPI.Web.Controllers;
 
@@ -12,11 +15,13 @@ public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
     private readonly IUserRepository _users;
+    private readonly IConfiguration _config; // ⭐ برای خواندن تنظیمات دیتابیس
 
-    public AuthController(IAuthService authService, IUserRepository users)
+    public AuthController(IAuthService authService, IUserRepository users, IConfiguration config)
     {
         _authService = authService;
         _users = users;
+        _config = config;
     }
 
     [HttpPost("login")]
@@ -26,7 +31,52 @@ public class AuthController : ControllerBase
         [FromBody] LoginRequestDto request,
         CancellationToken ct)
     {
+        // ۱. احراز هویت (لاگین)
         var result = await _authService.LoginAsync(request, ct);
+
+        // ⭐ ۲. آپدیت خودکار دیتابیس پس از لاگین موفق
+        try
+        {
+            var server = _config["Database:Server"] ?? "localhost";
+            var user = _config["Database:UserId"] ?? "sa";
+            var pass = _config["Database:Password"] ?? "";
+            var permanentDb = _config["Database:DatabaseName"] ?? "Permanent";
+            var prefix = _config["Database:Prefix"] ?? "Acounting_";
+
+            // ساخت رشته اتصال برای دیتابیس اصلی (Permanent)
+            var permConnStr = new SqlConnectionStringBuilder
+            {
+                DataSource = server,
+                UserID = user,
+                Password = pass,
+                InitialCatalog = permanentDb,
+                TrustServerCertificate = true,
+                ConnectTimeout = 60
+            }.ConnectionString;
+
+            // ساخت رشته اتصال برای دیتابیس همین دوره مالی (Tenant)
+            var tenantDbName = $"{prefix}{request.OrgId}_{request.FyId}";
+            var tenantConnStr = new SqlConnectionStringBuilder
+            {
+                DataSource = server,
+                UserID = user,
+                Password = pass,
+                InitialCatalog = tenantDbName,
+                TrustServerCertificate = true,
+                ConnectTimeout = 60
+            }.ConnectionString;
+
+            // اجرای آپدیتر
+            await DatabaseUpdater.RunUpdaterAsync(permConnStr, isPermanent: true, ct);
+            await DatabaseUpdater.RunUpdaterAsync(tenantConnStr, isPermanent: false, ct);
+        }
+        catch (Exception ex)
+        {
+            // اگر آپدیت خطا داد، لاگ می‌کنیم ولی ورود کاربر را متوقف نمی‌کنیم
+            Console.WriteLine($"[Auto Update Error] {ex.Message}");
+        }
+
+        // ۳. برگرداندن توکن
         return Ok(result);
     }
 

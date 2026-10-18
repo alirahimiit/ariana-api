@@ -150,13 +150,6 @@
                 <!-- Form -->
                 <form id="loginForm" class="login-form-v2">
 
-                    <!-- ⭐ لینک تعریف سازمان (با استایل زیبا) -->
-                    <div style="text-align: center; margin-top: 15px; border-top: 1px dashed #E2E8F0; padding-top: 15px;">
-                        <a href="/setup.html" style="font-size: 13px; color: #6366F1; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">
-                            <span style="font-size: 16px;">⚙️</span> تعریف سازمان و دوره مالی جدید
-                        </a>
-                    </div>
-
                     <div class="lf-row">
                         <div class="lf-field">
                             <label for="orgId">
@@ -217,6 +210,29 @@
                     </button>
 
                     <div id="loginError" class="error-box hidden"></div>
+                    <!-- ⭐ خط جداکننده و دکمه تعریف سازمان -->
+                    <div style="position: relative; text-align: center; margin: 24px 0 16px;">
+                        <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: #E2E8F0; z-index: 1;"></div>
+                        <span style="position: relative; z-index: 2; background: #fff; padding: 0 12px; color: #94A3B8; font-size: 12px;">یا</span>
+                    </div>
+
+                    <a href="/setup.html" class="btn-setup-new" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; background: #F8FAFC; border: 1.5px dashed #CBD5E1; border-radius: 10px; color: #475569; font-size: 13px; font-weight: 600; text-decoration: none; transition: all 0.2s ease;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                        تعریف سازمان و دوره مالی جدید
+                    </a>
+
+                    <style>
+                        .btn-setup-new:hover {
+                            background: #F1F5F9 !important;
+                            border-color: #94A3B8 !important;
+                            color: #1E293B !important;
+                            transform: translateY(-1px);
+                            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+                        }
+                    </style>
                 </form>
 
                 <!-- Footer form -->

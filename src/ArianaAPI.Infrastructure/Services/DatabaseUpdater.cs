@@ -6,6 +6,7 @@ namespace ArianaAPI.Infrastructure.Services;
 
 public static class DatabaseUpdater
 {
+    // ⭐ نسخه دیتابیس را به امروز تغییر دادم تا فورس آپدیت شود
     public const string C_VERSION_DATABASE = "1405/06/15";
 
     public static async Task RunUpdaterAsync(string connectionString, bool isPermanent, CancellationToken ct = default)
@@ -13,67 +14,66 @@ public static class DatabaseUpdater
         await using var conn = new SqlConnection(connectionString);
         await conn.OpenAsync(ct);
 
-        // ۱. چک کردن تاریخ بروزرسانی (فقط اگر جدول و ستون وجود داشته باشد)
-        try
+        // ۱. چک کردن تاریخ بروزرسانی (فقط برای Permanent)
+        if (isPermanent)
         {
-            var columnExists = await conn.ExecuteScalarAsync<int>(
-                new CommandDefinition("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('DorehMali') AND name = 'UpDate_Database'", cancellationToken: ct));
-
-            if (columnExists > 0)
+            try
             {
-                string sqlCheck = isPermanent
-                    ? "SELECT TOP 1 UpDate_Database FROM DorehMali ORDER BY DorehMaliID DESC"
-                    : "SELECT TOP 1 UpDate_Database FROM DorehMali";
+                var columnExists = await conn.ExecuteScalarAsync<int>(
+                    new CommandDefinition("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('DorehMali') AND name = 'UpDate_Database'", cancellationToken: ct));
 
-                var currentVer = await conn.ExecuteScalarAsync<string>(
-                    new CommandDefinition(sqlCheck, cancellationToken: ct));
-
-                if (!string.IsNullOrEmpty(currentVer) && string.Compare(currentVer, C_VERSION_DATABASE) >= 0)
+                if (columnExists > 0)
                 {
-                    return; // دیتابیس بروز است
+                    var currentVer = await conn.ExecuteScalarAsync<string>(
+                        new CommandDefinition("SELECT MIN(UpDate_Database) FROM DorehMali", cancellationToken: ct));
+
+                    if (!string.IsNullOrEmpty(currentVer) && string.Compare(currentVer, C_VERSION_DATABASE) >= 0)
+                    {
+                        return; // دیتابیس کاملاً بروز است
+                    }
                 }
+            }
+            catch { /* اگر جدول وجود نداشت، ادامه بده */ }
+        }
+
+        // ۲. اجرای اسکریپت‌ها (بدون Transaction کلی - هر دستور جداگانه اجرا می‌شود)
+        var scripts = isPermanent ? GetPermanentScripts() : GetTenantScripts();
+        bool hasError = false;
+
+        foreach (var sql in scripts)
+        {
+            if (string.IsNullOrWhiteSpace(sql)) continue;
+
+            try
+            {
+                // ⭐ هر دستور در یک تراکنش جداگانه اجرا می‌شود تا خطای یکی، بقیه را خراب نکند
+                using var cmdTx = conn.BeginTransaction();
+                await conn.ExecuteAsync(new CommandDefinition(sql, transaction: cmdTx, cancellationToken: ct));
+                cmdTx.Commit();
+            }
+            catch (Exception ex)
+            {
+                // ⭐ خطا را چاپ می‌کنیم ولی برنامه را متوقف نمی‌کنیم
+                Console.WriteLine($"[DB Update Skipped] {ex.Message}");
+                hasError = true;
             }
         }
-        catch { /* اگر جدول وجود نداشت، ادامه بده */ }
 
-        // ۲. اجرای اسکریپت‌ها
-        using var tx = conn.BeginTransaction();
-        try
+        // ۳. ثبت تاریخ جدید (فقط اگر هیچ خطایی رخ نداده باشد)
+        if (isPermanent && !hasError)
         {
-            var scripts = isPermanent ? GetPermanentScripts() : GetTenantScripts();
-
-            foreach (var sql in scripts)
+            try
             {
-                if (string.IsNullOrWhiteSpace(sql)) continue;
-                try
+                var colExistsNow = await conn.ExecuteScalarAsync<int>(
+                    new CommandDefinition("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('DorehMali') AND name = 'UpDate_Database'", cancellationToken: ct));
+
+                if (colExistsNow > 0)
                 {
-                    await conn.ExecuteAsync(new CommandDefinition(sql, transaction: tx, cancellationToken: ct));
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[DB Update Error - {(isPermanent ? "Permanent" : "Tenant")}] {ex.Message}");
+                    string sqlUpdate = "UPDATE DorehMali SET UpDate_Database = @ver";
+                    await conn.ExecuteAsync(new CommandDefinition(sqlUpdate, new { ver = C_VERSION_DATABASE }, cancellationToken: ct));
                 }
             }
-
-            // ۳. ثبت تاریخ جدید (دوباره چک میکنیم که ستون حتما ایجاد شده باشد)
-            var colExistsNow = await conn.ExecuteScalarAsync<int>(
-                new CommandDefinition("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('DorehMali') AND name = 'UpDate_Database'", transaction: tx, cancellationToken: ct));
-
-            if (colExistsNow > 0)
-            {
-                string sqlUpdate = isPermanent
-                    ? "UPDATE DorehMali SET UpDate_Database = @ver WHERE DorehMaliID = (SELECT MAX(DorehMaliID) FROM DorehMali)"
-                    : "UPDATE DorehMali SET UpDate_Database = @ver";
-
-                await conn.ExecuteAsync(new CommandDefinition(sqlUpdate, new { ver = C_VERSION_DATABASE }, transaction: tx, cancellationToken: ct));
-            }
-
-            tx.Commit();
-        }
-        catch
-        {
-            tx.Rollback();
-            throw;
+            catch { /* ignore */ }
         }
     }
 
@@ -757,16 +757,27 @@ public static class DatabaseUpdater
             """,
 
             // ============================================================
-            // جدول ArticleStock و روابط آن
+            // جدول ArticleStock و روابط آن (اصلاح قطعی خطای PRIMARY KEY)
             // ============================================================
             """
             IF OBJECT_ID(N'dbo.ArticleStock', N'U') IS NULL
             BEGIN
                 CREATE TABLE [dbo].[ArticleStock] (
                     [ID] [numeric](18, 0) IDENTITY(1,1) NOT NULL,
-                    [ArticleID] [numeric](18, 0) NULL,
+                    [ArticleID] [numeric](18, 0) NOT NULL,
                     [StockTypeID] [numeric](18, 0) NULL
                 );
+            END
+            ELSE
+            BEGIN
+                -- ⭐ اگر جدول از قبل وجود دارد، اول رکوردهای خالی را پاک کن
+                DELETE FROM [dbo].[ArticleStock] WHERE [ArticleID] IS NULL;
+                
+                -- ⭐ سپس ستون را از حالت NULL به NOT NULL تغییر بده تا اجازه ساخت PK داده شود
+                IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.ArticleStock') AND name = 'ArticleID' AND is_nullable = 1)
+                BEGIN
+                    ALTER TABLE [dbo].[ArticleStock] ALTER COLUMN [ArticleID] numeric(18,0) NOT NULL;
+                END
             END;
             """,
 
@@ -779,7 +790,7 @@ public static class DatabaseUpdater
             """,
 
             """
-            -- اضافه کردن PK و FK با چک کردن وجودشان
+            -- اضافه کردن PK
             IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PK_ArticleStock]') AND type in (N'PK'))
             BEGIN
                 ALTER TABLE [dbo].[ArticleStock] ADD CONSTRAINT [PK_ArticleStock] PRIMARY KEY ([ArticleID]);
@@ -787,6 +798,7 @@ public static class DatabaseUpdater
             """,
 
             """
+            -- اضافه کردن FK
             IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[FK_ArticleStock_ArticleNew]') AND type in (N'F'))
             BEGIN
                 ALTER TABLE [dbo].[ArticleStock] ADD CONSTRAINT [FK_ArticleStock_ArticleNew] FOREIGN KEY ([ArticleID]) REFERENCES [dbo].[ArticleNew]([ID]) ON DELETE CASCADE;
@@ -1414,777 +1426,8 @@ public static class DatabaseUpdater
                     );
                 END
             """,
-            // ============================================================
-            // View های دیتابیس Tenant
-            // ============================================================
-            """
-            IF OBJECT_ID(N'dbo.ArticleNew_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ArticleNew_VIEW;
-            IF OBJECT_ID(N'dbo.InventoryTagView', N'V') IS NOT NULL DROP VIEW dbo.InventoryTagView;
-            IF OBJECT_ID(N'dbo.InventoryTagDetailView', N'V') IS NOT NULL DROP VIEW dbo.InventoryTagDetailView;
-            IF OBJECT_ID(N'dbo.InventoryDiffReportView', N'V') IS NOT NULL DROP VIEW dbo.InventoryDiffReportView;
-            IF OBJECT_ID(N'dbo.InventoryHistoryView', N'V') IS NOT NULL DROP VIEW dbo.InventoryHistoryView;
-            IF OBJECT_ID(N'dbo.Article_View', N'V') IS NOT NULL DROP VIEW dbo.Article_View;
-            IF OBJECT_ID(N'dbo.InventoryStageSummaryView', N'V') IS NOT NULL DROP VIEW dbo.InventoryStageSummaryView;
-            IF OBJECT_ID(N'dbo.ChequeBank_View', N'V') IS NOT NULL DROP VIEW dbo.ChequeBank_View;
-            IF OBJECT_ID(N'dbo.ChequeBook_View', N'V') IS NOT NULL DROP VIEW dbo.ChequeBook_View;
-            IF OBJECT_ID(N'dbo.FactorDetail_VIEW', N'V') IS NOT NULL DROP VIEW dbo.FactorDetail_VIEW;
-            IF OBJECT_ID(N'dbo.ConstHesabs_View', N'V') IS NOT NULL DROP VIEW dbo.ConstHesabs_View;
-            IF OBJECT_ID(N'dbo.ChequeBook_Child_View', N'V') IS NOT NULL DROP VIEW dbo.ChequeBook_Child_View;
-            IF OBJECT_ID(N'dbo.ParentSanad_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ParentSanad_VIEW;
-            IF OBJECT_ID(N'dbo.Tafzili1_Report_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Tafzili1_Report_VIEW;
-            IF OBJECT_ID(N'dbo.Tafzili_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Tafzili_VIEW;
-            IF OBJECT_ID(N'dbo.FactorParent_View', N'V') IS NOT NULL DROP VIEW dbo.FactorParent_View;
-            IF OBJECT_ID(N'dbo.VW_SelectHesab', N'V') IS NOT NULL DROP VIEW dbo.VW_SelectHesab;
-            IF OBJECT_ID(N'dbo.Hesab_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Hesab_VIEW;
-            IF OBJECT_ID(N'dbo.Moein_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Moein_VIEW;
-            IF OBJECT_ID(N'dbo.Col_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Col_VIEW;
-            IF OBJECT_ID(N'dbo.Tafzili2_Report_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Tafzili2_Report_VIEW;
-            IF OBJECT_ID(N'dbo.Asset_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Asset_VIEW;
-            IF OBJECT_ID(N'dbo.ArticleLenCode_View', N'V') IS NOT NULL DROP VIEW dbo.ArticleLenCode_View;
-            IF OBJECT_ID(N'dbo.Asset_Export_View', N'V') IS NOT NULL DROP VIEW dbo.Asset_Export_View;
-            IF OBJECT_ID(N'dbo.ArticleGroup_View', N'V') IS NOT NULL DROP VIEW dbo.ArticleGroup_View;
-            IF OBJECT_ID(N'dbo.vw_TalfighSanad', N'V') IS NOT NULL DROP VIEW dbo.vw_TalfighSanad;
-            IF OBJECT_ID(N'dbo.Stock_Factor_Mat_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Stock_Factor_Mat_VIEW;
-            IF OBJECT_ID(N'dbo.Stock_Factor_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Stock_Factor_VIEW;
-            IF OBJECT_ID(N'dbo.Stock_Factor_All_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Stock_Factor_All_VIEW;
-            IF OBJECT_ID(N'dbo.Tafzili_Customer_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Tafzili_Customer_VIEW;
-            IF OBJECT_ID(N'dbo.Vw_ExcelSanad', N'V') IS NOT NULL DROP VIEW dbo.Vw_ExcelSanad;
-            IF OBJECT_ID(N'dbo.vw_CheckExpend2', N'V') IS NOT NULL DROP VIEW dbo.vw_CheckExpend2;
-            IF OBJECT_ID(N'dbo.ServiceDefinition_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ServiceDefinition_VIEW;
-            IF OBJECT_ID(N'dbo.ServiceCase_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ServiceCase_VIEW;
-            IF OBJECT_ID(N'dbo.ServiceCaseDetail_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ServiceCaseDetail_VIEW;
-            IF OBJECT_ID(N'dbo.ServiceCaseCost_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ServiceCaseCost_VIEW;
-            IF OBJECT_ID(N'dbo.ServiceSettlement_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ServiceSettlement_VIEW;
-            IF OBJECT_ID(N'dbo.ServiceCaseFinancial_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ServiceCaseFinancial_VIEW;
-            """,
 
-            """
-            CREATE VIEW dbo.ArticleNew_VIEW AS 
-            SELECT A.ID,A.Code,A.Name,A.ArticleUnitID, U1.Name AS ArticleUnitName,
-            A.ArticleUnitID2,U2.Name AS ArticleUnitName2,
-            A.ArticleUnitID3,U3.Name AS ArticleUnitName3,
-            U1.TabileUnit AS Tabdil1,U2.TabileUnit AS Tabdil2,U3.TabileUnit AS Tabdil3,
-            A.ArticleGroupID,AG.Code AS ArticleGroupCode,AG.Name AS ArticleGroupName,
-            ISNULL(ST.ID,1) AS StockTypeID,ST.Code AS StockTypeCode,ST.Name AS StockTypeName,
-            ST.Kind,ST.For_EST,ST.xIs_RegMinOrderToIn,ST.xIs_RegMaxOrderToOut,ST.xIs_RegNegativKala,
-            ST.xNotCalcPerDiscount,ST.xNotCalcArezeshafzode,ST.xIs_CalcUnit2,ST.xIs_CalcUnit3,
-            A.Code_Col,A.Code_Moein,A.Code_Tafzil,A.Code_Col_Buy,A.Code_Moein_Buy,
-            A.Code_Tafzil_Buy,A.Code_Col_ReBuy,A.Code_Moein_ReBuy, A.Code_Tafzil_ReBuy,
-            A.Code_Col_ReSale,A.Code_Moein_ReSale,A.Code_Tafzil_ReSale,
-            A.Depreciation,A.DepreciationType, dbo.Get_Depreciation_Type(A.DepreciationType) AS DepreciationTypeName,
-            A.AmountFirst, A.CostFirst,A.AmountSale,
-            A.Status,
-            CASE A.Status WHEN 0 THEN N'انباری' WHEN 1 THEN N'اموالی' ELSE N'نامشخص' END AS StatusName,
-            A.MaxCostOrderBy,A.MinCostOrderBy,A.MarketerPercent,
-            A.ArticleCoding,A.CodingStore,A.CodingGroupStore,
-            A.tax_id,A.inAmount1,A.OutAmount1,A.BackAmount1,A.FinalAmount1,
-            A.inVal1,A.OutVal1,A.BackVal1,A.FinalVal1 
-            FROM dbo.ArticleNew A 
-            LEFT JOIN dbo.ArticleGroup AG ON AG.ID = A.ArticleGroupID 
-            LEFT JOIN dbo.ArticleStock AST ON AST.ArticleID = A.ID 
-            LEFT JOIN dbo.StockType ST ON ST.ID = AST.StockTypeID 
-            LEFT JOIN dbo.ArticleUnit U1 ON U1.ID = A.ArticleUnitID 
-            LEFT JOIN dbo.ArticleUnit U2 ON U2.ID = A.ArticleUnitID2 
-            LEFT JOIN dbo.ArticleUnit U3 ON U3.ID = A.ArticleUnitID3;
-            """,
-
-            """
-            CREATE VIEW [dbo].[InventoryTagView] AS 
-            SELECT TH.ID AS TagHeaderID,TH.TagNo,TH.StageNo,ISg.StageName AS StageName,
-            ST.Name AS StockName,ST.Code AS StockCode,ST.ID As StockTypeID,
-            TH.TagDate,TH.TagStatus,
-            CASE TH.TagStatus WHEN 0 THEN N'چاپ شده' WHEN 1 THEN N'در حال شمارش' WHEN 2 THEN N'تکمیل شده' WHEN 3 THEN N'تأیید نهایی' ELSE N'نامشخص' END AS StatusName,
-            TH.LocationCode,TH.CreateUserID,U1.Name AS CreateUserName,
-            TH.CreateDate,TH.ConfirmUserID,U2.Name AS ConfirmUserName,TH.ConfirmDate,
-            ISNULL((SELECT COUNT(*) FROM InventoryTagDetail WHERE TagID = TH.ID), 0) AS TotalItems,
-            ISNULL((SELECT COUNT(*) FROM InventoryTagDetail WHERE TagID = TH.ID AND CountedQty IS NOT NULL), 0) AS CountedItems,
-            ISNULL((SELECT COUNT(*) FROM InventoryTagDetail WHERE TagID = TH.ID AND CountedQty IS NOT NULL AND DiffQty <> 0), 0) AS DiffItems,
-            ISNULL((SELECT SUM(Abs(DiffQty)) FROM InventoryTagDetail WHERE TagID = TH.ID AND DiffQty IS NOT NULL), 0) AS TotalDifference,
-            CASE WHEN ISNULL((SELECT COUNT(*) FROM InventoryTagDetail WHERE TagID = TH.ID), 0) = 0 THEN 0 ELSE (ISNULL((SELECT COUNT(*) FROM InventoryTagDetail 
-            WHERE TagID = TH.ID AND CountedQty IS NOT NULL), 0) * 100) / ISNULL((SELECT COUNT(*) FROM InventoryTagDetail WHERE TagID = TH.ID), 1) END AS ProgressPercent,
-            ISNULL((SELECT STUFF((SELECT ', ' + CAST(SF.SpecialCode AS VARCHAR(20)) FROM Stock_Factor SF WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 
-            ORDER BY SF.SpecialCode FOR XML PATH('')), 1, 2, '')), '') AS SanadNos,
-            CAST(ISNULL((SELECT STUFF((SELECT ', ' + CASE SF.Kind WHEN 0 THEN 'رسید' WHEN 1 THEN 
-             CASE SF.AdjustmentType WHEN 1 THEN 'حواله(کمبود)' WHEN 3 THEN 'حواله(ضایعات)' END END + ':' + CAST(SF.SpecialCode AS VARCHAR(20)) 
-            FROM Stock_Factor SF WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 ORDER BY SF.SpecialCode FOR XML PATH('')), 1, 2, '')), '') AS NVARCHAR(500)) AS SanadFullInfo,
-            ISNULL((SELECT COUNT(*) FROM Stock_Factor SF WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1), 0) AS SanadCount,
-            ISNULL((SELECT COUNT(*) FROM Stock_Factor SF WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 AND SF.Kind = 0), 0) AS ResidCount,
-            ISNULL((SELECT COUNT(*) FROM Stock_Factor SF WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 AND SF.Kind = 1 AND SF.AdjustmentType = 1), 0) AS HavalehCount,
-            ISNULL((SELECT COUNT(*) FROM Stock_Factor SF WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 AND SF.Kind = 1 AND SF.AdjustmentType = 3), 0) AS ScrapCount,
-            ISNULL((SELECT STUFF((SELECT ', ' + CAST(SF.ID AS VARCHAR(20)) FROM Stock_Factor SF 
-             WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 AND SF.Kind = 0 ORDER BY SF.ID FOR XML PATH('')), 1, 2, '')), '') AS ResidSanadNos,
-            ISNULL((SELECT STUFF((SELECT ', ' + CAST(SF.ID AS VARCHAR(20)) FROM Stock_Factor SF 
-             WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 AND SF.Kind = 1 AND SF.AdjustmentType = 1 ORDER BY SF.ID FOR XML PATH('')), 1, 2, '')), '') AS HavalehSanadNos,
-            ISNULL((SELECT STUFF((SELECT ', ' + CAST(SF.ID AS VARCHAR(20)) FROM Stock_Factor SF 
-             WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 AND SF.Kind = 1 AND SF.AdjustmentType = 3 ORDER BY SF.ID FOR XML PATH('')), 1, 2, '')), '') AS ScrapSanadNos,
-            CASE WHEN ISNULL((SELECT COUNT(*) FROM Stock_Factor WHERE InventoryTagID = TH.ID AND IsInventoryAdjustment = 1), 0) = 0 THEN N'بدون سند' ELSE N'دارای سند' END AS SanadStatus 
-            FROM InventoryTagHeader TH 
-            INNER JOIN StockType ST ON ST.ID = TH.StockTypeID 
-            LEFT JOIN Users U1 ON U1.UsersID = TH.CreateUserID 
-            LEFT JOIN Users U2 ON U2.UsersID = TH.ConfirmUserID 
-            LEFT JOIN InventoryStage ISg ON ISg.StockTypeID = TH.StockTypeID AND ISg.StageNo = TH.StageNo AND ISg.IsActive = 1;
-            """,
-
-            """
-            CREATE VIEW [dbo].[InventoryTagDetailView] AS 
-            SELECT TD.ID AS DetailID, TD.TagID,TH.TagNo, TH.StageNo,TH.StockTypeID, ST.Name AS StockName, TD.ArticleID,
-            AN.Code AS ArticleCode, AN.Name AS ArticleName, AN.ArticleCoding, AU.Name AS UnitName, TD.SystemQty,
-            TD.CountedQty, TD.DiffQty,
-            CASE WHEN TD.DiffQty > 0 THEN N'کمبود' WHEN TD.DiffQty < 0 THEN N'اضافه' ELSE N'مشابه' END AS DiffType,
-            ISNULL(ABS(TD.DiffQty), 0) AS AbsDiffQty,
-            TD.ScrapQty,TD.Notes,TD.CounterUserID, U.Name AS CounterUserName,TD.CountDate,TD.CountTime,TH.TagStatus, TH.ConfirmDate 
-            FROM InventoryTagDetail TD 
-            INNER JOIN InventoryTagHeader TH ON TH.ID = TD.TagID 
-            INNER JOIN StockType ST ON ST.ID = TH.StockTypeID 
-            INNER JOIN ArticleNew AN ON AN.ID = TD.ArticleID 
-            INNER JOIN ArticleUnit AU ON AU.ID = AN.ArticleUnitID 
-            LEFT JOIN Users U ON U.UsersID = TD.CounterUserID;
-            """,
-
-            """
-            CREATE VIEW [dbo].[InventoryDiffReportView] AS 
-            SELECT TH.ID AS TagHeaderID,TH.TagNo,TH.StageNo,TH.StockTypeID,ST.Name AS StockName,TH.TagDate,TH.ConfirmDate,TD.ArticleID,
-            AN.Code AS ArticleCode, AN.Name AS ArticleName,AN.ArticleCoding,AU.Name AS UnitName,TD.SystemQty,TD.CountedQty,TD.DiffQty,
-            TD.ScrapQty,ABS(ISNULL(TD.DiffQty, 0)) AS AbsDiffQty, TD.Notes,U1.Name AS CounterUserName,U2.Name AS ConfirmUserName, TH.TagStatus,
-            CASE TH.TagStatus WHEN 0 THEN N'چاپ شده' WHEN 1 THEN N'در حال شمارش' WHEN 2 THEN N'تکمیل شده' WHEN 3 THEN N'تأیید نهایی' ELSE N'نامشخص' END AS StatusTagName,
-            CASE WHEN SystemQty < 0 THEN 'موجودی منفی' WHEN DiffQty > 0 THEN 'اضافه' WHEN DiffQty < 0 THEN 'کمبود' ELSE 'مشابه' END AS QtyStatus 
-            FROM InventoryTagHeader TH 
-            INNER JOIN StockType ST ON ST.ID = TH.StockTypeID 
-            INNER JOIN InventoryTagDetail TD ON TD.TagID = TH.ID 
-            INNER JOIN ArticleNew AN ON AN.ID = TD.ArticleID 
-            INNER JOIN ArticleUnit AU ON AU.ID = AN.ArticleUnitID 
-            LEFT JOIN Users U1 ON U1.UsersID = TD.CounterUserID 
-            LEFT JOIN Users U2 ON U2.UsersID = TH.ConfirmUserID 
-            WHERE TH.TagStatus >= 2 AND ISNULL(TD.DiffQty, 0) <> 0;
-            """,
-
-            """
-            CREATE VIEW [dbo].[InventoryHistoryView] AS 
-            SELECT TH.ID AS TagHeaderID,TH.TagNo,TH.StageNo,ST.Name AS StockName,TH.TagDate AS CreateDate,
-            'ایجاد تگ' AS OperationType, TH.CreateUserID AS UserID, U.Name AS UserName,TH.CreateDate AS OperationDate,
-            NULL AS OperationTime, CAST(TH.TagNo AS nvarchar(50)) + ' - ایجاد تگ برای انبار ' + ST.Name AS Description 
-            FROM InventoryTagHeader TH 
-            INNER JOIN StockType ST ON ST.ID = TH.StockTypeID 
-            LEFT JOIN Users U ON U.UsersID = TH.CreateUserID 
-            UNION ALL 
-            SELECT TD.TagID AS TagHeaderID,TH.TagNo,TH.StageNo,ST.Name AS StockName,TH.TagDate AS CreateDate, 'شمارش کالا' AS OperationType,
-            TD.CounterUserID AS UserID,U.Name AS UserName,TD.CountDate AS OperationDate, TD.CountTime AS OperationTime,
-            'شمارش کالای ' + AN.Name + ' - مقدار: ' + CAST(ISNULL(TD.CountedQty, 0) AS nvarchar(20)) AS Description 
-            FROM InventoryTagDetail TD 
-            INNER JOIN InventoryTagHeader TH ON TH.ID = TD.TagID 
-            INNER JOIN StockType ST ON ST.ID = TH.StockTypeID 
-            INNER JOIN ArticleNew AN ON AN.ID = TD.ArticleID 
-            LEFT JOIN Users U ON U.UsersID = TD.CounterUserID 
-            WHERE TD.CountedQty IS NOT NULL 
-            UNION ALL 
-            SELECT TH.ID AS TagHeaderID,TH.TagNo,TH.StageNo,ST.Name AS StockName,TH.TagDate AS CreateDate,'تأیید تگ' AS OperationType,TH.ConfirmUserID AS UserID,
-            U.Name AS UserName,TH.ConfirmDate AS OperationDate,NULL AS OperationTime, 'تأیید نهایی تگ ' + TH.TagNo AS Description 
-            FROM InventoryTagHeader TH 
-            INNER JOIN StockType ST ON ST.ID = TH.StockTypeID 
-            LEFT JOIN Users U ON U.UsersID = TH.ConfirmUserID 
-            WHERE TH.TagStatus >= 2;
-            """,
-
-            """
-            CREATE VIEW [Article_View] AS 
-            SELECT AN.Name AS ArticleName,AN.Code, AN.ArticleCoding,
-            AN.StockTypeName, AN.ArticleGroupID, AN.ArticleGroupName,
-            AN.ArticleUnitID,AN.ArticleUnitName,
-            A.ID,A.Date_Op,A.Time_Op,A.Code_Op,A.KindArticles,
-            (CASE A.KindArticles WHEN 0 THEN 'مرحله اول' WHEN 1 THEN 'میان دوره' WHEN 2 THEN 'پایان دوره' ELSE 'نامشخص' END) AS KindName,
-            A.ArticleID,A.HasEndedDate,A.FirstExistence,A.Inputed,A.OutPuted, A.Loss1, A.Loss2 ,FinallExistence,
-            A.Number,Parent_Sanad_ID,A.CommandStock,A.Tag 
-            FROM dbo.Articles A LEFT JOIN dbo.ArticleNew_VIEW AN ON A.ArticleID = AN.ID;
-            """,
-
-            """
-            CREATE VIEW [dbo].[InventoryStageSummaryView] AS
-            SELECT  TH.StockTypeID,ST.Name AS StockName,TH.StageNo,TH.TagDate AS StageStartDate, MAX(TH.ConfirmDate) AS StageEndDate,
-            COUNT(DISTINCT TH.ID) AS TotalTags,
-            SUM(CASE WHEN TH.TagStatus = 0 THEN 1 ELSE 0 END) AS PrintedTags,
-            SUM(CASE WHEN TH.TagStatus = 1 THEN 1 ELSE 0 END) AS CountingTags,
-            SUM(CASE WHEN TH.TagStatus = 2 THEN 1 ELSE 0 END) AS CompletedTags,
-            SUM(CASE WHEN TH.TagStatus = 3 THEN 1 ELSE 0 END) AS ConfirmedTags,
-            ISNULL(SUM(TD.SystemQty), 0) AS TotalSystemQty,
-            ISNULL(SUM(TD.CountedQty), 0) AS TotalCountedQty,
-            ISNULL(SUM(TD.DiffQty), 0) AS TotalDiffQty,
-            ISNULL(SUM(ABS(TD.DiffQty)), 0) AS TotalAbsDiffQty,
-            -- درصد اختلاف
-            CASE 
-                WHEN ISNULL(SUM(TD.SystemQty), 0) = 0 THEN 0
-                ELSE (ABS(ISNULL(SUM(TD.DiffQty), 0)) * 100) / ISNULL(SUM(TD.SystemQty), 1)
-            END AS DiffPercent
-            FROM InventoryTagHeader TH
-             INNER JOIN StockType ST ON ST.ID = TH.StockTypeID
-             LEFT JOIN InventoryTagDetail TD ON TD.TagID = TH.ID
-             GROUP BY TH.StockTypeID, ST.Name, TH.StageNo, TH.TagDate;
-            """,
-
-            """
-            CREATE VIEW [dbo].[ChequeBank_View]
-            AS
-            SELECT  CP.ID,CP.BankAccID, CP.CheckSeries, CP.CheckMab,CP.CheckDate,
-            CP.CheckPerson, BA.Shobe, BA.NoHesab,B.Name,cp.Code_Tafzil,tcv.NationalCode 
-            FROM  dbo.CheckPay  CP  
-            LEFT  JOIN dbo.BankAcc BA ON CP.BankAccID = BA.ID 
-            LEFT  JOIN dbo.Bank B ON BA.BankID = B.ID 
-            LEFT JOIN Tafzili_Customer_VIEW TCV ON tcv.Code_Tafzil = cp.Code_Tafzil;
-            """,
-
-            """
-            CREATE VIEW dbo.ChequeBook_View 
-            AS     
-            SELECT   dbo.ChequeBook.ID, dbo.ChequeBook.Code, dbo.ChequeBook.AcountNo, dbo.ChequeBook.BranchName, dbo.ChequeBook.SheetNo, dbo.ChequeBook.Serial1,
-               dbo.ChequeBook.BankID, dbo.Bank.Name AS BankName 
-            FROM  dbo.ChequeBook LEFT OUTER JOIN dbo.Bank ON dbo.ChequeBook.BankID = dbo.Bank.ID;
-            """,
-
-            """
-            CREATE VIEW dbo.FactorDetail_VIEW 
-            AS  
-            SELECT     FD.ID, FD.FactorID, FD.ArticleID, AN.Name AS ArticleName,
-                  AG.Name AS ArticleGroupName, U1.Name AS ArticleUnitName, AN.Code AS ArticleCode,AN.Tax_ID,
-                  Calc.CostItem,
-                  Calc.CostItem - ISNULL(FD.Discount, 0) AS CostTax,
-                  Calc.CostItem - ISNULL(FD.Discount, 0) + ISNULL(FD.Tax, 0) AS FinallCost,
-                  isnull(FD.IncCost,0) as IncCost,ISNULL(FD.TransCost, 0)as TransCost,
-                  FD.ArticleCount, FD.ArticleCount2, FD.ArticleCount3, (isnull(FD.Cost,0)) as Cost, FD.Discount,
-                  FD.PerDiscount, FD.Tax, FPV.NoFactor, FPV.DateIn, FPV.Descript,
-                  FPV.FactorKind, FPV.CodeTafzil, FPV.ID AS FactorParentID, AG.StockTypeID,
-                  ST.Name AS StockName, AN.AmountSale, FPV.Per_Ok, FPV.NoFactor_Per,
-                  FD.StockID, FPV.StockParentFactor, FPV.EconomicCode, FPV.NationalCode,
-                  FPV.PostalCode, FPV.StateName, FPV.CityName1, FPV.CityName2,
-                  FPV.Address, FPV.CashOK, FPV.CashUnOK, FPV.MelliCode,
-                  FPV.Phone, FPV.DateSanad, FPV.CityID, FPV.CityID2,
-                  FPV.CityCode, FPV.CityCode2, FPV.DisKind, FPV.Kind,
-                  FPV.HesabName, FPV.Mobile, FPV.StateID, FPV.StateCode,
-                  U2.Name AS ArticleUnitName2, U1.TabileUnit AS Tabdil1, U2.TabileUnit AS Tabdil2, AN.ArticleUnitID2,
-                  U3.Name AS ArticleUnitName3, U3.TabileUnit AS Tabdil3, AN.ArticleUnitID3,
-                  AN.MarketerPercent AS ArticleMarkerPer, FD.MarketerPercent,FD.MarketerCosts, FPV.MarkerName,
-                  FPV.CodeTaf_Marketer,FPV.TransCost as FPTransCost,
-                  FD.DegreeKala,FD.DropKala,FD.TaxFi,FPV.CarInfo 
-            FROM dbo.FactorDetail FD
-            LEFT JOIN dbo.FactorParent_View FPV ON FD.FactorID = FPV.ID
-            LEFT JOIN dbo.ArticleNew AN ON FD.ArticleID = AN.ID
-            LEFT JOIN dbo.ArticleGroup AG ON AN.ArticleGroupID = AG.ID
-            LEFT JOIN dbo.StockType ST ON AG.StockTypeID = ST.ID
-            LEFT JOIN dbo.ArticleUnit AS U1 ON AN.ArticleUnitID = U1.ID
-            LEFT JOIN dbo.ArticleUnit AS U2 ON AN.ArticleUnitID2 = U2.ID
-            LEFT JOIN dbo.ArticleUnit AS U3 ON AN.ArticleUnitID3 = U3.ID
-            CROSS APPLY (
-               SELECT CAST(ISNULL(FD.ArticleCount, 0) * ISNULL(FD.Cost, 0) AS NUMERIC(18, 0)) AS CostItem
-            ) AS Calc;
-            """,
-
-            """
-            CREATE VIEW dbo.ConstHesabs_View 
-            AS 
-            SELECT   dbo.ConstHesabs.Type, dbo.ConstHesabs.HesabID, dbo.Hesab.Code_Col, dbo.Hesab.Code_Moein 
-            FROM    dbo.ConstHesabs INNER JOIN dbo.Hesab ON dbo.ConstHesabs.HesabID = dbo.Hesab.HesabID;
-            """,
-
-            """
-            CREATE VIEW dbo.ChequeBook_Child_View 
-            AS 
-            SELECT  dbo.ChequeBook.Code, dbo.ChequeBook.AcountNo, dbo.ChequeBook.BranchName, dbo.ChequeBook.SheetNo, dbo.ChequeBook_Child.Serial,
-             dbo.ChequeBook_Child.Cost, dbo.ChequeBook_Child.ReciverName, dbo.ChequeBook_Child.Des, dbo.ChequeBook_Child.ID, dbo.ChequeBook_Child.SanadID,
-             dbo.Sanad.NO_Sanad, dbo.ChequeBook_Child.DateIN, dbo.ParentSanad.Date_IN AS SanadDate, dbo.Bank.Name AS BankName 
-             FROM  dbo.Bank RIGHT OUTER JOIN dbo.ChequeBook INNER JOIN 
-             dbo.ChequeBook_Child ON dbo.ChequeBook.ID = dbo.ChequeBook_Child.ChequeBookID ON dbo.Bank.ID = dbo.ChequeBook.BankID LEFT OUTER JOIN 
-             dbo.ParentSanad INNER JOIN dbo.Sanad ON dbo.ParentSanad.ParentSanadID = dbo.Sanad.ParentSanadCode ON dbo.ChequeBook_Child.SanadID = dbo.Sanad.SanadID;
-            """,
-
-            """
-            CREATE VIEW dbo.ParentSanad_VIEW 
-            AS  
-            SELECT  PS.NO_Sanad, PS.Date_IN, S.DoDate,S.DoOK, S.Mab_Bed, S.Mab_Bes,
-                S.Meghdar, S.OtherSharh, S.Code_Col,S.Code_Moein, S.Code_Tafzil, PS.ParentSanadID,
-                S.SanadID,PS.OtherParentSharh,S.ArticleID, S.ChequeBook_ChildID,S.ChequeBookDate,S.ChequeBook_Receiver,
-                S.RowNum, S.Tafzili2ID, S.Code_Tafzili2,S.tikRow
-            FROM dbo.Sanad AS S
-            INNER JOIN dbo.ParentSanad AS PS ON S.ParentSanadCode = PS.ParentSanadID;
-            """,
-
-            """
-            CREATE VIEW dbo.Tafzili1_Report_VIEW 
-            AS  
-            SELECT dbo.ParentSanad.NO_Sanad, dbo.ParentSanad.Date_IN, dbo.Sanad.Code_Col, dbo.Sanad.Code_Moein, dbo.Sanad.Code_Tafzil, dbo.Sanad.Mab_Bed, 
-            dbo.Sanad.Mab_Bes, dbo.Sanad.OtherSharh, dbo.Sanad.Code_Tafzil1, dbo.Sanad.FactorID, dbo.Sanad.SanadID, dbo.Sanad.FactorNo,
-            TBCol.Name AS NameCol, TBMoein.Name AS NameMoein, tbTaf1.Name AS Name, tbTaf1.Discript, tbTaf1.Address, tbTaf1.Mobile, tbTaf1.Phone,
-            tbTaf1.EconomicCode, tbTaf1.PostalCode, tbTaf1.TafziliGroupCode, tbTaf1.NationalCode, tbTaf1.MelliCode
-            FROM dbo.Sanad LEFT OUTER JOIN
-            dbo.ParentSanad ON dbo.Sanad.ParentSanadCode = dbo.ParentSanad.ParentSanadID LEFT OUTER JOIN
-            dbo.Hesab AS TBCol ON dbo.Sanad.Code_Col = TBCol.Code_Col LEFT OUTER JOIN
-            dbo.Hesab AS TBMoein ON dbo.Sanad.Code_Col = TBMoein.Code_Col AND dbo.Sanad.Code_Moein = TBMoein.Code_Moein LEFT OUTER JOIN
-            dbo.Hesab AS tbTaf1 ON tbTaf1.Code_Col = - 1 AND dbo.Sanad.Code_Tafzil = tbTaf1.Code_Tafzil;
-            """,
-
-            """
-            CREATE VIEW [dbo].[Tafzili_VIEW]
-            AS
-            SELECT     HesabID, Code_Tafzil, Name, JobName, EconomicCode, NationalCode, PostalCode, Address, MelliCode, StateID, CityID, CityID2, Mobile, Phone, Kind, 
-             (CASE Kind WHEN 0 THEN 'عادی' WHEN 1 THEN 'حقیقی' WHEN 2 THEN 'حقوقی شرکت' WHEN 3 THEN 'حقوقی سازمان' WHEN 4 THEN 'بازاریاب' ELSE 'عادی' END) 
-             AS DisKind 
-            FROM         dbo.Hesab
-            WHERE     (Code_Col = - 1);
-            """,
-
-            """
-            CREATE VIEW dbo.FactorParent_View 
-            AS   
-            SELECT  TOP 100 PERCENT  FP.ID,FP.NoFactor,FP.Date_In,FP.Date_In AS DateIn,FP.CodeTafzil,TV.Name AS HesabName,FP.IsCaSh,
-                CASE ISNULL(FP.IsCaSh, 0) WHEN 1 THEN 'نقدی' WHEN 2 THEN 'غیرنقدی'  ELSE '' END AS IsCashName,
-                CASE WHEN ISNULL(FP.IsCaSh, 0) = 1 THEN 1 ELSE 0 END AS CashOK,
-                CASE WHEN ISNULL(FP.IsCaSh, 0) = 2 THEN 1 ELSE 0 END AS CashUnOK,
-                CASE
-                      WHEN FP.FactorKind = 0 THEN N'خرید'
-                      WHEN FP.FactorKind = 1 THEN N'فروش'
-                      WHEN FP.FactorKind = 2 THEN N'برگشت از خرید'
-                      WHEN FP.FactorKind = 3 THEN N'برگشت از فروش'
-                      WHEN FP.FactorKind = 4 THEN N'پیش فاکتور'
-                      ELSE N'نامشخص'
-                END AS FactorKindTitle,
-                FP.FactorKind,FP.Descript,FP.Cost,TV.EconomicCode,TV.NationalCode,TV.PostalCode,ST.Name AS StateName, 
-                C1.Name AS CityName1,C2.Name AS CityName2,TV.Address,TV.Phone,TV.MelliCode, 
-                FP.Parent_Sanad_ID,FP.NoSanad_ID_Marketer,PS.NO_Sanad,PS.Date_IN AS DateSanad,FP.Per_Ok, 
-                FP.NoFactor_Per,FP.TransCost,FP.StockID AS StockParentFactor, C1.ID AS CityID,C2.ID AS CityID2, C1.Code AS CityCode, 
-                C2.Code AS CityCode2, TV.DisKind,TV.Kind,TV.Mobile,TV.StateID,ST.Code AS StateCode,FP.CodeTaf_Marketer, 
-                TM.Name AS MarkerName,PSM.NO_Sanad AS NoSanad_Marketer,PSM.Date_IN AS Date_IN_SanadMarketer,TM.Phone AS MarkerPhon, 
-                TM.Mobile AS MarkerMobile,  FP.CarInfo 
-            FROM dbo.FactorParent AS FP
-            LEFT JOIN dbo.Tafzili_VIEW AS TV ON FP.CodeTafzil = TV.Code_Tafzil
-            LEFT JOIN dbo.City AS C1 ON TV.CityID = C1.ID
-            LEFT JOIN dbo.City AS C2 ON TV.CityID2 = C2.ID
-            LEFT JOIN dbo.State AS ST ON TV.StateID = ST.ID
-            LEFT JOIN dbo.ParentSanad AS PS ON FP.Parent_Sanad_ID = PS.ParentSanadID
-            LEFT JOIN dbo.ParentSanad AS PSM ON FP.NoSanad_ID_Marketer = PSM.ParentSanadID
-            LEFT JOIN dbo.Tafzili_VIEW AS TM ON FP.CodeTaf_Marketer = TM.Code_Tafzil
-            ORDER BY FP.Date_In DESC;
-            """,
-
-            """
-            CREATE View VW_SelectHesab 
-            as
-            Select Substring(isNull(col.Name,''),1,30)+'-'+Substring(isNull(Moein.Name,''),1,30)+'-'+Substring(isNull(Taf.Name,''),1,30) as NameCoding 
-            ,isNull(col.Name,'') as NameCol,isNull(Moein.Name,'') as NameMoein,isNull(Taf.Name,'')as NameTafzil1,isNull(Taf2.Name,'') as NameTafzil2
-            ,S.Code_Col,S.Code_Moein,S.Code_Tafzil,S.Code_Tafzili2
-            ,(Cast(S.Code_Col as varchar)+'-'+Cast(S.Code_Moein as varchar)+'-'+Cast(S.Code_Tafzil as varchar)
-            +'-'+Cast(S.Code_Tafzili2 as varchar)) as HesabCode,Moein.Mahiat as Mahiat
-            from Sanad S
-            Left Join Hesab Col On S.Code_Col = Col.Code_Col and Col.Code_Moein = 0
-            Left Join Hesab Moein On S.Code_Col = Moein.Code_Col And S.Code_Moein = Moein.Code_Moein
-            Left Join Hesab Taf On S.Code_Tafzil = Taf.Code_Tafzil and Taf.Code_Col = -1
-            Left Join Tafzili2 Taf2 On  S.Code_Tafzili2 = Taf2.Code
-            Group by  S.Code_Col,S.Code_Moein,S.Code_Tafzil,S.Code_Tafzili2,Col.Name,Moein.Name,Taf.Name,Taf2.Name,Moein.Mahiat;
-            """,
-
-            """
-            CREATE VIEW dbo.Hesab_VIEW 
-            AS    
-            SELECT     HesabID, Code_Group, Code_Col, Code_Moein, Code_Tafzil, Name, Mahiat, Vaziat, HasTafzili, GroupTypeCode, dbo.GetMahiatName(Mahiat) AS MahiatName,
-             dbo.GetActiveName(Vaziat) AS VaziatName,
-                (SELECT     TOP 1 P.Name FROM  Hesab AS P  WHERE  P.Code_Group = Hesab.Code_Group AND IsNull(P.Code_Col, 0) = 0 AND IsNull(P.Code_Moein, 0) = 0) AS GroupName,
-             IsStock, HasTafzili2 , IsCodeMarkaz, IsCodeVahed, IsCodeProjeh 
-             FROM   dbo.Hesab;
-            """,
-
-            """
-            CREATE VIEW dbo.Moein_VIEW 
-            AS 
-            SELECT DISTINCT Name, Code_Moein, Code_Col 
-            FROM         dbo.Hesab WHERE     (Code_Col > 0) AND (Code_Moein > 0);
-            """,
-
-            """
-            CREATE VIEW dbo.Col_VIEW 
-            AS  
-            SELECT DISTINCT Code_Col, Name 
-            FROM         dbo.Hesab  WHERE     (Code_Col > 0) AND (Code_Moein = 0);
-            """,
-
-            """
-            CREATE VIEW dbo.Tafzili2_Report_VIEW 
-            AS 
-            SELECT  PS.NO_Sanad, PS.Date_IN, S.Code_Col, s.Code_Moein, S.Code_Tafzil, S.Mab_Bed, 
-                  S.Mab_Bes, S.OtherSharh, S.Code_Tafzil1, S.SanadID, T2.Name AS Tafzili2Name, T2.Code AS Tafzili2Code, 
-                  TV.Name AS Tafzili_Name, cv.Name AS Col_Name, mv.Name AS Moein_Name
-            FROM  dbo.Moein_VIEW mv RIGHT OUTER JOIN
-                dbo.Sanad S INNER JOIN
-                dbo.ParentSanad PS ON S.ParentSanadCode = PS.ParentSanadID ON mv.Code_Col = S.Code_Col AND 
-                mv.Code_Moein = S.Code_Moein LEFT OUTER JOIN
-                dbo.Col_VIEW cv ON S.Code_Col = cv.Code_Col LEFT OUTER JOIN
-                dbo.Tafzili_VIEW TV ON S.Code_Tafzil = TV.Code_Tafzil LEFT OUTER JOIN
-                dbo.Tafzili2 T2 ON S.Tafzili2ID = T2.ID;
-            """,
-
-            """
-            CREATE VIEW [dbo].[Asset_VIEW]
-            AS
-            SELECT     dbo.Asset.ArticleID, dbo.Asset.DateIN, dbo.Asset.Cost, dbo.Asset.SanadID, dbo.Asset.Depreciation_Before, dbo.Asset.Depreciation, 
-             dbo.Asset.Cost_Before, dbo.ArticleNew_VIEW.Name, dbo.ArticleNew_VIEW.ArticleGroupName, dbo.ArticleNew_VIEW.Depreciation AS Nerkh,
-             dbo.ArticleNew_VIEW.DepreciationType, dbo.Asset.No_Sanad, dbo.Asset.ID, dbo.Asset.Code, dbo.ArticleNew_VIEW.StockTypeName,
-             dbo.ArticleNew_VIEW.StockTypeCode, dbo.ArticleNew_VIEW.Code AS ArticleCode, dbo.ArticleNew_VIEW.ArticleGroupCode, dbo.ArticleNew_VIEW.Kind,
-             dbo.Asset.GhesmatCode, dbo.Asset.DateTrasfer, dbo.Asset.CodeTrasfer, dbo.Ghesmat.Sharh_G,
-             dbo.Phone.FirstName + ' ' + dbo.Phone.LastName AS NameTrasfer, dbo.ArticleNew_VIEW.ArticleUnitName, dbo.ArticleNew_VIEW.ArticleGroupID,
-             dbo.ArticleNew_VIEW.StockTypeID, dbo.ArticleNew_VIEW.DepreciationTypeName, dbo.ArticleNew_VIEW.For_EST, dbo.ArticleNew_VIEW.Status
-             FROM  dbo.Asset LEFT OUTER JOIN
-            dbo.Ghesmat ON dbo.Asset.GhesmatCode = dbo.Ghesmat.Code_G LEFT OUTER JOIN
-                  dbo.Phone ON dbo.Asset.CodeTrasfer = dbo.Phone.Code LEFT OUTER JOIN
-                  dbo.ArticleNew_VIEW ON dbo.Asset.ArticleID = dbo.ArticleNew_VIEW.ID;
-            """,
-
-            """
-            CREATE VIEW [dbo].[ArticleLenCode_View]
-            AS
-            SELECT    ID, Code,ArticleGroupID ,ArticleGroupCode,StockTypeCode
-            ,(Case len(StockTypeCode) when 1 then '00'+ cast(StockTypeCode AS varchar(3)) 
-            when 2 then '0'+ cast(StockTypeCode AS varchar(3)) else cast(StockTypeCode AS varchar(3)) end) as CodeStore
-            ,(Case len(ArticleGroupCode) when 1 then '00'+ cast(ArticleGroupCode AS varchar(3)) 
-            when 2 then '0'+ cast(ArticleGroupCode AS varchar(3)) else cast(ArticleGroupCode AS varchar(3)) end)AS GroupCode
-            FROM   dbo.ArticleNew_VIEW;
-            """,
-
-            """
-            CREATE VIEW [dbo].[Asset_Export_View] 
-            AS
-            SELECT  dbo.Asset_Export.ID, dbo.Asset_Export.CodeReg, dbo.Asset_Export.DateReg, dbo.Asset_Export.CodeExport, dbo.Asset_Export.DateExport,
-                  dbo.Asset_Export.GhesmatCode, dbo.Asset_Export.ArticleID, dbo.Ghesmat.Code_G, dbo.Ghesmat.Sharh_G,
-                  dbo.Phone.FirstName + ' ' + dbo.Phone.LastName AS NameExport, dbo.Asset_Export.Code, dbo.ArticleNew_VIEW.Name,
-                  dbo.ArticleNew_VIEW.ArticleGroupName, dbo.ArticleNew_VIEW.ArticleUnitID, dbo.ArticleNew_VIEW.ArticleUnitName,
-                  dbo.ArticleNew_VIEW.ArticleGroupID, dbo.ArticleNew_VIEW.StockTypeCode, dbo.ArticleNew_VIEW.StockTypeName, dbo.ArticleNew_VIEW.StockTypeID,
-                  dbo.ArticleNew_VIEW.Kind, dbo.ArticleNew_VIEW.For_EST, dbo.ArticleNew_VIEW.Status, dbo.Asset_VIEW.NameTrasfer
-                  FROM   dbo.Asset_Export LEFT OUTER JOIN
-                  dbo.Phone ON dbo.Asset_Export.CodeExport = dbo.Phone.Code LEFT OUTER JOIN
-                  dbo.ArticleNew_VIEW ON dbo.Asset_Export.ArticleID = dbo.ArticleNew_VIEW.ID LEFT OUTER JOIN
-                  dbo.Ghesmat ON dbo.Asset_Export.GhesmatCode = dbo.Ghesmat.Code_G LEFT OUTER JOIN
-                  dbo.Asset_VIEW ON dbo.Asset_VIEW.ArticleCode = dbo.Asset_Export.Code;
-            """,
-
-            """
-            CREATE VIEW [dbo].[ArticleGroup_View]
-            AS 
-            SELECT  dbo.ArticleGroup.ID, dbo.ArticleGroup.StockTypeID, dbo.ArticleGroup.Code,
-             dbo.ArticleGroup.Name,dbo.ArticleGroup.Degree, dbo.StockType.Name AS StockTypeName,
-             dbo.StockType.Code AS StockTypeCode
-             FROM   dbo.ArticleGroup LEFT OUTER JOIN dbo.StockType ON dbo.ArticleGroup.StockTypeID = dbo.StockType.ID;
-            """,
-
-            """
-            CREATE VIEW [dbo].[vw_TalfighSanad]
-            AS
-            SELECT   ParentSanadID,No_Sanad,RowNum,
-            Date_IN,isnull(Mab_Bed,0) Mab_Bed,isnull(Mab_Bes,0) Mab_Bes, OtherSharh, Code_Col, Code_Moein, Code_Tafzil, OtherParentSharh, ArticleID,
-            ChequeBook_ChildID, ChequeBookDate, ChequeBook_Receiver, Tafzili2ID, Code_Tafzili2,Meghdar
-             FROM   dbo.ParentSanad_VIEW;
-            """,
-
-            """
-            CREATE VIEW [dbo].[Stock_Factor_Mat_VIEW] 
-            AS 
-            SELECT     dbo.Stock_Factor_Mat.ID, dbo.Stock_Factor_Mat.ArticleID, dbo.Stock_Factor_Mat.Val, dbo.ArticleNew.Code AS ArticleCode, 
-                  dbo.ArticleNew.Name AS ArticleName, dbo.ArticleGroup_View.StockTypeName, dbo.ArticleGroup_View.StockTypeCode,
-                  dbo.ArticleGroup_View.Code AS ArticleGroupCode, dbo.ArticleGroup_View.Name AS ArticleGroupName, dbo.Stock_Factor_Mat.StockFacorID,
-                  UnitName1.Name AS ArticleUnit, dbo.ArticleNew.ArticleGroupID, dbo.ArticleGroup_View.StockTypeID, dbo.Stock_Factor_Mat.Cost,
-                  dbo.Stock_Factor_Mat.Val * dbo.Stock_Factor_Mat.Cost AS Amount, dbo.ArticleNew.Code_Col, dbo.ArticleNew.Code_Moein, dbo.ArticleNew.Code_Tafzil,
-                  dbo.ArticleNew.Code_Col_Buy, dbo.ArticleNew.Code_Moein_Buy, dbo.ArticleNew.Code_Tafzil_Buy, dbo.ArticleNew.Code_Col_ReBuy,
-                  dbo.ArticleNew.Code_Moein_ReBuy, dbo.ArticleNew.Code_Tafzil_ReBuy, dbo.ArticleNew.Code_Col_ReSale, dbo.ArticleNew.Code_Moein_ReSale,
-                  dbo.ArticleNew.Code_Tafzil_ReSale, dbo.ArticleNew.Status, dbo.ArticleNew.AmountFirst, dbo.ArticleNew.CostFirst, dbo.ArticleNew.MaxCostOrderBy,
-                  dbo.ArticleNew.MinCostOrderBy, dbo.ArticleNew.AmountSale, UnitName1.TabileUnit AS Tabdil1, UnitName2.Name AS ArticleUnit2,
-                  UnitName2.TabileUnit AS Tabdil2, dbo.ArticleNew.ArticleUnitID2,
-                  UnitName3.TabileUnit AS Tabdil3, dbo.ArticleNew.ArticleUnitID3,UnitName3.Name AS ArticleUnit3
-            FROM   dbo.ArticleUnit AS UnitName1 RIGHT OUTER JOIN
-                  dbo.ArticleNew ON UnitName1.ID = dbo.ArticleNew.ArticleUnitID LEFT OUTER JOIN
-                  dbo.ArticleUnit AS UnitName2 ON UnitName2.ID = dbo.ArticleNew.ArticleUnitID2 LEFT OUTER JOIN
-                  dbo.ArticleUnit AS UnitName3 ON UnitName3.ID = dbo.ArticleNew.ArticleUnitID3 LEFT OUTER JOIN
-                  dbo.ArticleGroup_View ON dbo.ArticleNew.ArticleGroupID = dbo.ArticleGroup_View.ID RIGHT OUTER JOIN
-                  dbo.Stock_Factor_Mat ON dbo.ArticleNew.ID = dbo.Stock_Factor_Mat.ArticleID;
-            """,
-
-            """
-            CREATE VIEW [dbo].[Stock_Factor_VIEW]
-            AS
-            SELECT  SF.ID,SF.Code, SF.Des, SF.Kind, SF.DateIN, SF.StockTypeID, 
-                 ST.Code AS StockTypeCode, ST.Name AS StockTypeName, ST.Kind AS StockTypeKind, SF.FactorID,
-                 SF.FactorCode AS NoFactor, SF.TolidID, SF.TolidCode, SF.SpecialCode,
-                 SF.Parent_Sanad_ID, ST.Code_Tafzil2, ST.Code_Tafzil, ST.Code_Moein, ST.Code_Col,
-                 SF.PerFactor_ID, PS.NO_Sanad,fp.CodeTafzil as CodeCustumer 
-            FROM  dbo.Stock_Factor SF
-             LEFT JOIN dbo.StockType ST ON SF.StockTypeID = ST.ID 
-             LEFT JOIN dbo.ParentSanad PS ON PS.ParentSanadID = SF.Parent_Sanad_ID 
-             left join dbo.FactorParent FP ON fp.ID =  SF.FactorID;
-            """,
-
-            """
-            CREATE VIEW [dbo].[Stock_Factor_All_VIEW]
-            AS
-            SELECT     dbo.Stock_Factor.ID, dbo.Stock_Factor.Code, dbo.Stock_Factor.Des, dbo.Stock_Factor.Kind, dbo.Stock_Factor.DateIN, dbo.Stock_Factor.StockTypeID,
-            dbo.ArticleNew.Code AS ArticleCode, dbo.ArticleNew.Name AS ArticleName, dbo.ArticleNew.ArticleUnitID, dbo.Stock_Factor_Mat.ArticleID,
-            dbo.Stock_Factor_Mat.Val, dbo.Stock_Factor.SpecialCode, dbo.Stock_Factor_Mat.Cost,AmountSale, dbo.ArticleNew.Status,dbo.Stock_Factor.PerFactor_ID
-            ,(dbo.Stock_Factor_Mat.Val * dbo.Stock_Factor_Mat.Cost) as Amount, dbo.Stock_Factor.Parent_Sanad_ID
-            ,dbo.Stock_Factor.FactorID, dbo.Stock_Factor.FactorCode 
-            FROM   dbo.Stock_Factor INNER JOIN
-             dbo.Stock_Factor_Mat ON dbo.Stock_Factor.ID = dbo.Stock_Factor_Mat.StockFacorID LEFT OUTER JOIN
-             dbo.ArticleNew ON dbo.Stock_Factor_Mat.ArticleID = dbo.ArticleNew.ID;
-            """,
-
-            """
-            CREATE VIEW [dbo].[Tafzili_Customer_VIEW]
-            AS
-            SELECT     dbo.Hesab.HesabID, dbo.Hesab.Code_Tafzil, dbo.Hesab.Name, City_1.Name AS CityName1, dbo.State.Name AS StateName,
-                  City_2.Name AS CityName2, dbo.Hesab.Phone, dbo.Hesab.Mobile, dbo.Hesab.Address, dbo.Hesab.PostalCode, dbo.Hesab.EconomicCode,
-                  dbo.Hesab.NationalCode,Kind 
-            FROM   dbo.Hesab LEFT OUTER JOIN
-                  dbo.State ON dbo.Hesab.StateID = dbo.State.ID LEFT OUTER JOIN
-                  dbo.City City_1 ON dbo.Hesab.CityID = City_1.ID LEFT OUTER JOIN
-                  dbo.City City_2 ON dbo.Hesab.CityID2 = City_2.ID
-            WHERE     (dbo.Hesab.Code_Col = - 1) AND (dbo.Hesab.Code_Tafzil > 0);
-            """,
-
-            """
-            CREATE VIEW dbo.Vw_ExcelSanad
-            AS
-            SELECT     dbo.ParentSanad_View.NO_Sanad AS 'شماره سند' 
-                  ,dbo.ParentSanad_View.Date_IN AS 'تاریخ سند حسابداری' 
-                  ,dbo.ParentSanad_View.OtherParentSharh AS 'شرح هدر سند' 
-                  ,dbo.ParentSanad_View.OtherSharh AS 'شرح سند' 
-                  ,dbo.ParentSanad_View.Code_Col AS 'کد کل' 
-                  ,dbo.ParentSanad_View.Code_Moein AS 'کد معین' 
-                  , dbo.ParentSanad_View.Code_Tafzil AS 'کد تفصیل' 
-                  , dbo.ParentSanad_View.Code_Tafzili2 AS 'کد تفصیل2' 
-                  , ViewCol.Name AS 'شرح حساب کل' 
-                  ,ViewMoein.Name AS 'شرح حساب معین' 
-                  ,isnull((SELECT [Name] FROM  dbo.Hesab_VIEW AS VWTafsili
-                        WHERE     VWTafsili.code_col = - 1
-                        AND VWTafsili.Code_Tafzil = ParentSanad_View.Code_Tafzil),'') AS 'شرح حساب تفصیل' 
-                  ,isnull((SELECT isnull([Name],'') FROM  dbo.Tafzili2
-                        WHERE Code = ParentSanad_View.Code_Tafzili2),'') AS 'شرح حساب تفصیل 2' 
-                  ,dbo.ParentSanad_View.Mab_Bed AS 'مبلغ -بدهکار' 
-                  , dbo.ParentSanad_View.Mab_Bes AS 'مبلغ - بستانکار' 
-            FROM         dbo.ParentSanad_View LEFT OUTER JOIN
-                  dbo.Hesab_VIEW ViewCol ON ViewCol.Code_Col = dbo.ParentSanad_View.Code_Col
-                  AND ViewCol.Code_Moein = 0 LEFT OUTER JOIN
-                  dbo.Hesab_VIEW ViewMoein ON ViewMoein.Code_Col = dbo.ParentSanad_View.Code_Col AND
-                  ViewMoein.Code_Moein = dbo.ParentSanad_View.Code_Moein;
-            """,
-
-            """
-            CREATE VIEW [dbo].[vw_CheckExpend2]
-            AS 
-            SELECT     dbo.CheckExpend.ID, dbo.CheckExpend.CheuqeReceiveID, dbo.CheckExpend.Code_OP, dbo.CheckExpend.Time_Op, dbo.CheckExpend.Date_OP,
-                  dbo.CheckExpend.ResidNumber, dbo.CheckExpend.SanadID, dbo.CheckExpend.Code_Col, dbo.CheckExpend.Code_Moein,
-                  dbo.CheckExpend.Code_Tafzil, dbo.CheckExpend.ParentSanadID, dbo.CheckExpend.ResidDes, dbo.CheckExpend.Code_Col_Pay,
-                  dbo.CheckExpend.Code_Moein_Pay, dbo.CheckExpend.Code_Tafzil_Pay, dbo.CheckExpend.ResidDate, dbo.CheckExpend.SanadPersonID,
-                  dbo.CheckRecive.BankID, dbo.CheckRecive.CheckDate, dbo.CheckRecive.CheckSeries, dbo.CheckRecive.BankBrunch, dbo.CheckRecive.CheckMab,
-                  dbo.CheckRecive.NoHesabCheck, dbo.CheckRecive.CheckPerson, dbo.CheckRecive.CheckState, dbo.CheckRecive.IsNaghd,
-                  dbo.CheckRecive.ChequeOK, dbo.CheckRecive.OkDate, dbo.CheckRecive.WasExpended, dbo.CheckRecive.Code_Col_Pay_OK,
-                  dbo.CheckRecive.Code_Moein_Pay_OK, dbo.CheckRecive.Code_Tafzil_Pay_OK, dbo.CheckRecive.Code_Col_OK, dbo.CheckRecive.Code_Moein_OK,
-                  dbo.CheckRecive.Code_Tafzil_OK, dbo.CheckRecive.ParentSanadOKID, dbo.CheckRecive.UnOkDate, dbo.CheckRecive.UnOkSanadIDBed,
-                  dbo.CheckRecive.UnOkSanadIDBes, dbo.CheckRecive.UnOkParentSanadID, dbo.Bank.Name as BankName
-            FROM   dbo.CheckExpend LEFT OUTER JOIN dbo.CheckRecive ON dbo.CheckExpend.CheuqeReceiveID = dbo.CheckRecive.ID 
-            LEFT OUTER JOIN dbo.Bank ON dbo.CheckRecive.BankID = dbo.Bank.ID;
-            """,
-
-            """
-            CREATE VIEW dbo.ServiceDefinition_VIEW
-            AS
-            SELECT
-                SD.ID,SD.Code,SD.ServiceName,SD.Description,SD.ServiceType,
-                CASE SD.ServiceType
-                    WHEN 1 THEN N'مشاوره'
-                    WHEN 2 THEN N'واسطه‌گری'
-                    WHEN 3 THEN N'حق‌العمل‌کاری'
-                    WHEN 4 THEN N'دلالی'
-                    WHEN 5 THEN N'خدمات عمومی'
-                    WHEN 6 THEN N'نمایندگی و پیگیری'
-                    WHEN 7 THEN N'گردشگری'
-                    ELSE N'نامشخص'
-                END AS ServiceTypeTitle,
-                SD.CalculationType,
-                CASE SD.CalculationType
-                    WHEN 1 THEN N'مبلغ ثابت'
-                    WHEN 2 THEN N'تعداد × مبلغ'
-                    WHEN 3 THEN N'درصد از مبلغ پایه'
-                    WHEN 4 THEN N'درصد از مبلغ معامله'
-                    WHEN 5 THEN N'ترکیبی'
-                    ELSE N'نامشخص'
-                END AS CalculationTypeTitle,
-                SD.DefaultPercent,SD.DefaultAmount,SD.HasPrincipal,SD.HasTransactionAmount,
-                SD.HasSettlement,SD.HasDirectCost,SD.ConnectToFactor,SD.IsTaxable,SD.TaxPercent,
-                SD.ArticleID, AN.Code AS ArticleCode,AN.Name AS ArticleName,SD.RevenueCode_Col,
-                SD.RevenueCode_Moein,SD.RevenueCode_Tafzil,RH_Col.Name AS RevenueColName,
-                RH_Moein.Name AS RevenueMoeinName,RevenueTaf.[Name] AS RevenueTafzilName,
-                SD.CostCode_Col,SD.CostCode_Moein,SD.CostCode_Tafzil,CH_Col.Name AS CostColName,
-                CH_Moein.Name AS CostMoeinName,CostTaf.[Name] AS CostTafzilName,SD.PrincipalCode_Col,
-                SD.PrincipalCode_Moein,SD.PrincipalCode_Tafzil,PH_Col.Name AS PrincipalColName,PH_Moein.Name AS PrincipalMoeinName,
-                PrincipalTaf.[Name] AS PrincipalTafzilName,SD.IsActive,
-                SD.CreatorID,SD.CreateDate,SD.CreateTime,SD.UpdaterID,SD.UpdateDate,SD.UpdateTime
-            FROM dbo.ServiceDefinition AS SD
-            LEFT JOIN dbo.ArticleNew AS AN ON AN.ID = SD.ArticleID
-            LEFT JOIN dbo.Hesab AS RH_Col ON RH_Col.Code_Col = SD.RevenueCode_Col AND RH_Col.Code_Moein = 0 AND (RH_Col.Code_Tafzil IS NULL OR RH_Col.Code_Tafzil = 0)
-            LEFT JOIN dbo.Hesab AS RH_Moein ON RH_Moein.Code_Col = SD.RevenueCode_Col AND RH_Moein.Code_Moein = SD.RevenueCode_Moein AND (RH_Moein.Code_Tafzil IS NULL OR RH_Moein.Code_Tafzil = 0)
-            LEFT JOIN dbo.Tafzili_View AS RevenueTaf ON RevenueTaf.Code_Tafzil = SD.RevenueCode_Tafzil
-            LEFT JOIN dbo.Hesab AS CH_Col ON CH_Col.Code_Col = SD.CostCode_Col AND CH_Col.Code_Moein = 0 AND (CH_Col.Code_Tafzil IS NULL OR CH_Col.Code_Tafzil = 0)
-            LEFT JOIN dbo.Hesab AS CH_Moein ON CH_Moein.Code_Col = SD.CostCode_Col AND CH_Moein.Code_Moein = SD.CostCode_Moein AND (CH_Moein.Code_Tafzil IS NULL OR CH_Moein.Code_Tafzil = 0)
-            LEFT JOIN dbo.Tafzili_View AS CostTaf ON CostTaf.Code_Tafzil = SD.CostCode_Tafzil
-            LEFT JOIN dbo.Hesab AS PH_Col ON PH_Col.Code_Col = SD.PrincipalCode_Col AND PH_Col.Code_Moein = 0 AND (PH_Col.Code_Tafzil IS NULL OR PH_Col.Code_Tafzil = 0)
-            LEFT JOIN dbo.Hesab AS PH_Moein ON PH_Moein.Code_Col = SD.PrincipalCode_Col AND PH_Moein.Code_Moein = SD.PrincipalCode_Moein AND (PH_Moein.Code_Tafzil IS NULL OR PH_Moein.Code_Tafzil = 0)
-            LEFT JOIN dbo.Tafzili_View AS PrincipalTaf ON PrincipalTaf.Code_Tafzil = SD.PrincipalCode_Tafzil;
-            """,
-
-            """
-            CREATE VIEW [dbo].[ServiceCase_VIEW]
-            AS
-            SELECT
-                SC.ID, SC.CaseNo,SC.CaseDate,SC.ServiceDefinitionID,SD.ServiceName,
-                SD.ServiceType,SD.CalculationType,SC.Title,SC.Description,SC.ContractNo,
-                SC.ContractDate,SC.CustomerTafziliCode,CustomerTaf.[Name] AS CustomerName,
-                CustomerTaf.JobName AS CustomerJobName,CustomerTaf.Mobile AS CustomerMobile,
-                SC.PrincipalTafziliCode,PrincipalTaf.[Name] AS PrincipalName,PrincipalTaf.JobName AS PrincipalJobName,
-                PrincipalTaf.Mobile AS PrincipalMobile,SC.OtherTafziliCode,OtherTaf.[Name] AS OtherTafziliName,OtherTaf.JobName AS OtherTafziliJobName,
-                SC.BaseAmount,SC.TransactionAmount,SC.CommissionPercent,SC.CommissionAmount,SC.DiscountAmount,
-                SC.TaxPercent,SC.TaxAmount,SC.OtherAmount,SC.TotalAmount,SC.PrincipalAmount,SC.CustomerReceivableAmount, SC.Status,
-                CASE SC.Status
-                    WHEN 1 THEN N'پیش‌نویس'
-                    WHEN 2 THEN N'فعال'
-                    WHEN 3 THEN N'در انتظار تسویه'
-                    WHEN 4 THEN N'تسویه شده'
-                    WHEN 5 THEN N'لغو شده'
-                    ELSE N'نامشخص'
-                END AS StatusTitle,
-                SC.StartDate,SC.EndDate,SC.ResponsibleUserID,SC.IsPosted,SC.CreatorID,
-                SC.CreateDate,SC.CreateTime,SC.UpdaterID,SC.UpdateDate,SC.UpdateTime, SC.ParentSanadID
-            FROM dbo.ServiceCase AS SC
-            INNER JOIN dbo.ServiceDefinition AS SD ON SD.ID = SC.ServiceDefinitionID
-            LEFT JOIN dbo.Tafzili_View AS CustomerTaf ON CustomerTaf.Code_Tafzil = SC.CustomerTafziliCode
-            LEFT JOIN dbo.Tafzili_View AS PrincipalTaf ON PrincipalTaf.Code_Tafzil = SC.PrincipalTafziliCode
-            LEFT JOIN dbo.Tafzili_View AS OtherTaf ON OtherTaf.Code_Tafzil = SC.OtherTafziliCode;
-            """,
-
-            """
-            CREATE VIEW dbo.ServiceCaseDetail_VIEW
-            AS
-            SELECT SCD.ID,SCD.CaseID,SC.CaseNo,SC.CaseDate,SC.Title AS CaseTitle,SCD.RowNo,
-                SCD.OperationDate,SCD.OperationType, 
-                CASE SCD.OperationType
-                    WHEN 1 THEN N'شروع عملیات'
-                    WHEN 2 THEN N'ارائه خدمت'
-                    WHEN 3 THEN N'دریافت مدارک'
-                    WHEN 4 THEN N'پیگیری'
-                    WHEN 5 THEN N'محاسبه کارمزد'
-                    WHEN 6 THEN N'پرداخت'
-                    WHEN 7 THEN N'سایر'
-                    ELSE N'نامشخص'
-                END AS OperationTypeTitle,
-                SCD.Title,SCD.[Description],SCD.ReferenceNo,SCD.Quantity,SCD.UnitAmount,SCD.BaseAmount,
-                SCD.[Percent],SCD.CommissionAmount,SCD.TaxAmount,SCD.OtherAmount,SCD.Status,
-                CASE SCD.[Status]
-                    WHEN 1 THEN N'باز'
-                    WHEN 2 THEN N'انجام شده'
-                    WHEN 3 THEN N'لغو شده'
-                    ELSE N'نامشخص'
-                END AS StatusTitle,
-                SCD.ArticleID,AN.Code AS ArticleCode,AN.Name AS ArticleName,SCD.FactorID,
-                SCD.FactorDetailID,SCD.CreatorID,SCD.CreateDate,SCD.CreateTime
-            FROM dbo.ServiceCaseDetail AS SCD
-            INNER JOIN dbo.ServiceCase AS SC ON SC.ID = SCD.CaseID
-            LEFT JOIN dbo.ArticleNew AS AN ON AN.ID = SCD.ArticleID;
-            """,
-
-            """
-            CREATE VIEW dbo.ServiceCaseCost_VIEW
-            AS
-            SELECT SCC.ID,SCC.CaseID,SC.CaseNo,SC.CaseDate,SC.Title AS CaseTitle,SCC.CostDate,SCC.CostType,
-                CASE SCC.CostType
-                    WHEN 1 THEN N'کارشناس'
-                    WHEN 2 THEN N'مأموریت'
-                    WHEN 3 THEN N'حمل'
-                    WHEN 4 THEN N'تبلیغات'
-                    WHEN 5 THEN N'پیگیری'
-                    WHEN 6 THEN N'ابزار'
-                    WHEN 7 THEN N'سایر'
-                    ELSE N'نامشخص'
-                END AS CostTypeTitle,
-                SCC.Title,SCC.Description,SCC.TafziliCode,SCC.Code_Col,SCC.Code_Moein,SCC.Code_Tafzil,SCC.Amount,
-                SCC.TaxPercent,SCC.TaxAmount,SCC.TotalAmount,SCC.FactorID,SCC.FactorDetailID,SCC.ParentSanadID,SCC.IsPaid 
-            FROM dbo.ServiceCaseCost AS SCC 
-            INNER JOIN dbo.ServiceCase AS SC ON SC.ID = SCC.CaseID;
-            """,
-
-            """
-            CREATE VIEW dbo.ServiceSettlement_VIEW
-            AS
-            SELECT SS.ID,SS.CaseID,SC.CaseNo,SC.CaseDate,SC.Title AS CaseTitle,SS.SettlementDate,SS.SettlementType,
-              CASE SS.SettlementType
-                    WHEN 1 THEN N'دریافت از مشتری'
-                    WHEN 2 THEN N'پرداخت به موکل'
-                    WHEN 3 THEN N'دریافت از طرف معامله'
-                    WHEN 4 THEN N'پرداخت هزینه'
-                    WHEN 5 THEN N'برگشت وجه'
-                    WHEN 6 THEN N'سایر'
-                    ELSE N'نامشخص'
-                END AS SettlementTypeTitle,
-               SS.TafziliCode,TV.Name AS TafziliName,TV.JobName AS TafziliJobName,SS.Amount,SS.PaymentMethod,
-                CASE SS.PaymentMethod
-                    WHEN 1 THEN N'نقدی'
-                    WHEN 2 THEN N'کارتخوان'
-                    WHEN 3 THEN N'بانک'
-                    WHEN 4 THEN N'چک'
-                    WHEN 5 THEN N'حواله'
-                    WHEN 6 THEN N'سایر'
-                    ELSE N'نامشخص'
-                END AS PaymentMethodTitle,
-                SS.ReferenceNo,SS.Description,SS.FactorID,SS.ParentSanadID,SS.IsConfirmed,SS.CreatorID,
-                SS.CreateDate,SS.CreateTime,SS.ConfirmerID,SS.ConfirmDate,SS.ConfirmTime
-            FROM dbo.ServiceSettlement AS SS
-            INNER JOIN dbo.ServiceCase AS SC ON SC.ID = SS.CaseID
-            LEFT JOIN dbo.Tafzili_VIEW AS TV ON TV.Code_Tafzil = SS.TafziliCode;
-            """,
-
-            """
-            CREATE VIEW dbo.ServiceCaseFinancial_VIEW
-            AS
-            SELECT SC.ID AS CaseID,SC.CaseNo,SC.CaseDate,SC.Title AS CaseTitle,SC.ServiceDefinitionID,
-                SD.ServiceName,SC.CustomerTafziliCode,CustomerTaf.Name AS CustomerName,SC.PrincipalTafziliCode,
-                PrincipalTaf.Name AS PrincipalName,SC.BaseAmount,SC.TransactionAmount,SC.CommissionPercent,
-                SC.CommissionAmount,SC.DiscountAmount,SC.TaxAmount,SC.OtherAmount,SC.TotalAmount,SC.PrincipalAmount,SC.CustomerReceivableAmount,
-                ISNULL(Costs.TotalCost, 0) AS TotalCost, ISNULL(Settlements.TotalReceived, 0) AS TotalReceived,
-                ISNULL(Settlements.TotalPaidToPrincipal, 0) AS TotalPaidToPrincipal,
-                ISNULL(Settlements.TotalOtherPayment, 0) AS TotalOtherPayment,
-                ISNULL(Settlements.TotalReceived, 0)
-                - ISNULL(Settlements.TotalPaidToPrincipal, 0)
-                - ISNULL(Settlements.TotalOtherPayment, 0) AS CashBalance,
-                SC.CommissionAmount- ISNULL(Costs.TotalCost, 0) AS GrossProfit,
-                SC.CustomerReceivableAmount - ISNULL(Settlements.TotalReceived, 0) AS ReceivableBalance,
-                SC.PrincipalAmount
-                - ISNULL(Settlements.TotalPaidToPrincipal, 0) AS PrincipalBalance,SC.Status,
-                CASE SC.Status
-                    WHEN 1 THEN N'پیش‌نویس'
-                    WHEN 2 THEN N'فعال'
-                    WHEN 3 THEN N'در انتظار تسویه'
-                    WHEN 4 THEN N'تسویه شده'
-                    WHEN 5 THEN N'لغو شده'
-                    ELSE N'نامشخص'
-                END AS StatusTitle
-            FROM dbo.ServiceCase AS SC
-            INNER JOIN dbo.ServiceDefinition AS SD ON SD.ID = SC.ServiceDefinitionID
-            LEFT JOIN dbo.Tafzili_View AS CustomerTaf ON CustomerTaf.Code_Tafzil = SC.CustomerTafziliCode
-            LEFT JOIN dbo.Tafzili_View AS PrincipalTaf ON PrincipalTaf.Code_Tafzil = SC.PrincipalTafziliCode
-            OUTER APPLY
-            (SELECT SUM(SCC.TotalAmount) AS TotalCost
-                FROM dbo.ServiceCaseCost AS SCC
-                WHERE SCC.CaseID = SC.ID) AS Costs
-            OUTER APPLY
-            (SELECT SUM(CASE WHEN SS.SettlementType IN (1, 3) AND SS.IsConfirmed = 1
-                            THEN SS.Amount
-                            ELSE 0  END) AS TotalReceived,
-                    SUM(CASE WHEN SS.SettlementType = 2 AND SS.IsConfirmed = 1 THEN SS.Amount ELSE 0  END ) AS TotalPaidToPrincipal,
-                    SUM(CASE WHEN SS.SettlementType IN (4, 5, 6) AND SS.IsConfirmed = 1
-                            THEN SS.Amount ELSE 0 END ) AS TotalOtherPayment
-               FROM dbo.ServiceSettlement AS SS
-                WHERE SS.CaseID = SC.ID
-            ) AS Settlements;
-            """,
-            // ============================================================
+    // ============================================================
             // Functions — بخش اول (توابع پایه)
             // ============================================================
             """
@@ -2203,6 +1446,15 @@ public static class DatabaseUpdater
             IF OBJECT_ID(N'dbo.fn_GetArticleCost', N'FN') IS NOT NULL DROP FUNCTION [dbo].[fn_GetArticleCost];
             IF OBJECT_ID(N'dbo.Get_Depreciation_Type', N'FN') IS NOT NULL DROP FUNCTION [dbo].[Get_Depreciation_Type];
             IF OBJECT_ID(N'dbo.fn_GetNTSW_Data', N'IF') IS NOT NULL DROP FUNCTION [dbo].[fn_GetNTSW_Data];
+            """,
+           """
+            CREATE FUNCTION [dbo].[Get_Depreciation_Type] (@Kind int)
+            RETURNS varchar(30) AS BEGIN
+                Declare @Temp varchar(30)
+                set @Temp = N'درصدی'
+                if IsNull(@Kind,0) = 0 set @Temp = N'مستقیم'
+                return(@Temp)
+            END;
             """,
 
             """
@@ -2388,6 +1640,773 @@ public static class DatabaseUpdater
                 return(IsNull(@aTemp, 0))
             END;
             """,
+            // ============================================================
+            // View های دیتابیس Tenant
+            // ============================================================
+            """
+            IF OBJECT_ID(N'dbo.ArticleNew_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ArticleNew_VIEW;
+            IF OBJECT_ID(N'dbo.InventoryTagView', N'V') IS NOT NULL DROP VIEW dbo.InventoryTagView;
+            IF OBJECT_ID(N'dbo.InventoryTagDetailView', N'V') IS NOT NULL DROP VIEW dbo.InventoryTagDetailView;
+            IF OBJECT_ID(N'dbo.InventoryDiffReportView', N'V') IS NOT NULL DROP VIEW dbo.InventoryDiffReportView;
+            IF OBJECT_ID(N'dbo.InventoryHistoryView', N'V') IS NOT NULL DROP VIEW dbo.InventoryHistoryView;
+            IF OBJECT_ID(N'dbo.Article_View', N'V') IS NOT NULL DROP VIEW dbo.Article_View;
+            IF OBJECT_ID(N'dbo.InventoryStageSummaryView', N'V') IS NOT NULL DROP VIEW dbo.InventoryStageSummaryView;
+            IF OBJECT_ID(N'dbo.ChequeBank_View', N'V') IS NOT NULL DROP VIEW dbo.ChequeBank_View;
+            IF OBJECT_ID(N'dbo.ChequeBook_View', N'V') IS NOT NULL DROP VIEW dbo.ChequeBook_View;
+            IF OBJECT_ID(N'dbo.FactorDetail_VIEW', N'V') IS NOT NULL DROP VIEW dbo.FactorDetail_VIEW;
+            IF OBJECT_ID(N'dbo.ConstHesabs_View', N'V') IS NOT NULL DROP VIEW dbo.ConstHesabs_View;
+            IF OBJECT_ID(N'dbo.ChequeBook_Child_View', N'V') IS NOT NULL DROP VIEW dbo.ChequeBook_Child_View;
+            IF OBJECT_ID(N'dbo.ParentSanad_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ParentSanad_VIEW;
+            IF OBJECT_ID(N'dbo.Tafzili1_Report_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Tafzili1_Report_VIEW;
+            IF OBJECT_ID(N'dbo.Tafzili_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Tafzili_VIEW;
+            IF OBJECT_ID(N'dbo.FactorParent_View', N'V') IS NOT NULL DROP VIEW dbo.FactorParent_View;
+            IF OBJECT_ID(N'dbo.VW_SelectHesab', N'V') IS NOT NULL DROP VIEW dbo.VW_SelectHesab;
+            IF OBJECT_ID(N'dbo.Hesab_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Hesab_VIEW;
+            IF OBJECT_ID(N'dbo.Moein_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Moein_VIEW;
+            IF OBJECT_ID(N'dbo.Col_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Col_VIEW;
+            IF OBJECT_ID(N'dbo.Tafzili2_Report_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Tafzili2_Report_VIEW;
+            IF OBJECT_ID(N'dbo.Asset_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Asset_VIEW;
+            IF OBJECT_ID(N'dbo.ArticleLenCode_View', N'V') IS NOT NULL DROP VIEW dbo.ArticleLenCode_View;
+            IF OBJECT_ID(N'dbo.Asset_Export_View', N'V') IS NOT NULL DROP VIEW dbo.Asset_Export_View;
+            IF OBJECT_ID(N'dbo.ArticleGroup_View', N'V') IS NOT NULL DROP VIEW dbo.ArticleGroup_View;
+            IF OBJECT_ID(N'dbo.vw_TalfighSanad', N'V') IS NOT NULL DROP VIEW dbo.vw_TalfighSanad;
+            IF OBJECT_ID(N'dbo.Stock_Factor_Mat_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Stock_Factor_Mat_VIEW;
+            IF OBJECT_ID(N'dbo.Stock_Factor_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Stock_Factor_VIEW;
+            IF OBJECT_ID(N'dbo.Stock_Factor_All_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Stock_Factor_All_VIEW;
+            IF OBJECT_ID(N'dbo.Tafzili_Customer_VIEW', N'V') IS NOT NULL DROP VIEW dbo.Tafzili_Customer_VIEW;
+            IF OBJECT_ID(N'dbo.Vw_ExcelSanad', N'V') IS NOT NULL DROP VIEW dbo.Vw_ExcelSanad;
+            IF OBJECT_ID(N'dbo.vw_CheckExpend2', N'V') IS NOT NULL DROP VIEW dbo.vw_CheckExpend2;
+            IF OBJECT_ID(N'dbo.ServiceDefinition_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ServiceDefinition_VIEW;
+            IF OBJECT_ID(N'dbo.ServiceCase_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ServiceCase_VIEW;
+            IF OBJECT_ID(N'dbo.ServiceCaseDetail_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ServiceCaseDetail_VIEW;
+            IF OBJECT_ID(N'dbo.ServiceCaseCost_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ServiceCaseCost_VIEW;
+            IF OBJECT_ID(N'dbo.ServiceSettlement_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ServiceSettlement_VIEW;
+            IF OBJECT_ID(N'dbo.ServiceCaseFinancial_VIEW', N'V') IS NOT NULL DROP VIEW dbo.ServiceCaseFinancial_VIEW;
+            """,
+            """
+            CREATE VIEW dbo.Hesab_VIEW 
+            AS    
+            SELECT     HesabID, Code_Group, Code_Col, Code_Moein, Code_Tafzil, Name, Mahiat, Vaziat, HasTafzili, GroupTypeCode, dbo.GetMahiatName(Mahiat) AS MahiatName,
+             dbo.GetActiveName(Vaziat) AS VaziatName,
+                (SELECT     TOP 1 P.Name FROM  Hesab AS P  WHERE  P.Code_Group = Hesab.Code_Group AND IsNull(P.Code_Col, 0) = 0 AND IsNull(P.Code_Moein, 0) = 0) AS GroupName,
+             IsStock, HasTafzili2 , IsCodeMarkaz, IsCodeVahed, IsCodeProjeh 
+             FROM   dbo.Hesab;
+            """,
+            """
+            CREATE VIEW dbo.Col_VIEW 
+            AS  
+            SELECT DISTINCT Code_Col, Name 
+            FROM         dbo.Hesab  WHERE     (Code_Col > 0) AND (Code_Moein = 0);
+            """,
+            """
+            CREATE VIEW dbo.Moein_VIEW 
+            AS 
+            SELECT DISTINCT Name, Code_Moein, Code_Col 
+            FROM         dbo.Hesab WHERE     (Code_Col > 0) AND (Code_Moein > 0);
+            """,
+            """
+            CREATE VIEW [dbo].[Tafzili_VIEW]
+            AS
+            SELECT     HesabID, Code_Tafzil, Name, JobName, EconomicCode, NationalCode, PostalCode, Address, MelliCode, StateID, CityID, CityID2, Mobile, Phone, Kind, 
+             (CASE Kind WHEN 0 THEN 'عادی' WHEN 1 THEN 'حقیقی' WHEN 2 THEN 'حقوقی شرکت' WHEN 3 THEN 'حقوقی سازمان' WHEN 4 THEN 'بازاریاب' ELSE 'عادی' END) 
+             AS DisKind 
+            FROM         dbo.Hesab
+            WHERE     (Code_Col = - 1);
+            """,
+
+           """
+            CREATE VIEW [dbo].[Tafzili_Customer_VIEW]
+            AS
+            SELECT     dbo.Hesab.HesabID, dbo.Hesab.Code_Tafzil, dbo.Hesab.Name, City_1.Name AS CityName1, dbo.State.Name AS StateName,
+                  City_2.Name AS CityName2, dbo.Hesab.Phone, dbo.Hesab.Mobile, dbo.Hesab.Address, dbo.Hesab.PostalCode, dbo.Hesab.EconomicCode,
+                  dbo.Hesab.NationalCode,Kind 
+            FROM   dbo.Hesab LEFT OUTER JOIN
+                  dbo.State ON dbo.Hesab.StateID = dbo.State.ID LEFT OUTER JOIN
+                  dbo.City City_1 ON dbo.Hesab.CityID = City_1.ID LEFT OUTER JOIN
+                  dbo.City City_2 ON dbo.Hesab.CityID2 = City_2.ID
+            WHERE     (dbo.Hesab.Code_Col = - 1) AND (dbo.Hesab.Code_Tafzil > 0);
+            """,
+
+            """
+            CREATE VIEW dbo.Tafzili2_Report_VIEW 
+            AS 
+            SELECT  PS.NO_Sanad, PS.Date_IN, S.Code_Col, s.Code_Moein, S.Code_Tafzil, S.Mab_Bed, 
+                  S.Mab_Bes, S.OtherSharh, S.Code_Tafzil1, S.SanadID, T2.Name AS Tafzili2Name, T2.Code AS Tafzili2Code, 
+                  TV.Name AS Tafzili_Name, cv.Name AS Col_Name, mv.Name AS Moein_Name
+            FROM  dbo.Moein_VIEW mv RIGHT OUTER JOIN
+                dbo.Sanad S INNER JOIN
+                dbo.ParentSanad PS ON S.ParentSanadCode = PS.ParentSanadID ON mv.Code_Col = S.Code_Col AND 
+                mv.Code_Moein = S.Code_Moein LEFT OUTER JOIN
+                dbo.Col_VIEW cv ON S.Code_Col = cv.Code_Col LEFT OUTER JOIN
+                dbo.Tafzili_VIEW TV ON S.Code_Tafzil = TV.Code_Tafzil LEFT OUTER JOIN
+                dbo.Tafzili2 T2 ON S.Tafzili2ID = T2.ID;
+            """,
+            """
+            CREATE VIEW dbo.ParentSanad_VIEW 
+            AS  
+            SELECT  PS.NO_Sanad, PS.Date_IN, S.DoDate,S.DoOK, S.Mab_Bed, S.Mab_Bes,
+                S.Meghdar, S.OtherSharh, S.Code_Col,S.Code_Moein, S.Code_Tafzil, PS.ParentSanadID,
+                S.SanadID,PS.OtherParentSharh,S.ArticleID, S.ChequeBook_ChildID,S.ChequeBookDate,S.ChequeBook_Receiver,
+                S.RowNum, S.Tafzili2ID, S.Code_Tafzili2,S.tikRow
+            FROM dbo.Sanad AS S
+            INNER JOIN dbo.ParentSanad AS PS ON S.ParentSanadCode = PS.ParentSanadID;
+            """,
+ 
+
+  
+            """
+            CREATE VIEW [dbo].[ArticleGroup_View]
+            AS 
+            SELECT  dbo.ArticleGroup.ID, dbo.ArticleGroup.StockTypeID, dbo.ArticleGroup.Code,
+             dbo.ArticleGroup.Name,dbo.ArticleGroup.Degree, dbo.StockType.Name AS StockTypeName,
+             dbo.StockType.Code AS StockTypeCode
+             FROM   dbo.ArticleGroup LEFT OUTER JOIN dbo.StockType ON dbo.ArticleGroup.StockTypeID = dbo.StockType.ID;
+            """,
+            """
+            CREATE VIEW dbo.ChequeBook_View 
+            AS     
+            SELECT   dbo.ChequeBook.ID, dbo.ChequeBook.Code, dbo.ChequeBook.AcountNo, dbo.ChequeBook.BranchName, dbo.ChequeBook.SheetNo, dbo.ChequeBook.Serial1,
+               dbo.ChequeBook.BankID, dbo.Bank.Name AS BankName 
+            FROM  dbo.ChequeBook LEFT OUTER JOIN dbo.Bank ON dbo.ChequeBook.BankID = dbo.Bank.ID;
+            """,
+           """
+            CREATE VIEW [dbo].[ChequeBank_View]
+            AS
+            SELECT  CP.ID,CP.BankAccID, CP.CheckSeries, CP.CheckMab,CP.CheckDate,
+            CP.CheckPerson, BA.Shobe, BA.NoHesab,B.Name,cp.Code_Tafzil,tcv.NationalCode 
+            FROM  dbo.CheckPay  CP  
+            LEFT  JOIN dbo.BankAcc BA ON CP.BankAccID = BA.ID 
+            LEFT  JOIN dbo.Bank B ON BA.BankID = B.ID 
+            LEFT JOIN Tafzili_Customer_VIEW TCV ON tcv.Code_Tafzil = cp.Code_Tafzil;
+            """,
+
+            """
+            CREATE VIEW dbo.ConstHesabs_View 
+            AS 
+            SELECT dbo.ConstHesabs.Type, dbo.ConstHesabs.HesabID, dbo.Hesab.Code_Col, dbo.Hesab.Code_Moein 
+            FROM    dbo.ConstHesabs INNER JOIN dbo.Hesab ON dbo.ConstHesabs.HesabID = dbo.Hesab.HesabID;
+            """,
+
+            """
+            CREATE VIEW dbo.ChequeBook_Child_View 
+            AS 
+            SELECT  dbo.ChequeBook.Code, dbo.ChequeBook.AcountNo, dbo.ChequeBook.BranchName, dbo.ChequeBook.SheetNo, dbo.ChequeBook_Child.Serial,
+             dbo.ChequeBook_Child.Cost, dbo.ChequeBook_Child.ReciverName, dbo.ChequeBook_Child.Des, dbo.ChequeBook_Child.ID, dbo.ChequeBook_Child.SanadID,
+             dbo.Sanad.NO_Sanad, dbo.ChequeBook_Child.DateIN, dbo.ParentSanad.Date_IN AS SanadDate, dbo.Bank.Name AS BankName 
+             FROM  dbo.Bank RIGHT OUTER JOIN dbo.ChequeBook INNER JOIN 
+             dbo.ChequeBook_Child ON dbo.ChequeBook.ID = dbo.ChequeBook_Child.ChequeBookID ON dbo.Bank.ID = dbo.ChequeBook.BankID LEFT OUTER JOIN 
+             dbo.ParentSanad 
+                INNER JOIN dbo.Sanad ON dbo.ParentSanad.ParentSanadID = dbo.Sanad.ParentSanadCode
+                ON dbo.ChequeBook_Child.SanadID = dbo.Sanad.SanadID;
+            """,
+
+            //--------------------
+            //سطح بدون نیاز
+            //-------------------
+                      """
+            CREATE VIEW dbo.FactorParent_View 
+            AS   
+            SELECT  TOP 100 PERCENT  FP.ID,FP.NoFactor,FP.Date_In,FP.Date_In AS DateIn,FP.CodeTafzil,TV.Name AS HesabName,FP.IsCaSh,
+                CASE ISNULL(FP.IsCaSh, 0) WHEN 1 THEN 'نقدی' WHEN 2 THEN 'غیرنقدی'  ELSE '' END AS IsCashName,
+                CASE WHEN ISNULL(FP.IsCaSh, 0) = 1 THEN 1 ELSE 0 END AS CashOK,
+                CASE WHEN ISNULL(FP.IsCaSh, 0) = 2 THEN 1 ELSE 0 END AS CashUnOK,
+                CASE
+                      WHEN FP.FactorKind = 0 THEN N'خرید'
+                      WHEN FP.FactorKind = 1 THEN N'فروش'
+                      WHEN FP.FactorKind = 2 THEN N'برگشت از خرید'
+                      WHEN FP.FactorKind = 3 THEN N'برگشت از فروش'
+                      WHEN FP.FactorKind = 4 THEN N'پیش فاکتور'
+                      ELSE N'نامشخص'
+                END AS FactorKindTitle,
+                FP.FactorKind,FP.Descript,FP.Cost,TV.EconomicCode,TV.NationalCode,TV.PostalCode,ST.Name AS StateName, 
+                C1.Name AS CityName1,C2.Name AS CityName2,TV.Address,TV.Phone,TV.MelliCode, 
+                FP.Parent_Sanad_ID,FP.NoSanad_ID_Marketer,PS.NO_Sanad,PS.Date_IN AS DateSanad,FP.Per_Ok, 
+                FP.NoFactor_Per,FP.TransCost,FP.StockID AS StockParentFactor, C1.ID AS CityID,C2.ID AS CityID2, C1.Code AS CityCode, 
+                C2.Code AS CityCode2, TV.DisKind,TV.Kind,TV.Mobile,TV.StateID,ST.Code AS StateCode,FP.CodeTaf_Marketer, 
+                TM.Name AS MarkerName,PSM.NO_Sanad AS NoSanad_Marketer,PSM.Date_IN AS Date_IN_SanadMarketer,TM.Phone AS MarkerPhon, 
+                TM.Mobile AS MarkerMobile,  FP.CarInfo 
+            FROM dbo.FactorParent AS FP
+            LEFT JOIN dbo.Tafzili_VIEW AS TV ON FP.CodeTafzil = TV.Code_Tafzil
+            LEFT JOIN dbo.City AS C1 ON TV.CityID = C1.ID
+            LEFT JOIN dbo.City AS C2 ON TV.CityID2 = C2.ID
+            LEFT JOIN dbo.State AS ST ON TV.StateID = ST.ID
+            LEFT JOIN dbo.ParentSanad AS PS ON FP.Parent_Sanad_ID = PS.ParentSanadID
+            LEFT JOIN dbo.ParentSanad AS PSM ON FP.NoSanad_ID_Marketer = PSM.ParentSanadID
+            LEFT JOIN dbo.Tafzili_VIEW AS TM ON FP.CodeTaf_Marketer = TM.Code_Tafzil
+            ORDER BY FP.Date_In DESC;
+            """,
+            """
+            CREATE VIEW dbo.ArticleNew_VIEW AS 
+            SELECT A.ID,A.Code,A.Name,A.ArticleUnitID, U1.Name AS ArticleUnitName,
+            A.ArticleUnitID2,U2.Name AS ArticleUnitName2,
+            A.ArticleUnitID3,U3.Name AS ArticleUnitName3,
+            U1.TabileUnit AS Tabdil1,U2.TabileUnit AS Tabdil2,U3.TabileUnit AS Tabdil3,
+            A.ArticleGroupID,AG.Code AS ArticleGroupCode,AG.Name AS ArticleGroupName,
+            ISNULL(ST.ID,1) AS StockTypeID,ST.Code AS StockTypeCode,ST.Name AS StockTypeName,
+            ST.Kind,ST.For_EST,ST.xIs_RegMinOrderToIn,ST.xIs_RegMaxOrderToOut,ST.xIs_RegNegativKala,
+            ST.xNotCalcPerDiscount,ST.xNotCalcArezeshafzode,ST.xIs_CalcUnit2,ST.xIs_CalcUnit3,
+            A.Code_Col,A.Code_Moein,A.Code_Tafzil,A.Code_Col_Buy,A.Code_Moein_Buy,
+            A.Code_Tafzil_Buy,A.Code_Col_ReBuy,A.Code_Moein_ReBuy, A.Code_Tafzil_ReBuy,
+            A.Code_Col_ReSale,A.Code_Moein_ReSale,A.Code_Tafzil_ReSale,
+            A.Depreciation,A.DepreciationType, dbo.Get_Depreciation_Type(A.DepreciationType) AS DepreciationTypeName,
+            A.AmountFirst, A.CostFirst,A.AmountSale,
+            A.Status,
+            CASE A.Status WHEN 0 THEN N'انباری' WHEN 1 THEN N'اموالی' ELSE N'نامشخص' END AS StatusName,
+            A.MaxCostOrderBy,A.MinCostOrderBy,A.MarketerPercent,
+            A.ArticleCoding,A.CodingStore,A.CodingGroupStore,
+            A.tax_id,A.inAmount1,A.OutAmount1,A.BackAmount1,A.FinalAmount1,
+            A.inVal1,A.OutVal1,A.BackVal1,A.FinalVal1 
+            FROM dbo.ArticleNew A 
+            LEFT JOIN dbo.ArticleGroup AG ON AG.ID = A.ArticleGroupID 
+            LEFT JOIN dbo.ArticleStock AST ON AST.ArticleID = A.ID 
+            LEFT JOIN dbo.StockType ST ON ST.ID = AST.StockTypeID 
+            LEFT JOIN dbo.ArticleUnit U1 ON U1.ID = A.ArticleUnitID 
+            LEFT JOIN dbo.ArticleUnit U2 ON U2.ID = A.ArticleUnitID2 
+            LEFT JOIN dbo.ArticleUnit U3 ON U3.ID = A.ArticleUnitID3;
+            """,
+            """
+            CREATE VIEW dbo.Tafzili1_Report_VIEW 
+            AS  
+            SELECT dbo.ParentSanad.NO_Sanad, dbo.ParentSanad.Date_IN, dbo.Sanad.Code_Col, dbo.Sanad.Code_Moein, dbo.Sanad.Code_Tafzil, dbo.Sanad.Mab_Bed, 
+            dbo.Sanad.Mab_Bes, dbo.Sanad.OtherSharh, dbo.Sanad.Code_Tafzil1, dbo.Sanad.FactorID, dbo.Sanad.SanadID, dbo.Sanad.FactorNo,
+            TBCol.Name AS NameCol, TBMoein.Name AS NameMoein, tbTaf1.Name AS Name, tbTaf1.Discript, tbTaf1.Address, tbTaf1.Mobile, tbTaf1.Phone,
+            tbTaf1.EconomicCode, tbTaf1.PostalCode, tbTaf1.TafziliGroupCode, tbTaf1.NationalCode, tbTaf1.MelliCode
+            FROM dbo.Sanad LEFT OUTER JOIN
+            dbo.ParentSanad ON dbo.Sanad.ParentSanadCode = dbo.ParentSanad.ParentSanadID LEFT OUTER JOIN
+            dbo.Hesab AS TBCol ON dbo.Sanad.Code_Col = TBCol.Code_Col LEFT OUTER JOIN
+            dbo.Hesab AS TBMoein ON dbo.Sanad.Code_Col = TBMoein.Code_Col AND dbo.Sanad.Code_Moein = TBMoein.Code_Moein LEFT OUTER JOIN
+            dbo.Hesab AS tbTaf1 ON tbTaf1.Code_Col = - 1 AND dbo.Sanad.Code_Tafzil = tbTaf1.Code_Tafzil;
+            """,
+            """
+            CREATE View VW_SelectHesab 
+            as
+            Select Substring(isNull(col.Name,''),1,30)+'-'+Substring(isNull(Moein.Name,''),1,30)+'-'+Substring(isNull(Taf.Name,''),1,30) as NameCoding 
+            ,isNull(col.Name,'') as NameCol,isNull(Moein.Name,'') as NameMoein,isNull(Taf.Name,'')as NameTafzil1,isNull(Taf2.Name,'') as NameTafzil2
+            ,S.Code_Col,S.Code_Moein,S.Code_Tafzil,S.Code_Tafzili2
+            ,(Cast(S.Code_Col as varchar)+'-'+Cast(S.Code_Moein as varchar)+'-'+Cast(S.Code_Tafzil as varchar)
+            +'-'+Cast(S.Code_Tafzili2 as varchar)) as HesabCode,Moein.Mahiat as Mahiat
+            from Sanad S
+            Left Join Hesab Col On S.Code_Col = Col.Code_Col and Col.Code_Moein = 0
+            Left Join Hesab Moein On S.Code_Col = Moein.Code_Col And S.Code_Moein = Moein.Code_Moein
+            Left Join Hesab Taf On S.Code_Tafzil = Taf.Code_Tafzil and Taf.Code_Col = -1
+            Left Join Tafzili2 Taf2 On  S.Code_Tafzili2 = Taf2.Code
+            Group by  S.Code_Col,S.Code_Moein,S.Code_Tafzil,S.Code_Tafzili2,Col.Name,Moein.Name,Taf.Name,Taf2.Name,Moein.Mahiat;
+            """,
+            """
+            CREATE VIEW dbo.FactorDetail_VIEW 
+            AS  
+            SELECT     FD.ID, FD.FactorID, FD.ArticleID, AN.Name AS ArticleName,
+                  AG.Name AS ArticleGroupName, U1.Name AS ArticleUnitName, AN.Code AS ArticleCode,AN.Tax_ID,
+                  Calc.CostItem,
+                  Calc.CostItem - ISNULL(FD.Discount, 0) AS CostTax,
+                  Calc.CostItem - ISNULL(FD.Discount, 0) + ISNULL(FD.Tax, 0) AS FinallCost,
+                  isnull(FD.IncCost,0) as IncCost,ISNULL(FD.TransCost, 0)as TransCost,
+                  FD.ArticleCount, FD.ArticleCount2, FD.ArticleCount3, (isnull(FD.Cost,0)) as Cost, FD.Discount,
+                  FD.PerDiscount, FD.Tax, FPV.NoFactor, FPV.DateIn, FPV.Descript,
+                  FPV.FactorKind, FPV.CodeTafzil, FPV.ID AS FactorParentID, AG.StockTypeID,
+                  ST.Name AS StockName, AN.AmountSale, FPV.Per_Ok, FPV.NoFactor_Per,
+                  FD.StockID, FPV.StockParentFactor, FPV.EconomicCode, FPV.NationalCode,
+                  FPV.PostalCode, FPV.StateName, FPV.CityName1, FPV.CityName2,
+                  FPV.Address, FPV.CashOK, FPV.CashUnOK, FPV.MelliCode,
+                  FPV.Phone, FPV.DateSanad, FPV.CityID, FPV.CityID2,
+                  FPV.CityCode, FPV.CityCode2, FPV.DisKind, FPV.Kind,
+                  FPV.HesabName, FPV.Mobile, FPV.StateID, FPV.StateCode,
+                  U2.Name AS ArticleUnitName2, U1.TabileUnit AS Tabdil1, U2.TabileUnit AS Tabdil2, AN.ArticleUnitID2,
+                  U3.Name AS ArticleUnitName3, U3.TabileUnit AS Tabdil3, AN.ArticleUnitID3,
+                  AN.MarketerPercent AS ArticleMarkerPer, FD.MarketerPercent,FD.MarketerCosts, FPV.MarkerName,
+                  FPV.CodeTaf_Marketer,FPV.TransCost as FPTransCost,
+                  FD.DegreeKala,FD.DropKala,FD.TaxFi,FPV.CarInfo 
+            FROM dbo.FactorDetail FD
+            LEFT JOIN dbo.FactorParent_View FPV ON FD.FactorID = FPV.ID
+            LEFT JOIN dbo.ArticleNew AN ON FD.ArticleID = AN.ID
+            LEFT JOIN dbo.ArticleGroup AG ON AN.ArticleGroupID = AG.ID
+            LEFT JOIN dbo.StockType ST ON AG.StockTypeID = ST.ID
+            LEFT JOIN dbo.ArticleUnit AS U1 ON AN.ArticleUnitID = U1.ID
+            LEFT JOIN dbo.ArticleUnit AS U2 ON AN.ArticleUnitID2 = U2.ID
+            LEFT JOIN dbo.ArticleUnit AS U3 ON AN.ArticleUnitID3 = U3.ID
+            CROSS APPLY (
+               SELECT CAST(ISNULL(FD.ArticleCount, 0) * ISNULL(FD.Cost, 0) AS NUMERIC(18, 0)) AS CostItem
+            ) AS Calc;
+            """,
+
+           """
+            CREATE VIEW [dbo].[InventoryTagView] AS 
+            SELECT TH.ID AS TagHeaderID,TH.TagNo,TH.StageNo,ISg.StageName AS StageName,
+            ST.Name AS StockName,ST.Code AS StockCode,ST.ID As StockTypeID,
+            TH.TagDate,TH.TagStatus,
+            CASE TH.TagStatus WHEN 0 THEN N'چاپ شده' WHEN 1 THEN N'در حال شمارش' WHEN 2 THEN N'تکمیل شده' WHEN 3 THEN N'تأیید نهایی' ELSE N'نامشخص' END AS StatusName,
+            TH.LocationCode,TH.CreateUserID,U1.Name AS CreateUserName,
+            TH.CreateDate,TH.ConfirmUserID,U2.Name AS ConfirmUserName,TH.ConfirmDate,
+            ISNULL((SELECT COUNT(*) FROM InventoryTagDetail WHERE TagID = TH.ID), 0) AS TotalItems,
+            ISNULL((SELECT COUNT(*) FROM InventoryTagDetail WHERE TagID = TH.ID AND CountedQty IS NOT NULL), 0) AS CountedItems,
+            ISNULL((SELECT COUNT(*) FROM InventoryTagDetail WHERE TagID = TH.ID AND CountedQty IS NOT NULL AND DiffQty <> 0), 0) AS DiffItems,
+            ISNULL((SELECT SUM(Abs(DiffQty)) FROM InventoryTagDetail WHERE TagID = TH.ID AND DiffQty IS NOT NULL), 0) AS TotalDifference,
+            CASE WHEN ISNULL((SELECT COUNT(*) FROM InventoryTagDetail WHERE TagID = TH.ID), 0) = 0 THEN 0 
+                ELSE (ISNULL((SELECT COUNT(*) FROM InventoryTagDetail 
+                                WHERE TagID = TH.ID AND CountedQty IS NOT NULL), 0) * 100) / 
+                                ISNULL((SELECT COUNT(*) FROM InventoryTagDetail WHERE TagID = TH.ID), 1) END AS ProgressPercent,
+            ISNULL((SELECT STUFF((SELECT ', ' + CAST(SF.SpecialCode AS VARCHAR(20)) FROM Stock_Factor SF WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 
+            ORDER BY SF.SpecialCode FOR XML PATH('')), 1, 2, '')), '') AS SanadNos,
+            CAST(ISNULL((SELECT STUFF((SELECT ', ' + CASE SF.Kind WHEN 0 THEN 'رسید' WHEN 1 THEN 
+             CASE SF.AdjustmentType WHEN 1 THEN 'حواله(کمبود)' WHEN 3 THEN 'حواله(ضایعات)' END END + ':' + CAST(SF.SpecialCode AS VARCHAR(20)) 
+            FROM Stock_Factor SF WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 ORDER BY SF.SpecialCode FOR XML PATH('')), 1, 2, '')), '') AS NVARCHAR(500)) AS SanadFullInfo,
+            ISNULL((SELECT COUNT(*) FROM Stock_Factor SF WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1), 0) AS SanadCount,
+            ISNULL((SELECT COUNT(*) FROM Stock_Factor SF WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 AND SF.Kind = 0), 0) AS ResidCount,
+            ISNULL((SELECT COUNT(*) FROM Stock_Factor SF WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 AND SF.Kind = 1 AND SF.AdjustmentType = 1), 0) AS HavalehCount,
+            ISNULL((SELECT COUNT(*) FROM Stock_Factor SF WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 AND SF.Kind = 1 AND SF.AdjustmentType = 3), 0) AS ScrapCount,
+            ISNULL((SELECT STUFF((SELECT ', ' + CAST(SF.ID AS VARCHAR(20)) FROM Stock_Factor SF 
+             WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 AND SF.Kind = 0 ORDER BY SF.ID FOR XML PATH('')), 1, 2, '')), '') AS ResidSanadNos,
+            ISNULL((SELECT STUFF((SELECT ', ' + CAST(SF.ID AS VARCHAR(20)) FROM Stock_Factor SF 
+             WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 AND SF.Kind = 1 AND SF.AdjustmentType = 1 ORDER BY SF.ID FOR XML PATH('')), 1, 2, '')), '') AS HavalehSanadNos,
+            ISNULL((SELECT STUFF((SELECT ', ' + CAST(SF.ID AS VARCHAR(20)) FROM Stock_Factor SF 
+             WHERE SF.InventoryTagID = TH.ID AND SF.IsInventoryAdjustment = 1 AND SF.Kind = 1 AND SF.AdjustmentType = 3 ORDER BY SF.ID FOR XML PATH('')), 1, 2, '')), '') AS ScrapSanadNos,
+            CASE WHEN ISNULL((SELECT COUNT(*) FROM Stock_Factor WHERE InventoryTagID = TH.ID AND IsInventoryAdjustment = 1), 0) = 0 THEN N'بدون سند' ELSE N'دارای سند' END AS SanadStatus 
+            FROM InventoryTagHeader TH 
+            INNER JOIN StockType ST ON ST.ID = TH.StockTypeID 
+            LEFT JOIN Users U1 ON U1.UsersID = TH.CreateUserID 
+            LEFT JOIN Users U2 ON U2.UsersID = TH.ConfirmUserID 
+            LEFT JOIN InventoryStage ISg ON ISg.StockTypeID = TH.StockTypeID AND ISg.StageNo = TH.StageNo AND ISg.IsActive = 1;
+            """,
+
+            """
+            CREATE VIEW [dbo].[InventoryTagDetailView] AS 
+            SELECT TD.ID AS DetailID, TD.TagID,TH.TagNo, TH.StageNo,TH.StockTypeID, ST.Name AS StockName, TD.ArticleID,
+            AN.Code AS ArticleCode, AN.Name AS ArticleName, AN.ArticleCoding, AU.Name AS UnitName, TD.SystemQty,
+            TD.CountedQty, TD.DiffQty,
+            CASE WHEN TD.DiffQty > 0 THEN N'کمبود' WHEN TD.DiffQty < 0 THEN N'اضافه' ELSE N'مشابه' END AS DiffType,
+            ISNULL(ABS(TD.DiffQty), 0) AS AbsDiffQty,
+            TD.ScrapQty,TD.Notes,TD.CounterUserID, U.Name AS CounterUserName,TD.CountDate,TD.CountTime,TH.TagStatus, TH.ConfirmDate 
+            FROM InventoryTagDetail TD 
+            INNER JOIN InventoryTagHeader TH ON TH.ID = TD.TagID 
+            INNER JOIN StockType ST ON ST.ID = TH.StockTypeID 
+            INNER JOIN ArticleNew AN ON AN.ID = TD.ArticleID 
+            INNER JOIN ArticleUnit AU ON AU.ID = AN.ArticleUnitID 
+            LEFT JOIN Users U ON U.UsersID = TD.CounterUserID;
+            """,
+
+            """
+            CREATE VIEW [dbo].[InventoryDiffReportView] AS 
+            SELECT TH.ID AS TagHeaderID,TH.TagNo,TH.StageNo,TH.StockTypeID,ST.Name AS StockName,TH.TagDate,TH.ConfirmDate,TD.ArticleID,
+            AN.Code AS ArticleCode, AN.Name AS ArticleName,AN.ArticleCoding,AU.Name AS UnitName,TD.SystemQty,TD.CountedQty,TD.DiffQty,
+            TD.ScrapQty,ABS(ISNULL(TD.DiffQty, 0)) AS AbsDiffQty, TD.Notes,U1.Name AS CounterUserName,U2.Name AS ConfirmUserName, TH.TagStatus,
+            CASE TH.TagStatus WHEN 0 THEN N'چاپ شده' WHEN 1 THEN N'در حال شمارش' WHEN 2 THEN N'تکمیل شده' WHEN 3 THEN N'تأیید نهایی' ELSE N'نامشخص' END AS StatusTagName,
+            CASE WHEN SystemQty < 0 THEN 'موجودی منفی' WHEN DiffQty > 0 THEN 'اضافه' WHEN DiffQty < 0 THEN 'کمبود' ELSE 'مشابه' END AS QtyStatus 
+            FROM InventoryTagHeader TH 
+            INNER JOIN StockType ST ON ST.ID = TH.StockTypeID 
+            INNER JOIN InventoryTagDetail TD ON TD.TagID = TH.ID 
+            INNER JOIN ArticleNew AN ON AN.ID = TD.ArticleID 
+            INNER JOIN ArticleUnit AU ON AU.ID = AN.ArticleUnitID 
+            LEFT JOIN Users U1 ON U1.UsersID = TD.CounterUserID 
+            LEFT JOIN Users U2 ON U2.UsersID = TH.ConfirmUserID 
+            WHERE TH.TagStatus >= 2 AND ISNULL(TD.DiffQty, 0) <> 0;
+            """,
+
+            """
+            CREATE VIEW [dbo].[InventoryHistoryView] AS 
+            SELECT TH.ID AS TagHeaderID,TH.TagNo,TH.StageNo,ST.Name AS StockName,TH.TagDate AS CreateDate,
+            'ایجاد تگ' AS OperationType, TH.CreateUserID AS UserID, U.Name AS UserName,TH.CreateDate AS OperationDate,
+            NULL AS OperationTime, CAST(TH.TagNo AS nvarchar(50)) + ' - ایجاد تگ برای انبار ' + ST.Name AS Description 
+            FROM InventoryTagHeader TH 
+            INNER JOIN StockType ST ON ST.ID = TH.StockTypeID 
+            LEFT JOIN Users U ON U.UsersID = TH.CreateUserID 
+            UNION ALL 
+            SELECT TD.TagID AS TagHeaderID,TH.TagNo,TH.StageNo,ST.Name AS StockName,TH.TagDate AS CreateDate, 'شمارش کالا' AS OperationType,
+            TD.CounterUserID AS UserID,U.Name AS UserName,TD.CountDate AS OperationDate, TD.CountTime AS OperationTime,
+            'شمارش کالای ' + AN.Name + ' - مقدار: ' + CAST(ISNULL(TD.CountedQty, 0) AS nvarchar(20)) AS Description 
+            FROM InventoryTagDetail TD 
+            INNER JOIN InventoryTagHeader TH ON TH.ID = TD.TagID 
+            INNER JOIN StockType ST ON ST.ID = TH.StockTypeID 
+            INNER JOIN ArticleNew AN ON AN.ID = TD.ArticleID 
+            LEFT JOIN Users U ON U.UsersID = TD.CounterUserID 
+            WHERE TD.CountedQty IS NOT NULL 
+            UNION ALL 
+            SELECT TH.ID AS TagHeaderID,TH.TagNo,TH.StageNo,ST.Name AS StockName,TH.TagDate AS CreateDate,'تأیید تگ' AS OperationType,TH.ConfirmUserID AS UserID,
+            U.Name AS UserName,TH.ConfirmDate AS OperationDate,NULL AS OperationTime, 'تأیید نهایی تگ ' + TH.TagNo AS Description 
+            FROM InventoryTagHeader TH 
+            INNER JOIN StockType ST ON ST.ID = TH.StockTypeID 
+            LEFT JOIN Users U ON U.UsersID = TH.ConfirmUserID 
+            WHERE TH.TagStatus >= 2;
+            """,
+
+            """
+            CREATE VIEW [dbo].[InventoryStageSummaryView] AS
+            SELECT  TH.StockTypeID,ST.Name AS StockName,TH.StageNo,TH.TagDate AS StageStartDate, MAX(TH.ConfirmDate) AS StageEndDate,
+            COUNT(DISTINCT TH.ID) AS TotalTags,
+            SUM(CASE WHEN TH.TagStatus = 0 THEN 1 ELSE 0 END) AS PrintedTags,
+            SUM(CASE WHEN TH.TagStatus = 1 THEN 1 ELSE 0 END) AS CountingTags,
+            SUM(CASE WHEN TH.TagStatus = 2 THEN 1 ELSE 0 END) AS CompletedTags,
+            SUM(CASE WHEN TH.TagStatus = 3 THEN 1 ELSE 0 END) AS ConfirmedTags,
+            ISNULL(SUM(TD.SystemQty), 0) AS TotalSystemQty,
+            ISNULL(SUM(TD.CountedQty), 0) AS TotalCountedQty,
+            ISNULL(SUM(TD.DiffQty), 0) AS TotalDiffQty,
+            ISNULL(SUM(ABS(TD.DiffQty)), 0) AS TotalAbsDiffQty,
+            -- درصد اختلاف
+            CASE 
+                WHEN ISNULL(SUM(TD.SystemQty), 0) = 0 THEN 0
+                ELSE (ABS(ISNULL(SUM(TD.DiffQty), 0)) * 100) / ISNULL(SUM(TD.SystemQty), 1)
+            END AS DiffPercent
+            FROM InventoryTagHeader TH
+             INNER JOIN StockType ST ON ST.ID = TH.StockTypeID
+             LEFT JOIN InventoryTagDetail TD ON TD.TagID = TH.ID
+             GROUP BY TH.StockTypeID, ST.Name, TH.StageNo, TH.TagDate;
+            """,
+            """
+            CREATE VIEW [Article_View] AS 
+            SELECT AN.Name AS ArticleName,AN.Code, AN.ArticleCoding,
+            AN.StockTypeName, AN.ArticleGroupID, AN.ArticleGroupName,
+            AN.ArticleUnitID,AN.ArticleUnitName,
+            A.ID,A.Date_Op,A.Time_Op,A.Code_Op,A.KindArticles,
+            (CASE A.KindArticles WHEN 0 THEN 'مرحله اول' WHEN 1 THEN 'میان دوره' WHEN 2 THEN 'پایان دوره' ELSE 'نامشخص' END) AS KindName,
+            A.ArticleID,A.HasEndedDate,A.FirstExistence,A.Inputed,A.OutPuted, A.Loss1, A.Loss2 ,FinallExistence,
+            A.Number,Parent_Sanad_ID,A.CommandStock,A.Tag 
+            FROM dbo.Articles A LEFT JOIN dbo.ArticleNew_VIEW AN ON A.ArticleID = AN.ID;
+            """,
+
+            """
+            CREATE VIEW [dbo].[Asset_VIEW]
+            AS
+            SELECT     dbo.Asset.ArticleID, dbo.Asset.DateIN, dbo.Asset.Cost, dbo.Asset.SanadID, dbo.Asset.Depreciation_Before, dbo.Asset.Depreciation, 
+             dbo.Asset.Cost_Before, dbo.ArticleNew_VIEW.Name, dbo.ArticleNew_VIEW.ArticleGroupName, dbo.ArticleNew_VIEW.Depreciation AS Nerkh,
+             dbo.ArticleNew_VIEW.DepreciationType, dbo.Asset.No_Sanad, dbo.Asset.ID, dbo.Asset.Code, dbo.ArticleNew_VIEW.StockTypeName,
+             dbo.ArticleNew_VIEW.StockTypeCode, dbo.ArticleNew_VIEW.Code AS ArticleCode, dbo.ArticleNew_VIEW.ArticleGroupCode, dbo.ArticleNew_VIEW.Kind,
+             dbo.Asset.GhesmatCode, dbo.Asset.DateTrasfer, dbo.Asset.CodeTrasfer, dbo.Ghesmat.Sharh_G,
+             dbo.Phone.FirstName + ' ' + dbo.Phone.LastName AS NameTrasfer, dbo.ArticleNew_VIEW.ArticleUnitName, dbo.ArticleNew_VIEW.ArticleGroupID,
+             dbo.ArticleNew_VIEW.StockTypeID, dbo.ArticleNew_VIEW.DepreciationTypeName, dbo.ArticleNew_VIEW.For_EST, dbo.ArticleNew_VIEW.Status
+             FROM  dbo.Asset LEFT OUTER JOIN
+            dbo.Ghesmat ON dbo.Asset.GhesmatCode = dbo.Ghesmat.Code_G LEFT OUTER JOIN
+                  dbo.Phone ON dbo.Asset.CodeTrasfer = dbo.Phone.Code LEFT OUTER JOIN
+                  dbo.ArticleNew_VIEW ON dbo.Asset.ArticleID = dbo.ArticleNew_VIEW.ID;
+            """,
+
+            """
+            CREATE VIEW [dbo].[ArticleLenCode_View]
+            AS
+            SELECT    ID, Code,ArticleGroupID ,ArticleGroupCode,StockTypeCode
+            ,(Case len(StockTypeCode) when 1 then '00'+ cast(StockTypeCode AS varchar(3)) 
+            when 2 then '0'+ cast(StockTypeCode AS varchar(3)) else cast(StockTypeCode AS varchar(3)) end) as CodeStore
+            ,(Case len(ArticleGroupCode) when 1 then '00'+ cast(ArticleGroupCode AS varchar(3)) 
+            when 2 then '0'+ cast(ArticleGroupCode AS varchar(3)) else cast(ArticleGroupCode AS varchar(3)) end)AS GroupCode
+            FROM   dbo.ArticleNew_VIEW;
+            """,
+
+            """
+            CREATE VIEW [dbo].[Asset_Export_View] 
+            AS
+            SELECT  dbo.Asset_Export.ID, dbo.Asset_Export.CodeReg, dbo.Asset_Export.DateReg, dbo.Asset_Export.CodeExport, dbo.Asset_Export.DateExport,
+                  dbo.Asset_Export.GhesmatCode, dbo.Asset_Export.ArticleID, dbo.Ghesmat.Code_G, dbo.Ghesmat.Sharh_G,
+                  dbo.Phone.FirstName + ' ' + dbo.Phone.LastName AS NameExport, dbo.Asset_Export.Code, dbo.ArticleNew_VIEW.Name,
+                  dbo.ArticleNew_VIEW.ArticleGroupName, dbo.ArticleNew_VIEW.ArticleUnitID, dbo.ArticleNew_VIEW.ArticleUnitName,
+                  dbo.ArticleNew_VIEW.ArticleGroupID, dbo.ArticleNew_VIEW.StockTypeCode, dbo.ArticleNew_VIEW.StockTypeName, dbo.ArticleNew_VIEW.StockTypeID,
+                  dbo.ArticleNew_VIEW.Kind, dbo.ArticleNew_VIEW.For_EST, dbo.ArticleNew_VIEW.Status, dbo.Asset_VIEW.NameTrasfer
+                  FROM   dbo.Asset_Export LEFT OUTER JOIN
+                  dbo.Phone ON dbo.Asset_Export.CodeExport = dbo.Phone.Code LEFT OUTER JOIN
+                  dbo.ArticleNew_VIEW ON dbo.Asset_Export.ArticleID = dbo.ArticleNew_VIEW.ID LEFT OUTER JOIN
+                  dbo.Ghesmat ON dbo.Asset_Export.GhesmatCode = dbo.Ghesmat.Code_G LEFT OUTER JOIN
+                  dbo.Asset_VIEW ON dbo.Asset_VIEW.ArticleCode = dbo.Asset_Export.Code;
+            """,
+            """
+            CREATE VIEW [dbo].[vw_TalfighSanad]
+            AS
+            SELECT   ParentSanadID,No_Sanad,RowNum,
+            Date_IN,isnull(Mab_Bed,0) Mab_Bed,isnull(Mab_Bes,0) Mab_Bes, OtherSharh, Code_Col, Code_Moein, Code_Tafzil, OtherParentSharh, ArticleID,
+            ChequeBook_ChildID, ChequeBookDate, ChequeBook_Receiver, Tafzili2ID, Code_Tafzili2,Meghdar
+             FROM   dbo.ParentSanad_VIEW;
+            """,
+            """
+            CREATE VIEW [dbo].[Stock_Factor_Mat_VIEW] 
+            AS 
+            SELECT     dbo.Stock_Factor_Mat.ID, dbo.Stock_Factor_Mat.ArticleID, dbo.Stock_Factor_Mat.Val, dbo.ArticleNew.Code AS ArticleCode, 
+                  dbo.ArticleNew.Name AS ArticleName, dbo.ArticleGroup_View.StockTypeName, dbo.ArticleGroup_View.StockTypeCode,
+                  dbo.ArticleGroup_View.Code AS ArticleGroupCode, dbo.ArticleGroup_View.Name AS ArticleGroupName, dbo.Stock_Factor_Mat.StockFacorID,
+                  UnitName1.Name AS ArticleUnit, dbo.ArticleNew.ArticleGroupID, dbo.ArticleGroup_View.StockTypeID, dbo.Stock_Factor_Mat.Cost,
+                  dbo.Stock_Factor_Mat.Val * dbo.Stock_Factor_Mat.Cost AS Amount, dbo.ArticleNew.Code_Col, dbo.ArticleNew.Code_Moein, dbo.ArticleNew.Code_Tafzil,
+                  dbo.ArticleNew.Code_Col_Buy, dbo.ArticleNew.Code_Moein_Buy, dbo.ArticleNew.Code_Tafzil_Buy, dbo.ArticleNew.Code_Col_ReBuy,
+                  dbo.ArticleNew.Code_Moein_ReBuy, dbo.ArticleNew.Code_Tafzil_ReBuy, dbo.ArticleNew.Code_Col_ReSale, dbo.ArticleNew.Code_Moein_ReSale,
+                  dbo.ArticleNew.Code_Tafzil_ReSale, dbo.ArticleNew.Status, dbo.ArticleNew.AmountFirst, dbo.ArticleNew.CostFirst, dbo.ArticleNew.MaxCostOrderBy,
+                  dbo.ArticleNew.MinCostOrderBy, dbo.ArticleNew.AmountSale, UnitName1.TabileUnit AS Tabdil1, UnitName2.Name AS ArticleUnit2,
+                  UnitName2.TabileUnit AS Tabdil2, dbo.ArticleNew.ArticleUnitID2,
+                  UnitName3.TabileUnit AS Tabdil3, dbo.ArticleNew.ArticleUnitID3,UnitName3.Name AS ArticleUnit3
+            FROM   dbo.ArticleUnit AS UnitName1 RIGHT OUTER JOIN
+                  dbo.ArticleNew ON UnitName1.ID = dbo.ArticleNew.ArticleUnitID LEFT OUTER JOIN
+                  dbo.ArticleUnit AS UnitName2 ON UnitName2.ID = dbo.ArticleNew.ArticleUnitID2 LEFT OUTER JOIN
+                  dbo.ArticleUnit AS UnitName3 ON UnitName3.ID = dbo.ArticleNew.ArticleUnitID3 LEFT OUTER JOIN
+                  dbo.ArticleGroup_View ON dbo.ArticleNew.ArticleGroupID = dbo.ArticleGroup_View.ID RIGHT OUTER JOIN
+                  dbo.Stock_Factor_Mat ON dbo.ArticleNew.ID = dbo.Stock_Factor_Mat.ArticleID;
+            """,
+
+            """
+            CREATE VIEW [dbo].[Stock_Factor_VIEW]
+            AS
+            SELECT  SF.ID,SF.Code, SF.Des, SF.Kind, SF.DateIN, SF.StockTypeID, 
+                 ST.Code AS StockTypeCode, ST.Name AS StockTypeName, ST.Kind AS StockTypeKind, SF.FactorID,
+                 SF.FactorCode AS NoFactor, SF.TolidID, SF.TolidCode, SF.SpecialCode,
+                 SF.Parent_Sanad_ID, ST.Code_Tafzil2, ST.Code_Tafzil, ST.Code_Moein, ST.Code_Col,
+                 SF.PerFactor_ID, PS.NO_Sanad,fp.CodeTafzil as CodeCustumer 
+            FROM  dbo.Stock_Factor SF
+             LEFT JOIN dbo.StockType ST ON SF.StockTypeID = ST.ID 
+             LEFT JOIN dbo.ParentSanad PS ON PS.ParentSanadID = SF.Parent_Sanad_ID 
+             left join dbo.FactorParent FP ON fp.ID =  SF.FactorID;
+            """,
+
+            """
+            CREATE VIEW [dbo].[Stock_Factor_All_VIEW]
+            AS
+            SELECT     dbo.Stock_Factor.ID, dbo.Stock_Factor.Code, dbo.Stock_Factor.Des, dbo.Stock_Factor.Kind, dbo.Stock_Factor.DateIN, dbo.Stock_Factor.StockTypeID,
+            dbo.ArticleNew.Code AS ArticleCode, dbo.ArticleNew.Name AS ArticleName, dbo.ArticleNew.ArticleUnitID, dbo.Stock_Factor_Mat.ArticleID,
+            dbo.Stock_Factor_Mat.Val, dbo.Stock_Factor.SpecialCode, dbo.Stock_Factor_Mat.Cost,AmountSale, dbo.ArticleNew.Status,dbo.Stock_Factor.PerFactor_ID
+            ,(dbo.Stock_Factor_Mat.Val * dbo.Stock_Factor_Mat.Cost) as Amount, dbo.Stock_Factor.Parent_Sanad_ID
+            ,dbo.Stock_Factor.FactorID, dbo.Stock_Factor.FactorCode 
+            FROM   dbo.Stock_Factor INNER JOIN
+             dbo.Stock_Factor_Mat ON dbo.Stock_Factor.ID = dbo.Stock_Factor_Mat.StockFacorID LEFT OUTER JOIN
+             dbo.ArticleNew ON dbo.Stock_Factor_Mat.ArticleID = dbo.ArticleNew.ID;
+            """,
+ 
+
+            """
+            CREATE VIEW [dbo].[vw_CheckExpend2]
+            AS 
+            SELECT     dbo.CheckExpend.ID, dbo.CheckExpend.CheuqeReceiveID, dbo.CheckExpend.Code_OP, dbo.CheckExpend.Time_Op, dbo.CheckExpend.Date_OP,
+                  dbo.CheckExpend.ResidNumber, dbo.CheckExpend.SanadID, dbo.CheckExpend.Code_Col, dbo.CheckExpend.Code_Moein,
+                  dbo.CheckExpend.Code_Tafzil, dbo.CheckExpend.ParentSanadID, dbo.CheckExpend.ResidDes, dbo.CheckExpend.Code_Col_Pay,
+                  dbo.CheckExpend.Code_Moein_Pay, dbo.CheckExpend.Code_Tafzil_Pay, dbo.CheckExpend.ResidDate, dbo.CheckExpend.SanadPersonID,
+                  dbo.CheckRecive.BankID, dbo.CheckRecive.CheckDate, dbo.CheckRecive.CheckSeries, dbo.CheckRecive.BankBrunch, dbo.CheckRecive.CheckMab,
+                  dbo.CheckRecive.NoHesabCheck, dbo.CheckRecive.CheckPerson, dbo.CheckRecive.CheckState, dbo.CheckRecive.IsNaghd,
+                  dbo.CheckRecive.ChequeOK, dbo.CheckRecive.OkDate, dbo.CheckRecive.WasExpended, dbo.CheckRecive.Code_Col_Pay_OK,
+                  dbo.CheckRecive.Code_Moein_Pay_OK, dbo.CheckRecive.Code_Tafzil_Pay_OK, dbo.CheckRecive.Code_Col_OK, dbo.CheckRecive.Code_Moein_OK,
+                  dbo.CheckRecive.Code_Tafzil_OK, dbo.CheckRecive.ParentSanadOKID, dbo.CheckRecive.UnOkDate, dbo.CheckRecive.UnOkSanadIDBed,
+                  dbo.CheckRecive.UnOkSanadIDBes, dbo.CheckRecive.UnOkParentSanadID, dbo.Bank.Name as BankName
+            FROM   dbo.CheckExpend
+                LEFT OUTER JOIN dbo.CheckRecive ON dbo.CheckExpend.CheuqeReceiveID = dbo.CheckRecive.ID 
+                LEFT OUTER JOIN dbo.Bank ON dbo.CheckRecive.BankID = dbo.Bank.ID;
+            """,
+            """
+            CREATE VIEW dbo.Vw_ExcelSanad
+            AS
+            SELECT     dbo.ParentSanad_View.NO_Sanad AS 'شماره سند' 
+                  ,dbo.ParentSanad_View.Date_IN AS 'تاریخ سند حسابداری' 
+                  ,dbo.ParentSanad_View.OtherParentSharh AS 'شرح هدر سند' 
+                  ,dbo.ParentSanad_View.OtherSharh AS 'شرح سند' 
+                  ,dbo.ParentSanad_View.Code_Col AS 'کد کل' 
+                  ,dbo.ParentSanad_View.Code_Moein AS 'کد معین' 
+                  , dbo.ParentSanad_View.Code_Tafzil AS 'کد تفصیل' 
+                  , dbo.ParentSanad_View.Code_Tafzili2 AS 'کد تفصیل2' 
+                  , ViewCol.Name AS 'شرح حساب کل' 
+                  ,ViewMoein.Name AS 'شرح حساب معین' 
+                  ,isnull((SELECT [Name] FROM  dbo.Hesab_VIEW AS VWTafsili
+                        WHERE     VWTafsili.code_col = - 1
+                        AND VWTafsili.Code_Tafzil = ParentSanad_View.Code_Tafzil),'') AS 'شرح حساب تفصیل' 
+                  ,isnull((SELECT isnull([Name],'') FROM  dbo.Tafzili2
+                        WHERE Code = ParentSanad_View.Code_Tafzili2),'') AS 'شرح حساب تفصیل 2' 
+                  ,dbo.ParentSanad_View.Mab_Bed AS 'مبلغ -بدهکار' 
+                  , dbo.ParentSanad_View.Mab_Bes AS 'مبلغ - بستانکار' 
+            FROM   dbo.ParentSanad_View LEFT OUTER JOIN
+                  dbo.Hesab_VIEW ViewCol ON ViewCol.Code_Col = dbo.ParentSanad_View.Code_Col
+                  AND ViewCol.Code_Moein = 0 LEFT OUTER JOIN
+                  dbo.Hesab_VIEW ViewMoein ON ViewMoein.Code_Col = dbo.ParentSanad_View.Code_Col AND
+                  ViewMoein.Code_Moein = dbo.ParentSanad_View.Code_Moein;
+            """,
+
+            """
+            CREATE VIEW dbo.ServiceDefinition_VIEW
+            AS
+            SELECT
+                SD.ID,SD.Code,SD.ServiceName,SD.Description,SD.ServiceType,
+                CASE SD.ServiceType
+                    WHEN 1 THEN N'مشاوره'
+                    WHEN 2 THEN N'واسطه‌گری'
+                    WHEN 3 THEN N'حق‌العمل‌کاری'
+                    WHEN 4 THEN N'دلالی'
+                    WHEN 5 THEN N'خدمات عمومی'
+                    WHEN 6 THEN N'نمایندگی و پیگیری'
+                    WHEN 7 THEN N'گردشگری'
+                    ELSE N'نامشخص'
+                END AS ServiceTypeTitle,
+                SD.CalculationType,
+                CASE SD.CalculationType
+                    WHEN 1 THEN N'مبلغ ثابت'
+                    WHEN 2 THEN N'تعداد × مبلغ'
+                    WHEN 3 THEN N'درصد از مبلغ پایه'
+                    WHEN 4 THEN N'درصد از مبلغ معامله'
+                    WHEN 5 THEN N'ترکیبی'
+                    ELSE N'نامشخص'
+                END AS CalculationTypeTitle,
+                SD.DefaultPercent,SD.DefaultAmount,SD.HasPrincipal,SD.HasTransactionAmount,
+                SD.HasSettlement,SD.HasDirectCost,SD.ConnectToFactor,SD.IsTaxable,SD.TaxPercent,
+                SD.ArticleID, AN.Code AS ArticleCode,AN.Name AS ArticleName,SD.RevenueCode_Col,
+                SD.RevenueCode_Moein,SD.RevenueCode_Tafzil,RH_Col.Name AS RevenueColName,
+                RH_Moein.Name AS RevenueMoeinName,RevenueTaf.[Name] AS RevenueTafzilName,
+                SD.CostCode_Col,SD.CostCode_Moein,SD.CostCode_Tafzil,CH_Col.Name AS CostColName,
+                CH_Moein.Name AS CostMoeinName,CostTaf.[Name] AS CostTafzilName,SD.PrincipalCode_Col,
+                SD.PrincipalCode_Moein,SD.PrincipalCode_Tafzil,PH_Col.Name AS PrincipalColName,PH_Moein.Name AS PrincipalMoeinName,
+                PrincipalTaf.[Name] AS PrincipalTafzilName,SD.IsActive,
+                SD.CreatorID,SD.CreateDate,SD.CreateTime,SD.UpdaterID,SD.UpdateDate,SD.UpdateTime
+            FROM dbo.ServiceDefinition AS SD
+            LEFT JOIN dbo.ArticleNew AS AN ON AN.ID = SD.ArticleID
+            LEFT JOIN dbo.Hesab AS RH_Col ON RH_Col.Code_Col = SD.RevenueCode_Col AND RH_Col.Code_Moein = 0 AND (RH_Col.Code_Tafzil IS NULL OR RH_Col.Code_Tafzil = 0)
+            LEFT JOIN dbo.Hesab AS RH_Moein ON RH_Moein.Code_Col = SD.RevenueCode_Col AND RH_Moein.Code_Moein = SD.RevenueCode_Moein AND (RH_Moein.Code_Tafzil IS NULL OR RH_Moein.Code_Tafzil = 0)
+            LEFT JOIN dbo.Tafzili_View AS RevenueTaf ON RevenueTaf.Code_Tafzil = SD.RevenueCode_Tafzil
+            LEFT JOIN dbo.Hesab AS CH_Col ON CH_Col.Code_Col = SD.CostCode_Col AND CH_Col.Code_Moein = 0 AND (CH_Col.Code_Tafzil IS NULL OR CH_Col.Code_Tafzil = 0)
+            LEFT JOIN dbo.Hesab AS CH_Moein ON CH_Moein.Code_Col = SD.CostCode_Col AND CH_Moein.Code_Moein = SD.CostCode_Moein AND (CH_Moein.Code_Tafzil IS NULL OR CH_Moein.Code_Tafzil = 0)
+            LEFT JOIN dbo.Tafzili_View AS CostTaf ON CostTaf.Code_Tafzil = SD.CostCode_Tafzil
+            LEFT JOIN dbo.Hesab AS PH_Col ON PH_Col.Code_Col = SD.PrincipalCode_Col AND PH_Col.Code_Moein = 0 AND (PH_Col.Code_Tafzil IS NULL OR PH_Col.Code_Tafzil = 0)
+            LEFT JOIN dbo.Hesab AS PH_Moein ON PH_Moein.Code_Col = SD.PrincipalCode_Col AND PH_Moein.Code_Moein = SD.PrincipalCode_Moein AND (PH_Moein.Code_Tafzil IS NULL OR PH_Moein.Code_Tafzil = 0)
+            LEFT JOIN dbo.Tafzili_View AS PrincipalTaf ON PrincipalTaf.Code_Tafzil = SD.PrincipalCode_Tafzil;
+            """,
+
+            """
+            CREATE VIEW [dbo].[ServiceCase_VIEW]
+            AS
+            SELECT
+                SC.ID, SC.CaseNo,SC.CaseDate,SC.ServiceDefinitionID,SD.ServiceName,
+                SD.ServiceType,SD.CalculationType,SC.Title,SC.Description,SC.ContractNo,
+                SC.ContractDate,SC.CustomerTafziliCode,CustomerTaf.[Name] AS CustomerName,
+                CustomerTaf.JobName AS CustomerJobName,CustomerTaf.Mobile AS CustomerMobile,
+                SC.PrincipalTafziliCode,PrincipalTaf.[Name] AS PrincipalName,PrincipalTaf.JobName AS PrincipalJobName,
+                PrincipalTaf.Mobile AS PrincipalMobile,SC.OtherTafziliCode,OtherTaf.[Name] AS OtherTafziliName,OtherTaf.JobName AS OtherTafziliJobName,
+                SC.BaseAmount,SC.TransactionAmount,SC.CommissionPercent,SC.CommissionAmount,SC.DiscountAmount,
+                SC.TaxPercent,SC.TaxAmount,SC.OtherAmount,SC.TotalAmount,SC.PrincipalAmount,SC.CustomerReceivableAmount, SC.Status,
+                CASE SC.Status
+                    WHEN 1 THEN N'پیش‌نویس'
+                    WHEN 2 THEN N'فعال'
+                    WHEN 3 THEN N'در انتظار تسویه'
+                    WHEN 4 THEN N'تسویه شده'
+                    WHEN 5 THEN N'لغو شده'
+                    ELSE N'نامشخص'
+                END AS StatusTitle,
+                SC.StartDate,SC.EndDate,SC.ResponsibleUserID,SC.IsPosted,SC.CreatorID,
+                SC.CreateDate,SC.CreateTime,SC.UpdaterID,SC.UpdateDate,SC.UpdateTime, SC.ParentSanadID
+            FROM dbo.ServiceCase AS SC
+            INNER JOIN dbo.ServiceDefinition AS SD ON SD.ID = SC.ServiceDefinitionID
+            LEFT JOIN dbo.Tafzili_View AS CustomerTaf ON CustomerTaf.Code_Tafzil = SC.CustomerTafziliCode
+            LEFT JOIN dbo.Tafzili_View AS PrincipalTaf ON PrincipalTaf.Code_Tafzil = SC.PrincipalTafziliCode
+            LEFT JOIN dbo.Tafzili_View AS OtherTaf ON OtherTaf.Code_Tafzil = SC.OtherTafziliCode;
+            """,
+
+            """
+            CREATE VIEW dbo.ServiceCaseDetail_VIEW
+            AS
+            SELECT SCD.ID,SCD.CaseID,SC.CaseNo,SC.CaseDate,SC.Title AS CaseTitle,SCD.RowNo,
+                SCD.OperationDate,SCD.OperationType, 
+                CASE SCD.OperationType
+                    WHEN 1 THEN N'شروع عملیات'
+                    WHEN 2 THEN N'ارائه خدمت'
+                    WHEN 3 THEN N'دریافت مدارک'
+                    WHEN 4 THEN N'پیگیری'
+                    WHEN 5 THEN N'محاسبه کارمزد'
+                    WHEN 6 THEN N'پرداخت'
+                    WHEN 7 THEN N'سایر'
+                    ELSE N'نامشخص'
+                END AS OperationTypeTitle,
+                SCD.Title,SCD.[Description],SCD.ReferenceNo,SCD.Quantity,SCD.UnitAmount,SCD.BaseAmount,
+                SCD.[Percent],SCD.CommissionAmount,SCD.TaxAmount,SCD.OtherAmount,SCD.Status,
+                CASE SCD.[Status]
+                    WHEN 1 THEN N'باز'
+                    WHEN 2 THEN N'انجام شده'
+                    WHEN 3 THEN N'لغو شده'
+                    ELSE N'نامشخص'
+                END AS StatusTitle,
+                SCD.ArticleID,AN.Code AS ArticleCode,AN.Name AS ArticleName,SCD.FactorID,
+                SCD.FactorDetailID,SCD.CreatorID,SCD.CreateDate,SCD.CreateTime
+            FROM dbo.ServiceCaseDetail AS SCD
+            INNER JOIN dbo.ServiceCase AS SC ON SC.ID = SCD.CaseID
+            LEFT JOIN dbo.ArticleNew AS AN ON AN.ID = SCD.ArticleID;
+            """,
+
+            """
+            CREATE VIEW dbo.ServiceCaseCost_VIEW
+            AS
+            SELECT SCC.ID,SCC.CaseID,SC.CaseNo,SC.CaseDate,SC.Title AS CaseTitle,SCC.CostDate,SCC.CostType,
+                CASE SCC.CostType
+                    WHEN 1 THEN N'کارشناس'
+                    WHEN 2 THEN N'مأموریت'
+                    WHEN 3 THEN N'حمل'
+                    WHEN 4 THEN N'تبلیغات'
+                    WHEN 5 THEN N'پیگیری'
+                    WHEN 6 THEN N'ابزار'
+                    WHEN 7 THEN N'سایر'
+                    ELSE N'نامشخص'
+                END AS CostTypeTitle,
+                SCC.Title,SCC.Description,SCC.TafziliCode,SCC.Code_Col,SCC.Code_Moein,SCC.Code_Tafzil,SCC.Amount,
+                SCC.TaxPercent,SCC.TaxAmount,SCC.TotalAmount,SCC.FactorID,SCC.FactorDetailID,SCC.ParentSanadID,SCC.IsPaid 
+            FROM dbo.ServiceCaseCost AS SCC 
+            INNER JOIN dbo.ServiceCase AS SC ON SC.ID = SCC.CaseID;
+            """,
+
+            """
+            CREATE VIEW dbo.ServiceSettlement_VIEW
+            AS
+            SELECT SS.ID,SS.CaseID,SC.CaseNo,SC.CaseDate,SC.Title AS CaseTitle,SS.SettlementDate,SS.SettlementType,
+              CASE SS.SettlementType
+                    WHEN 1 THEN N'دریافت از مشتری'
+                    WHEN 2 THEN N'پرداخت به موکل'
+                    WHEN 3 THEN N'دریافت از طرف معامله'
+                    WHEN 4 THEN N'پرداخت هزینه'
+                    WHEN 5 THEN N'برگشت وجه'
+                    WHEN 6 THEN N'سایر'
+                    ELSE N'نامشخص'
+                END AS SettlementTypeTitle,
+               SS.TafziliCode,TV.Name AS TafziliName,TV.JobName AS TafziliJobName,SS.Amount,SS.PaymentMethod,
+                CASE SS.PaymentMethod
+                    WHEN 1 THEN N'نقدی'
+                    WHEN 2 THEN N'کارتخوان'
+                    WHEN 3 THEN N'بانک'
+                    WHEN 4 THEN N'چک'
+                    WHEN 5 THEN N'حواله'
+                    WHEN 6 THEN N'سایر'
+                    ELSE N'نامشخص'
+                END AS PaymentMethodTitle,
+                SS.ReferenceNo,SS.Description,SS.FactorID,SS.ParentSanadID,SS.IsConfirmed,SS.CreatorID,
+                SS.CreateDate,SS.CreateTime,SS.ConfirmerID,SS.ConfirmDate,SS.ConfirmTime
+            FROM dbo.ServiceSettlement AS SS
+            INNER JOIN dbo.ServiceCase AS SC ON SC.ID = SS.CaseID
+            LEFT JOIN dbo.Tafzili_VIEW AS TV ON TV.Code_Tafzil = SS.TafziliCode;
+            """,
+
+            """
+            CREATE VIEW dbo.ServiceCaseFinancial_VIEW
+            AS
+            SELECT SC.ID AS CaseID,SC.CaseNo,SC.CaseDate,SC.Title AS CaseTitle,SC.ServiceDefinitionID,
+                SD.ServiceName,SC.CustomerTafziliCode,CustomerTaf.Name AS CustomerName,SC.PrincipalTafziliCode,
+                PrincipalTaf.Name AS PrincipalName,SC.BaseAmount,SC.TransactionAmount,SC.CommissionPercent,
+                SC.CommissionAmount,SC.DiscountAmount,SC.TaxAmount,SC.OtherAmount,SC.TotalAmount,SC.PrincipalAmount,SC.CustomerReceivableAmount,
+                ISNULL(Costs.TotalCost, 0) AS TotalCost, 
+                ISNULL(Settlements.TotalReceived, 0) AS TotalReceived,
+                ISNULL(Settlements.TotalPaidToPrincipal, 0) AS TotalPaidToPrincipal,
+                ISNULL(Settlements.TotalOtherPayment, 0) AS TotalOtherPayment,
+                ISNULL(Settlements.TotalReceived, 0) - ISNULL(Settlements.TotalPaidToPrincipal, 0)
+                - ISNULL(Settlements.TotalOtherPayment, 0) AS CashBalance,
+                SC.CommissionAmount - ISNULL(Costs.TotalCost, 0) AS GrossProfit,
+                SC.CustomerReceivableAmount - ISNULL(Settlements.TotalReceived, 0) AS ReceivableBalance,
+                SC.PrincipalAmount
+                - ISNULL(Settlements.TotalPaidToPrincipal, 0) AS PrincipalBalance,SC.Status,
+                CASE SC.Status
+                    WHEN 1 THEN N'پیش‌نویس'
+                    WHEN 2 THEN N'فعال'
+                    WHEN 3 THEN N'در انتظار تسویه'
+                    WHEN 4 THEN N'تسویه شده'
+                    WHEN 5 THEN N'لغو شده'
+                    ELSE N'نامشخص'
+                END AS StatusTitle
+            FROM dbo.ServiceCase AS SC
+            INNER JOIN dbo.ServiceDefinition AS SD ON SD.ID = SC.ServiceDefinitionID
+            LEFT JOIN dbo.Tafzili_View AS CustomerTaf ON CustomerTaf.Code_Tafzil = SC.CustomerTafziliCode
+            LEFT JOIN dbo.Tafzili_View AS PrincipalTaf ON PrincipalTaf.Code_Tafzil = SC.PrincipalTafziliCode
+            OUTER APPLY
+            (SELECT SUM(SCC.TotalAmount) AS TotalCost
+                FROM dbo.ServiceCaseCost AS SCC
+                WHERE SCC.CaseID = SC.ID) AS Costs
+            OUTER APPLY
+            (SELECT SUM(CASE WHEN SS.SettlementType IN (1, 3) AND SS.IsConfirmed = 1
+                            THEN SS.Amount
+                            ELSE 0  END) AS TotalReceived,
+                    SUM(CASE WHEN SS.SettlementType = 2 AND SS.IsConfirmed = 1 THEN SS.Amount ELSE 0  END ) AS TotalPaidToPrincipal,
+                    SUM(CASE WHEN SS.SettlementType IN (4, 5, 6) AND SS.IsConfirmed = 1
+                            THEN SS.Amount ELSE 0 END ) AS TotalOtherPayment
+               FROM dbo.ServiceSettlement AS SS
+                WHERE SS.CaseID = SC.ID
+            ) AS Settlements;
+            """,
+        
 
             // ============================================================
             // Functions — بخش دوم (توابع جدولی و محاسباتی سنگین)
@@ -2617,15 +2636,6 @@ public static class DatabaseUpdater
             END;
             """,
 
-            """
-            CREATE FUNCTION [dbo].[Get_Depreciation_Type] (@Kind int)
-            RETURNS varchar(30) AS BEGIN
-                Declare @Temp varchar(30)
-                set @Temp = N'درصدی'
-                if IsNull(@Kind,0) = 0 set @Temp = N'مستقیم'
-                return(@Temp)
-            END;
-            """,
 
             """
             CREATE FUNCTION [dbo].[fn_GetNTSW_Data] (@SazmanCode INT, @DorehMaliID INT, @FactorKind INT,
@@ -3107,7 +3117,13 @@ public static class DatabaseUpdater
                     
                     SET @Mab_Bed = CASE WHEN @FactorKind IN (1, 2) THEN @Discount ELSE 0 END;
                     SET @Mab_Bes = CASE WHEN @FactorKind IN (0, 3) THEN @Discount ELSE 0 END;
-                    SET @Des=N' بابت تخفیفات اعطایی فاکتور '+ CASE @FactorKind WHEN 0 THEN N'خرید ' WHEN 1 THEN N'فروش ' WHEN 2 THEN N'برگشت از خرید ' WHEN 3 THEN N'برگشت از فروش ' end + N' بشماره '+ cast(@FactorNo as varchar(20)) + ' ' + ISNULL(@HesabNameTaf, '')
+                    SET @Des=N' بابت تخفیفات اعطایی فاکتور '+ 
+                    CASE @FactorKind 
+                        WHEN 0 THEN N'خرید ' 
+                        WHEN 1 THEN N'فروش ' 
+                        WHEN 2 THEN N'برگشت از خرید ' 
+                        WHEN 3 THEN N'برگشت از فروش ' 
+                        end + N' بشماره '+cast(@FactorNo as varchar(20)) + ' ' + ISNULL(@HesabNameTaf, '')
                     
                     EXEC Insert_Sanad @aNo_Sanad, @aParentSanadID, @aCode_Col, @aCode_Moein, @Code_Tafzili, @Des, @Mab_Bed, @Mab_Bes, @FactorID;
                 END
@@ -3130,7 +3146,11 @@ public static class DatabaseUpdater
                     FROM Hesab_VIEW h
                     WHERE h.Code_Col = @aCode_Col AND h.Code_Moein = @aCode_Moein;
                     
-                    SET @Des = N'مالیات بر ارزش افزوده فاکتور ' + CASE @FactorKind WHEN 0 THEN N'خرید ' WHEN 1 THEN N'فروش ' WHEN 2 THEN N'برگشت از خرید ' WHEN 3 THEN N'برگشت از فروش ' end + N' بشماره '+ CAST(@FactorNo AS VARCHAR(20)) + ' ' + ISNULL(@HesabNameTaf, '');
+                    SET @Des = N'مالیات بر ارزش افزوده فاکتور ' + 
+                    CASE @FactorKind WHEN 0 THEN N'خرید ' 
+                                     WHEN 1 THEN N'فروش ' 
+                                     WHEN 2 THEN N'برگشت از خرید ' 
+                                     WHEN 3 THEN N'برگشت از فروش ' end + N' بشماره '+ CAST(@FactorNo AS VARCHAR(20)) + ' ' + ISNULL(@HesabNameTaf, '');
                     SET @Mab_Bed = CASE WHEN @FactorKind IN (0, 3) THEN @Tax_Val ELSE 0 END;
                     SET @Mab_Bes = CASE WHEN @FactorKind IN (1, 2) THEN @Tax_Val ELSE 0 END;
                     
@@ -3147,7 +3167,12 @@ public static class DatabaseUpdater
                     FROM Hesab_VIEW h
                     WHERE h.Code_Col = @aCode_Col AND h.Code_Moein = @aCode_Moein;
                     
-                    SET @Des = N'عوارض بر ارزش افزوده فاکتور ' + CASE @FactorKind WHEN 0 THEN N'خرید ' WHEN 1 THEN N'فروش ' WHEN 2 THEN N'برگشت از خرید ' WHEN 3 THEN N'برگشت از فروش ' end + N' بشماره '+ CAST(@FactorNo AS VARCHAR(20)) + ' ' + ISNULL(@HesabNameTaf, '');
+                    SET @Des = N'عوارض بر ارزش افزوده فاکتور ' + 
+                    CASE @FactorKind WHEN 0 THEN N'خرید ' 
+                                     WHEN 1 THEN N'فروش ' 
+                                     WHEN 2 THEN N'برگشت از خرید ' 
+                                     WHEN 3 THEN N'برگشت از فروش ' 
+                                    end + N' بشماره '+ CAST(@FactorNo AS VARCHAR(20)) + ' ' + ISNULL(@HesabNameTaf, '');
                     SET @Mab_Bed = CASE WHEN @FactorKind IN (0, 3) THEN @Avarez_Val ELSE 0 END;
                     SET @Mab_Bes = CASE WHEN @FactorKind IN (1, 2) THEN @Avarez_Val ELSE 0 END;
                     
@@ -3346,7 +3371,10 @@ public static class DatabaseUpdater
                     SELECT @aNo_Sanad = ISNULL(MAX(No_Sanad), 0) + 1 FROM ParentSanad;
                     INSERT INTO ParentSanad (NO_Sanad, Date_IN, Vazeit, OtherParentSharh, Code_Op, Date_Op, Time_Op)
                     VALUES (@aNo_Sanad, @aDateIN, 0, 
-                            CASE @StockKind WHEN 0 THEN N'سند رسید' WHEN 1 THEN N'سند حواله' WHEN 2 THEN N'سند برگشتی' ELSE N'سند انبار' END,
+                            CASE @StockKind WHEN 0 THEN N'سند رسید' 
+                                            WHEN 1 THEN N'سند حواله' 
+                                            WHEN 2 THEN N'سند برگشتی' 
+                                            ELSE N'سند انبار' END,
                             -1, @aNow, GETDATE());
                     SET @aParentSanadID = SCOPE_IDENTITY();
                 END
@@ -3370,7 +3398,8 @@ public static class DatabaseUpdater
                 );
                 
                 INSERT INTO @TempItems (ArticleID, Amount, ArticleName, UnitName, Val)
-                SELECT SFM.ArticleID, ISNULL(SFM.Val, 0) * ISNULL(SFM.Cost, 0) AS Amount, AN.Name, AU.Name, SFM.Val
+                SELECT SFM.ArticleID, ISNULL(SFM.Val, 0) * ISNULL(SFM.Cost, 0) AS Amount, AN.Name, AU.Name,
+                        SFM.Val
                 FROM Stock_Factor_Mat SFM
                 INNER JOIN ArticleNew AN ON AN.ID = SFM.ArticleID
                 LEFT JOIN ArticleUnit AU ON AU.ID = AN.ArticleUnitID
@@ -3397,7 +3426,8 @@ public static class DatabaseUpdater
                         CROSS JOIN Stock_Factor_VIEW SF
                         WHERE AN.ID = @ArticleID AND SF.ID = @StockID;
                         
-                        SET @Des = N'ورود به ' + @StokName + N' به شماره رسید ' + CAST(@StockNo AS VARCHAR(20)) + 
+                        SET @Des = N'ورود به ' + @StokName + N' به شماره رسید ' + 
+                                    CAST(@StockNo AS VARCHAR(20)) + 
                                    N' به تعداد ' + CAST(@ArticleCount AS VARCHAR(20)) + ' ' + ISNULL(@UnitName, '') + 
                                    N' بابت کالای ' + ISNULL(@ArticleName, '');
                                    
