@@ -730,4 +730,81 @@ public class ChequeReportExtendedRepository : IChequeReportExtendedRepository
 
         return dto;
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  لیست سررسیدها (چک‌های در جریان + اسناد سررسید شده)
+    // ═══════════════════════════════════════════════════════════════
+    public async Task<List<DueDateItemDto>> GetDueDateListAsync(
+        long orgId, long fyId, DueDateFilterDto filter, CancellationToken ct = default)
+    {
+        var parts = new List<string>();
+        var p = new DynamicParameters();
+
+        // ۱. چک‌های پرداختی (در جریان) - طبق منطق CheckInput_Impl
+        if (filter.IncludePayCheques)
+        {
+            parts.Add(@"
+                SELECT 
+                    0 AS ItemType, CP.ID AS Id, LTRIM(RTRIM(CP.CheckDate)) AS DueDate, ISNULL(CP.CheckMab, 0) AS Amount,
+                    ISNULL(CP.CheckPerson, '') AS PartyName, ISNULL(CP.CheckSeries, '') AS Serial,
+                    N'چک پرداختی' AS TypeLabel, 0 AS Status, ISNULL(B.Name, '') AS BankName
+                FROM CheckPay CP
+                LEFT JOIN BankAcc A ON A.ID = CP.BankAccID
+                LEFT JOIN Bank B ON B.ID = A.BankID
+                WHERE ISNULL(CP.ChequeOK, 0) = 0 
+                  AND LEN(ISNULL(CP.CheckDate, '')) > 0
+            ");
+        }
+
+        // ۲. چک‌های دریافتی (در جریان) - طبق منطق CheckInput_Impl
+        if (filter.IncludeReceiveCheques)
+        {
+            parts.Add(@"
+                SELECT 
+                    1 AS ItemType, CR.ID AS Id, LTRIM(RTRIM(CR.CheckDate)) AS DueDate, ISNULL(CR.CheckMab, 0) AS Amount,
+                    ISNULL(CR.CheckPerson, '') AS PartyName, ISNULL(CR.CheckSeries, '') AS Serial,
+                    N'چک دریافتی' AS TypeLabel, 0 AS Status, ISNULL(B.Name, '') AS BankName
+                FROM CheckRecive CR
+                LEFT JOIN Bank B ON B.ID = CR.BankID
+                WHERE ISNULL(CR.ChequeOK, 0) = 0 
+                  AND ISNULL(CR.WasExpended, 0) = 0
+                  AND LEN(ISNULL(CR.CheckDate, '')) > 0
+            ");
+        }
+
+        // ۳. اسناد حسابداری (دیون پرداختی) - طبق منطق Sanad_impl
+        if (filter.IncludeSanads)
+        {
+            parts.Add(@"
+                SELECT 
+                    2 AS ItemType, P.ParentSanadID AS Id, LTRIM(RTRIM(MAX(S.DoDate))) AS DueDate, SUM(ISNULL(S.Mab_Bed, 0)) AS Amount,
+                    ISNULL(P.OtherParentSharh, '') AS PartyName, CAST(P.NO_Sanad AS VARCHAR) AS Serial,
+                    N'سند حسابداری' AS TypeLabel, 0 AS Status, '' AS BankName
+                FROM Sanad S
+                INNER JOIN ParentSanad P ON P.ParentSanadID = S.ParentSanadCode
+                WHERE ISNULL(S.DoOk, 0) = 0 
+                  AND LEN(ISNULL(S.DoDate, '')) > 0
+                GROUP BY P.ParentSanadID, P.OtherParentSharh, P.NO_Sanad
+            ");
+        }
+
+        if (parts.Count == 0) return new List<DueDateItemDto>();
+
+        var sql = string.Join(" UNION ALL ", parts) + " ORDER BY DueDate ASC";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        var items = (await conn.QueryAsync<DueDateItemDto>(
+            new CommandDefinition(sql, p, cancellationToken: ct))).ToList();
+
+        return items;
+    }
+
+    public async Task<bool> ConfirmSanadDueAsync(long orgId, long fyId, long sanadId, CancellationToken ct = default)
+    {
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        // آپدیت فیلد DoOk برای ردیف‌های سندِ مشخص شده
+        var sql = "UPDATE Sanad SET DoOk = 1 WHERE ParentSanadCode = @sanadId";
+        var rows = await conn.ExecuteAsync(new CommandDefinition(sql, new { sanadId }, cancellationToken: ct));
+        return rows > 0;
+    }
 }

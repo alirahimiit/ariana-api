@@ -55,4 +55,28 @@ public class ChequeReportExtendedController : ControllerBase
         var result = await _repo.GetKardexAsync(orgId, fyId, dto, ct);
         return result is null ? NotFound() : Ok(result);
     }
+
+    [HttpPost("due-date/list")]
+    public async Task<IActionResult> GetDueDateList(
+        [FromBody] DueDateFilterDto filter,
+        [FromServices] IChequeReportExtendedRepository repo,
+        CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        var result = await repo.GetDueDateListAsync(orgId, fyId, filter, ct);
+        return Ok(result);
+    }
+
+    public class ConfirmSanadDto { public long SanadId { get; set; } }
+
+    [HttpPost("confirm-sanad-due")]
+    public async Task<IActionResult> ConfirmSanadDue([FromBody] ConfirmSanadDto dto, CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+        var success = await _repo.ConfirmSanadDueAsync(orgId, fyId, dto.SanadId, ct);
+        return success ? Ok() : BadRequest("خطا در تأیید سند");
+    }
 }

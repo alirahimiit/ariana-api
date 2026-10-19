@@ -18,4 +18,11 @@ public interface IChequeReportExtendedRepository
         long orgId, long fyId,
         ChequeKardexRequestDto dto,
         CancellationToken ct = default);
+
+    Task<List<DueDateItemDto>> GetDueDateListAsync(
+    long orgId, long fyId,
+    DueDateFilterDto filter,
+    CancellationToken ct = default);
+
+    Task<bool> ConfirmSanadDueAsync(long orgId, long fyId, long sanadId, CancellationToken ct = default);
 }

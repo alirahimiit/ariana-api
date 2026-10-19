@@ -214,3 +214,31 @@ public class KardexRowDto
     public decimal MabBed { get; set; }
     public decimal MabBes { get; set; }
 }
+
+// ═══════════════════════════════════════════════════════
+//  لیست سررسیدها (ترکیب چک و سند) — جلسه ۵۲
+// ═══════════════════════════════════════════════════════
+
+public class DueDateFilterDto
+{
+    public string? FromDate { get; set; }
+    public string? ToDate { get; set; }
+    public bool IncludePayCheques { get; set; } = true;
+    public bool IncludeReceiveCheques { get; set; } = true;
+    public bool IncludeSanads { get; set; } = true;
+}
+
+public class DueDateItemDto
+{
+    public long Id { get; set; }
+    /// <summary>0=چک پرداختی، 1=چک دریافتی، 2=سند حسابداری</summary>
+    public int ItemType { get; set; }
+    public string DueDate { get; set; } = "";
+    public decimal Amount { get; set; }
+    public string PartyName { get; set; } = "";
+    public string Serial { get; set; } = ""; // برای چک: سریال / برای سند: شماره سند
+    public string TypeLabel { get; set; } = "";
+    public int Status { get; set; } // 0=در جریان
+    public int DaysRemaining { get; set; }
+    public string BankName { get; set; } = ""; // فقط برای چک‌ها
+}

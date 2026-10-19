@@ -644,3 +644,348 @@
         display: none !important;
     }
 }
+
+/* ═══ KPI سررسید ═══ */
+.due-date-kpi-strip {
+    background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
+    border-color: #E2E8F0;
+}
+
+    .due-date-kpi-strip .dash-strip-value {
+        font-size: 15px;
+    }
+
+    .due-date-kpi-strip .dash-strip-label {
+        font-size: 11px;
+    }
+
+/* ═══ Accordion سررسید ═══ */
+.due-date-section {
+    background: #fff;
+    border: 1px solid var(--border, #E5E7EB);
+    border-radius: 14px;
+    padding: 16px;
+}
+
+.due-date-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.acc-group {
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.acc-header {
+    background: #F8FAFC;
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+}
+
+    .acc-header:hover {
+        background: #F1F5F9;
+    }
+
+.acc-title {
+    flex: 1;
+}
+
+.acc-sum {
+    color: #4F46E5;
+    margin-left: 16px;
+    font-weight: 700;
+}
+
+.acc-icon {
+    transition: transform 0.2s;
+    font-size: 10px;
+    color: #94A3B8;
+}
+
+.acc-group.open .acc-icon {
+    transform: rotate(180deg);
+}
+
+.acc-body {
+    display: none;
+    padding: 0;
+}
+
+.acc-group.open .acc-body {
+    display: block;
+}
+
+/* جدول سررسید */
+.due-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+    .due-table th {
+        background: #F1F5F9;
+        padding: 8px;
+        text-align: right;
+        font-weight: 600;
+        color: #475569;
+        border-bottom: 2px solid #E2E8F0;
+    }
+
+    .due-table td {
+        padding: 8px;
+        border-bottom: 1px solid #F1F5F9;
+    }
+
+    .due-table tr:hover td {
+        background: #F8FAFC;
+    }
+
+.badge-type {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.chq-pay {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+.chq-recv {
+    background: #DBEAFE;
+    color: #1E40AF;
+}
+
+.sanad {
+    background: #DCFCE7;
+    color: #166534;
+}
+
+.btn-due-action {
+    padding: 4px 12px;
+    font-size: 11px;
+    background: #10B981;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.2s;
+}
+
+    .btn-due-action:hover {
+        background: #059669;
+    }
+
+/* ═══ Accordion سررسید ═══ */
+.acc-group {
+    border: 1px solid var(--border, #E5E7EB);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    background: #fff;
+}
+
+.acc-header {
+    background: #F8FAFC;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    color: #334155;
+    user-select: none;
+}
+
+    .acc-header:hover {
+        background: #F1F5F9;
+    }
+
+.acc-sum {
+    color: var(--primary, #4F46E5);
+    font-weight: 700;
+    margin-left: auto;
+    margin-right: 16px;
+}
+
+.acc-icon {
+    font-size: 10px;
+    color: #94A3B8;
+    transition: transform 0.2s;
+}
+
+.acc-group.open .acc-icon {
+    transform: rotate(180deg);
+}
+
+.acc-body {
+    display: none;
+    padding: 0;
+}
+
+.acc-group.open .acc-body {
+    display: block;
+}
+
+/* جدول داخل آکاردئون */
+.due-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+    .due-table th {
+        background: #F1F5F9;
+        padding: 10px 8px;
+        text-align: right;
+        font-weight: 600;
+        color: #475569;
+        border-bottom: 2px solid #E2E8F0;
+    }
+
+    .due-table td {
+        padding: 10px 8px;
+        border-bottom: 1px solid #F1F5F9;
+    }
+
+    .due-table tr:hover td {
+        background: #F8FAFC;
+    }
+
+.badge-type {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.chq-pay {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+.chq-recv {
+    background: #DBEAFE;
+    color: #1E40AF;
+}
+
+.sanad {
+    background: #DCFCE7;
+    color: #166534;
+}
+
+.btn-due-action {
+    padding: 4px 12px;
+    font-size: 11px;
+    background: #10B981;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.2s;
+}
+
+    .btn-due-action:hover {
+        background: #059669;
+    }
+/* ═══ دسترسی سریع ═══ */
+.dash-shortcuts {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.dash-shortcut {
+    background: #fff;
+    border: 1px solid var(--border, #E5E7EB);
+    border-radius: 10px;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex: 1;
+    min-width: 120px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+}
+
+    .dash-shortcut:hover {
+        background: #F8FAFC;
+        border-color: #CBD5E1;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+
+.dash-shortcut-icon {
+    width: 32px;
+    height: 32px;
+    background: #EEF2FF;
+    color: #4F46E5;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+    .dash-shortcut-icon .ico {
+        width: 18px;
+        height: 18px;
+    }
+
+.dash-shortcut-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .dash-shortcuts {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.due-date-section.open #dueDateAccordion {
+    display: block !important;
+}
+
+.due-date-section.open .master-icon {
+    transform: rotate(180deg);
+}
+
+/* بسته بودن پیش‌فرض کل لیست سررسید */
+.due-date-section #dueDateAccordion {
+    display: none !important;
+}
+
+.due-date-section.open #dueDateAccordion {
+    display: block !important;
+}
+
+.due-date-section.open .master-icon {
+    transform: rotate(180deg);
+}
+
+.hover-row:hover {
+    background-color: #f8fafc !important;
+    transition: background 0.2s;
+}
