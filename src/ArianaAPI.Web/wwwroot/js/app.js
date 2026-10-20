@@ -532,6 +532,9 @@ window.App = Object.assign(window.App || {}, {
         const s = this.state.settings;
         const hasLogo = !!this.getLogo();
         const pageSizeOptions = [10, 20, 30, 50, 75, 100, 200, 300, 500, 1000];
+        const user = this.state.user || {};
+        const orgId = user.orgId;
+        const fyId = user.fyId;
 
         // ساخت گزینه‌ها برای CustomSelect
         const pageSizeCsOptions = pageSizeOptions.map(v => ({
@@ -540,89 +543,228 @@ window.App = Object.assign(window.App || {}, {
         }));
 
         const body = `
-        <div class="form-group">
-            <label>لوگوی برنامه</label>
-            <div style="display:flex; align-items:center; gap:12px; padding:12px; background:#F9FAFB; border-radius:10px; margin-bottom:16px;">
-                <div class="logo-preview" style="width:56px; height:56px; font-size:22px;">
-                    ${hasLogo ? `<img src="${this.getLogo()}" alt="لوگو">` : '<span>آ</span>'}
+            <div class="settings-tabs" style="display:flex; gap:10px; border-bottom:1px solid #E2E8F0; margin-bottom:20px;">
+                <button class="stab active" data-tab="general" style="padding:10px 20px; background:none; border:none; border-bottom:3px solid #3B82F6; color:#1E293B; font-weight:bold; cursor:pointer; font-family:inherit;">تنظیمات عمومی</button>
+                <button class="stab" data-tab="org" style="padding:10px 20px; background:none; border:none; border-bottom:3px solid transparent; color:#64748B; font-weight:bold; cursor:pointer; font-family:inherit;">اطلاعات سازمان</button>
+                <button class="stab" data-tab="fy" style="padding:10px 20px; background:none; border:none; border-bottom:3px solid transparent; color:#64748B; font-weight:bold; cursor:pointer; font-family:inherit;">اطلاعات دوره مالی</button>
+            </div>
+
+            <div id="tab-general" class="stab-content">
+                <div class="form-group">
+                    <label>لوگوی برنامه</label>
+                    <div style="display:flex; align-items:center; gap:12px; padding:12px; background:#F9FAFB; border-radius:10px; margin-bottom:16px;">
+                        <div class="logo-preview" style="width:56px; height:56px; font-size:22px;">
+                            ${hasLogo ? `<img src="${this.getLogo()}" alt="لوگو">` : '<span>آ</span>'}
+                        </div>
+                        <div style="flex:1;">
+                            <p style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">
+                                ${hasLogo ? 'لوگوی فعلی' : 'لوگویی تنظیم نشده'}
+                            </p>
+                            <button type="button" class="btn btn-ghost btn-sm" id="openLogoDialogBtn">
+                                🎨 تغییر لوگو
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div style="flex:1;">
-                    <p style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">
-                        ${hasLogo ? 'لوگوی فعلی' : 'لوگویی تنظیم نشده'}
-                    </p>
-                    <button type="button" class="btn btn-ghost btn-sm" id="openLogoDialogBtn">
-                        🎨 تغییر لوگو
-                    </button>
+
+                <div class="form-group">
+                    <label>تعداد ردیف در هر صفحه (صفحه‌بندی)</label>
+                    <div id="csPageSizeWrapper">
+                        ${window.App.UI.CustomSelect.html('setPageSizeCustom', pageSizeCsOptions, String(s.pageSize), 'انتخاب کنید...')}
+                    </div>
+                    <p class="form-hint" style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">این مقدار روی همه‌ی جدول‌های برنامه اعمال می‌شود.</p>
+                </div>
+
+                <div style="display:flex; gap:10px; margin-top:20px;">
+                    <button class="btn btn-primary" id="setSaveBtn">💾 ذخیره</button>
+                    <button class="btn btn-ghost" data-close>انصراف</button>
                 </div>
             </div>
-        </div>
 
-        <div class="form-group">
-            <label>تعداد ردیف در هر صفحه (صفحه‌بندی)</label>
-            <!-- 👇 استفاده از CustomSelect استاندارد -->
-            <div id="csPageSizeWrapper">
-                ${window.App.UI.CustomSelect.html('setPageSizeCustom', pageSizeCsOptions, String(s.pageSize), 'انتخاب کنید...')}
+            <div id="tab-org" class="stab-content" style="display:none;">
+                <div id="orgLoading" style="text-align:center; padding:20px; color:#64748B;">در حال بارگذاری...</div>
+                <div id="orgForm" style="display:none;">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                        <div class="form-group"><label>نام سازمان</label><input type="text" id="editOrgName" class="form-control"></div>
+                        <div class="form-group"><label>کد لایسنس</label><input type="text" id="editOrgLicence" class="form-control"></div>
+                        <div class="form-group"><label>شناسه ملی</label><input type="text" id="editOrgNationalCode" class="form-control" dir="ltr"></div>
+                        <div class="form-group"><label>شماره ثبت</label><input type="text" id="editOrgRegNo" class="form-control" dir="ltr"></div>
+                        <div class="form-group"><label>کد اقتصادی</label><input type="text" id="editOrgEcoNo" class="form-control" dir="ltr"></div>
+                        <div class="form-group"><label>کد پستی</label><input type="text" id="editOrgPostalCode" class="form-control" dir="ltr"></div>
+                        <div class="form-group"><label>استان</label><input type="text" id="editOrgOstan" class="form-control"></div>
+                        <div class="form-group"><label>شهرستان</label><input type="text" id="editOrgCity1" class="form-control"></div>
+                        <div class="form-group"><label>شهر</label><input type="text" id="editOrgCity2" class="form-control"></div>
+                        <div class="form-group"><label>تلفن</label><input type="text" id="editOrgPhone" class="form-control" dir="ltr"></div>
+                        <div class="form-group" style="grid-column: span 2;"><label>آدرس</label><input type="text" id="editOrgAddress" class="form-control"></div>
+                    </div>
+                    <div style="display:flex; gap:10px; margin-top:20px;">
+                        <button class="btn btn-primary" id="saveOrgBtn">💾 ذخیره اطلاعات سازمان</button>
+                    </div>
+                </div>
             </div>
-            <p class="form-hint" style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">این مقدار روی همه‌ی جدول‌های برنامه اعمال می‌شود.</p>
-        </div>
 
-        <div style="display:flex; gap:10px; margin-top:20px;">
-            <button class="btn btn-primary" id="setSaveBtn">💾 ذخیره</button>
-            <button class="btn btn-ghost" data-close>انصراف</button>
-        </div>
-    `;
+            <div id="tab-fy" class="stab-content" style="display:none;">
+                <div id="fyLoading" style="text-align:center; padding:20px; color:#64748B;">در حال بارگذاری...</div>
+                <div id="fyForm" style="display:none;">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                        <div class="form-group" style="grid-column: span 2;"><label>نام دوره</label><input type="text" id="editFyName" class="form-control"></div>
+                        <div class="form-group"><label>تاریخ شروع</label><input type="text" id="editFyBeginDate" class="form-control" dir="ltr"></div>
+                        <div class="form-group"><label>تاریخ پایان</label><input type="text" id="editFyEndDate" class="form-control" dir="ltr"></div>
+                        <div class="form-group"><label>درصد مالیات</label><input type="number" id="editFyTax" class="form-control" dir="ltr"></div>
+                        <div class="form-group"><label>درصد عوارض</label><input type="number" id="editFyAvarez" class="form-control" dir="ltr"></div>
+                        <div class="form-group" style="grid-column: span 2; background:#FEF3C7; padding:10px; border-radius:8px;">
+                            <label style="color:#92400E;">نسخه دیتابیس (UpDate_Database) - ⚠️ با احتیاط تغییر دهید</label>
+                            <input type="text" id="editFyUpdateDb" class="form-control" dir="ltr">
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:10px; margin-top:20px;">
+                        <button class="btn btn-primary" id="saveFyBtn">💾 ذخیره اطلاعات دوره</button>
+                    </div>
+                </div>
+            </div>
+        `;
 
         this.openModal('⚙️ تنظیمات', body);
-
         const modalBody = document.getElementById('modalBody');
 
-        // ⭐ فعال‌سازی CustomSelect بعد از باز شدن مودال
-        setTimeout(() => {
-            window.App.UI.CustomSelect.bind('setPageSizeCustom', (val) => {
-                // در صورت نیاز به واکنش فوری
+        // ═══ تب‌ها ═══
+        modalBody.querySelectorAll('.stab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                // تغییر حالت دکمه‌ها
+                modalBody.querySelectorAll('.stab').forEach(b => {
+                    b.classList.remove('active');
+                    b.style.borderBottomColor = 'transparent';
+                    b.style.color = '#64748B';
+                });
+                btn.classList.add('active');
+                btn.style.borderBottomColor = '#3B82F6';
+                btn.style.color = '#1E293B';
+
+                // مخفی کردن محتواها
+                modalBody.querySelectorAll('.stab-content').forEach(c => c.style.display = 'none');
+                document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
+
+                // لود دیتا
+                if (btn.dataset.tab === 'org') loadOrgData();
+                if (btn.dataset.tab === 'fy') loadFyData();
             });
+        });
+
+        // ═══ تب عمومی (لوگو و صفحه‌بندی) ═══
+        setTimeout(() => {
+            window.App.UI.CustomSelect.bind('setPageSizeCustom', () => { });
         }, 50);
 
-        // دکمه لوگو
-        const logoBtn = modalBody.querySelector('#openLogoDialogBtn');
-        if (logoBtn) {
-            logoBtn.addEventListener('click', () => {
-                this.closeModal();
-                setTimeout(() => this.openLogoDialog(), 100);
-            });
-        }
+        modalBody.querySelector('#openLogoDialogBtn')?.addEventListener('click', () => {
+            this.closeModal();
+            setTimeout(() => this.openLogoDialog(), 100);
+        });
 
-        // ذخیره
         modalBody.querySelector('#setSaveBtn').addEventListener('click', () => {
-            // ⭐ خواندن مقدار از CustomSelect
             const selectedPageSize = parseInt(window.App.UI.CustomSelect.getValue('setPageSizeCustom'));
-
             this.state.settings.pageSize = selectedPageSize;
             localStorage.setItem('ariana_settings', JSON.stringify(this.state.settings));
             this.closeModal();
             this.toast('تنظیمات ذخیره شد', 'success');
 
             // رفرش صفحه فعلی
-            if (this.state.currentPage === 'sanad') {
-                this.state.sanadPage = 1;
-                window.App.Features.Sanad.loadList();
-            } else if (this.state.currentPage === 'article') {
-                window.App.Features.Article.runList(1);
-            } else if (this.state.currentPage === 'factor') {
-                window.App.Features.Factor.runList(1);
-            } else if (this.state.currentPage === 'tafzili2') {
-                window.App.Features.Tafzili2.runList(1);
-            }
+            if (this.state.currentPage === 'sanad') { this.state.sanadPage = 1; window.App.Features.Sanad.loadList(); }
+            else if (this.state.currentPage === 'article') { window.App.Features.Article.runList(1); }
+            else if (this.state.currentPage === 'factor') { window.App.Features.Factor.runList(1); }
+            else if (this.state.currentPage === 'tafzili2') { window.App.Features.Tafzili2.runList(1); }
         });
 
-        // بستن
+        // ═══ تب سازمان ═══
+        async function loadOrgData() {
+            const loading = document.getElementById('orgLoading');
+            const form = document.getElementById('orgForm');
+            loading.style.display = 'block'; form.style.display = 'none';
+
+            try {
+                const res = await window.App.Http.api(`/api/setup/sazman/${orgId}`);
+                document.getElementById('editOrgName').value = res.name || '';
+                document.getElementById('editOrgLicence').value = res.licenceSazman || '';
+                document.getElementById('editOrgNationalCode').value = res.nationalCode || '';
+                document.getElementById('editOrgRegNo').value = res.regNo || '';
+                document.getElementById('editOrgEcoNo').value = res.ecoNo || '';
+                document.getElementById('editOrgPostalCode').value = res.postalCode || '';
+                document.getElementById('editOrgOstan').value = res.ostan || '';
+                document.getElementById('editOrgCity1').value = res.cityName1 || '';
+                document.getElementById('editOrgCity2').value = res.cityName2 || '';
+                document.getElementById('editOrgPhone').value = res.phoneNo || '';
+                document.getElementById('editOrgAddress').value = res.address || '';
+
+                loading.style.display = 'none'; form.style.display = 'block';
+            } catch (e) { loading.textContent = 'خطا در بارگذاری اطلاعات'; }
+        }
+
+        modalBody.querySelector('#saveOrgBtn').addEventListener('click', async () => {
+            const payload = {
+                SazmanId: orgId,
+                Name: document.getElementById('editOrgName').value,
+                LicenceSazman: document.getElementById('editOrgLicence').value,
+                NationalCode: document.getElementById('editOrgNationalCode').value,
+                RegNo: document.getElementById('editOrgRegNo').value,
+                EcoNo: document.getElementById('editOrgEcoNo').value,
+                PostalCode: document.getElementById('editOrgPostalCode').value,
+                Ostan: document.getElementById('editOrgOstan').value,
+                CityName1: document.getElementById('editOrgCity1').value,
+                CityName2: document.getElementById('editOrgCity2').value,
+                PhoneNo: document.getElementById('editOrgPhone').value,
+                Address: document.getElementById('editOrgAddress').value
+            };
+            try {
+                await window.App.Http.api(`/api/setup/sazman/${orgId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(payload),
+                    successMsg: 'اطلاعات سازمان ذخیره شد'
+                });
+            } catch (e) { /* handled by Http.api */ }
+        });
+
+        // ═══ تب دوره مالی ═══
+        async function loadFyData() {
+            const loading = document.getElementById('fyLoading');
+            const form = document.getElementById('fyForm');
+            loading.style.display = 'block'; form.style.display = 'none';
+
+            try {
+                const res = await window.App.Http.api(`/api/setup/doreh-mali/${fyId}`);
+                document.getElementById('editFyName').value = res.name || '';
+                document.getElementById('editFyBeginDate').value = res.beginDate || '';
+                document.getElementById('editFyEndDate').value = res.endDate || '';
+                document.getElementById('editFyTax').value = res.tax_Per || 0;
+                document.getElementById('editFyAvarez').value = res.avarez_Per || 0;
+                document.getElementById('editFyUpdateDb').value = res.upDate_Database || '';
+
+                loading.style.display = 'none'; form.style.display = 'block';
+            } catch (e) { loading.textContent = 'خطا در بارگذاری اطلاعات'; }
+        }
+
+        modalBody.querySelector('#saveFyBtn').addEventListener('click', async () => {
+            const payload = {
+                DorehMaliId: fyId,
+                Name: document.getElementById('editFyName').value,
+                BeginDate: document.getElementById('editFyBeginDate').value,
+                EndDate: document.getElementById('editFyEndDate').value,
+                Tax_Per: parseFloat(document.getElementById('editFyTax').value) || 0,
+                Avarez_Per: parseFloat(document.getElementById('editFyAvarez').value) || 0,
+                UpDate_Database: document.getElementById('editFyUpdateDb').value
+            };
+            try {
+                await window.App.Http.api(`/api/setup/doreh-mali/${fyId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(payload),
+                    successMsg: 'اطلاعات دوره مالی ذخیره شد'
+                });
+            } catch (e) { /* handled by Http.api */ }
+        });
+
+        // ═══ بستن ═══
         modalBody.querySelectorAll('[data-close]').forEach(el => {
-            el.addEventListener('click', () => {
-                this.closeModal();
-            });
+            el.addEventListener('click', () => this.closeModal());
         });
-    },  
-
+    },
     // ═══════════════════════════════════════════
     //  API HELPER
     // ═══════════════════════════════════════════

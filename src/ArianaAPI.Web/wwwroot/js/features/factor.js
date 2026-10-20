@@ -808,9 +808,15 @@ window.App.Features.Factor = (function () {
             '<span class="factor-label">جمع حمل:</span>' +
             '<span class="factor-value">' + H.fmt(detail.totalTransCost) + '</span>' +
             '</div>' +
-            '<div class="factor-total-item factor-total-final">' +
+            '<div class="factor-total-item factor-total-final" style="flex-direction: column; align-items: flex-start;">' +
+            '<div style="display:flex; justify-content:space-between; width:100%;">' +
             '<span class="factor-label">مبلغ نهایی:</span>' +
             '<span class="factor-value">' + H.fmt(detail.totalFinall) + '</span>' +
+            '</div>' +
+            // ⭐ نمایش حروف در مودال جزئیات
+            '<div style="font-size: 13px; color: #059669; margin-top: 8px; font-weight: bold; width:100%; text-align:center;">' +
+            H.toPersianWords(detail.totalFinall) +
+            '</div>' +
             '</div>' +
             '</div>';
     }
@@ -941,6 +947,7 @@ window.App.Features.Factor = (function () {
             '</table>';
 
         // ═══ جمع‌ها ═══
+        // ═══ جمع‌ها ═══
         const totalsBlock =
             '<table class="totals-table">' +
             '<tr>' +
@@ -961,6 +968,13 @@ window.App.Features.Factor = (function () {
             H.fmt(detail.totalFinall) +
             '</td>' +
             '</tr>' +
+            // ⭐ ردیف جدید برای مبلغ به حروف در چاپ
+            '<tr>' +
+            '<td class="label" style="border-top: 1px solid #ccc; padding-top: 8px;">مبلغ به حروف:</td>' +
+            '<td colspan="5" class="text-right" style="border-top: 1px solid #ccc; padding-top: 8px; font-weight:bold; color:#059669;">' +
+            H.toPersianWords(detail.totalFinall) +
+            '</td>' +
+            '</tr>' +
             '</table>';
 
         return headerRows + partyRows + descriptBlock + itemsBlock + totalsBlock;
@@ -970,7 +984,8 @@ window.App.Features.Factor = (function () {
         const u = window.App.state.user || {};
         return (u.orgName || '') + ' - ' + (u.fyName || '');
     }
-
+  
+    
     // ═══════════════════════════════════════════
     //  API عمومی
     // ═══════════════════════════════════════════

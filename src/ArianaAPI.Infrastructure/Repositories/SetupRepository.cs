@@ -125,6 +125,13 @@ public class SetupRepository : ISetupRepository
         await using var permConn = new SqlConnection(_permanentConnectionString);
         await permConn.OpenAsync(ct);
 
+        // ⭐ ۱. دریافت تاریخ و ساعت شمسی (فقط یک بار در بالاترین سطح)
+        var pc = new System.Globalization.PersianCalendar();
+        var now = DateTime.Now;
+        var todayPersian = $"{pc.GetYear(now):D4}/{pc.GetMonth(now):D2}/{pc.GetDayOfMonth(now):D2}";
+        var currentTime = now.ToString("HH:mm");
+
+        // ⭐ ۲. ثبت سازمان جدید (در صورت نیاز)
         if (finalSazmanId == 0)
         {
             var authorizedIds = GetAuthorizedOrgsFromLicense();
@@ -132,27 +139,41 @@ public class SetupRepository : ISetupRepository
                 new CommandDefinition("SELECT SazmanID FROM Sazman", cancellationToken: ct))).ToList();
 
             var availableIds = authorizedIds.Except(existingIds).ToList();
-
-            if (!availableIds.Any())
-                throw new Exception("محدودیت لایسنس: شما به حداکثر تعداد سازمان‌های مجاز رسیده‌اید.");
+            if (!availableIds.Any()) throw new Exception("محدودیت لایسنس: تمام سازمان‌های مجاز ایجاد شده‌اند.");
 
             finalSazmanId = availableIds.First();
 
             await permConn.ExecuteAsync(new CommandDefinition("SET IDENTITY_INSERT Sazman ON", cancellationToken: ct));
             await permConn.ExecuteAsync(new CommandDefinition(@"
-                INSERT INTO Sazman (SazmanID, Name, LicenceSazman, SysID, Date_Op, Time_Op) 
-                VALUES (@Id, @Name, @Code, '', dbo.GetMToSDate(GETDATE()), CONVERT(varchar(8), GETDATE(), 108))",
-                new { Id = finalSazmanId, Name = req.SazmanName, Code = req.SazmanCode }, cancellationToken: ct));
+                INSERT INTO Sazman (
+                    SazmanID, Name, LicenceSazman, SysID, NationalCode, RegNo, EcoNo, PostalCode, 
+                    Ostan, CityName1, CityName2, Address, PhoneNo, Date_Op, Time_Op
+                ) 
+                VALUES (
+                    @Id, @Name, @Code, '', @NationalCode, @RegNo, @EcoNo, @PostalCode, 
+                    @Ostan, @CityName1, @CityName2, @Address, @PhoneNo, @DateOp, @TimeOp
+                )",
+                new
+                {
+                    Id = finalSazmanId,
+                    Name = req.SazmanName,
+                    Code = req.SazmanCode,
+                    NationalCode = req.SazmanNationalCode ?? "",
+                    RegNo = req.SazmanRegNo ?? "",
+                    EcoNo = req.SazmanEcoNo ?? "",
+                    PostalCode = req.SazmanPostalCode ?? "",
+                    Ostan = req.SazmanOstan ?? "",
+                    CityName1 = req.SazmanCityName1 ?? "",
+                    CityName2 = req.SazmanCityName2 ?? "",
+                    Address = req.SazmanAddress ?? "",
+                    PhoneNo = req.SazmanPhoneNo ?? "",
+                    DateOp = todayPersian,
+                    TimeOp = currentTime
+                }, cancellationToken: ct));
             await permConn.ExecuteAsync(new CommandDefinition("SET IDENTITY_INSERT Sazman OFF", cancellationToken: ct));
         }
 
-        // ⭐ دریافت تاریخ و ساعت شمسی برای ثبت در دیتابیس
-        var pc = new System.Globalization.PersianCalendar();
-        var now = DateTime.Now;
-        var todayPersian = $"{pc.GetYear(now):D4}/{pc.GetMonth(now):D2}/{pc.GetDayOfMonth(now):D2}";
-        var currentTime = now.ToString("HH:mm");
-
-        // ⭐ اصلاح کوئری INSERT با اضافه کردن تمام ستون‌ها و مقداردهی پیش‌فرض (صفر یا رشته خالی)
+        // ⭐ ۳. ثبت دوره مالی جدید
         var newFyId = await permConn.ExecuteScalarAsync<long>(
             new CommandDefinition(@"
                 INSERT INTO DorehMali (
@@ -162,7 +183,7 @@ public class SetupRepository : ISetupRepository
                 OUTPUT INSERTED.DorehMaliID
                 VALUES (
                     @Name, @BeginDate, @EndDate, @SazmanCode, @Prior, @Tax, @Avarez, @Ver,
-                    '', 0, 0, 0, 0, @TodayPersian, @CurrentTime, 0, 0
+                    '', 0, 0, 0, 0, @DateOp, @TimeOp, 0, 0
                 )",
                 new
                 {
@@ -174,8 +195,8 @@ public class SetupRepository : ISetupRepository
                     Tax = req.Tax_Per,
                     Avarez = req.Avarez_Per,
                     Ver = DatabaseUpdater.C_VERSION_DATABASE,
-                    TodayPersian = todayPersian,
-                    CurrentTime = currentTime
+                    DateOp = todayPersian,
+                    TimeOp = currentTime
                 }, cancellationToken: ct));
 
         var newDbName = $"{_prefix}{finalSazmanId}_{newFyId}";
@@ -212,7 +233,7 @@ public class SetupRepository : ISetupRepository
             if (File.Exists(tempBak)) File.Delete(tempBak);
         }
 
-        // ⭐ اجرای آپدیتر روی Permanent (با مدیریت خطا)
+        // اجرای آپدیتر روی Permanent (با مدیریت خطا)
         try
         {
             await DatabaseUpdater.RunUpdaterAsync(_permanentConnectionString, isPermanent: true, ct);
@@ -228,7 +249,7 @@ public class SetupRepository : ISetupRepository
             _config["Database:UserId"] ?? "sa",
             _config["Database:Password"] ?? "");
 
-        // ⭐ اجرای آپدیتر روی دیتابیس دوره جدید (با مدیریت خطا)
+        // اجرای آپدیتر روی دیتابیس دوره جدید (با مدیریت خطا)
         try
         {
             await DatabaseUpdater.RunUpdaterAsync(newDbConnStr, isPermanent: false, ct);

@@ -116,6 +116,11 @@ public static class DatabaseUpdater
     {
         return new List<string>
         {
+             // ============================================================
+            // اصلاحات دیتابیس‌های قدیمی (Migration)
+            // ============================================================
+            // ⭐ اضافه کردن ستون PasswordHash به جدول Users (برای وب)
+            "IF OBJECT_ID(N'dbo.Users', N'U') IS NOT NULL AND COL_LENGTH('Users', 'PasswordHash') IS NULL ALTER TABLE Users ADD PasswordHash NVARCHAR(100) NULL;",
             // ۲. ایجاد ستون‌ها در Tenant (دیتابیس دوره)
             "IF COL_LENGTH('Sanad', 'FactorID') IS NULL ALTER TABLE Sanad ADD FactorID numeric",
             "IF COL_LENGTH('Sanad', 'MarketerFactorID') IS NULL ALTER TABLE Sanad ADD MarketerFactorID numeric",

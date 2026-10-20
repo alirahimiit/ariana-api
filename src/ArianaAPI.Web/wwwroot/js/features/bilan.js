@@ -163,11 +163,18 @@ window.App.Features.Bilan = (function () {
                         <div style="font-size:20px; font-weight:700; color:#1E40AF; direction:ltr;">
                             ${H.fmt(data.totalAssets)}
                         </div>
+                        <!-- ⭐ حروف برای دارایی‌ها -->
+                        <div style="font-size:12px; color:#1E40AF; margin-top:6px; font-weight:600;">
+                            ${H.toPersianWords(Math.abs(data.totalAssets))}
+                        </div>
                     </div>
                     <div style="text-align:center; padding:16px; background:white; border-radius:10px;">
                         <div style="font-size:13px; color:#6B7280; margin-bottom:6px;">جمع بدهی‌ها</div>
                         <div style="font-size:20px; font-weight:700; color:#92400E; direction:ltr;">
                             ${H.fmt(data.totalLiabilities)}
+                        </div>
+                        <div style="font-size:12px; color:${diffColor}; margin-top:4px; font-weight:600;">
+                            ${H.toPersianWords(Math.abs(data.totalLiabilities))}
                         </div>
                     </div>
                     <div style="text-align:center; padding:16px; background:white; border-radius:10px; border:2px solid ${diffColor};">
@@ -175,10 +182,15 @@ window.App.Features.Bilan = (function () {
                         <div style="font-size:20px; font-weight:700; color:${diffColor}; direction:ltr;">
                             ${H.fmt(Math.abs(data.difference))}
                         </div>
+                        <!-- ⭐ حروف برای تفاوت -->
+                        <div style="font-size:12px; color:${diffColor}; margin-top:4px; font-weight:600;">
+                            ${H.toPersianWords(Math.abs(data.difference))}
+                        </div>
                         <div style="font-size:12px; color:${diffColor}; margin-top:4px;">${H.esc(data.resultText)}</div>
                     </div>
                 </div>
             </div>`;
+
 
         container.innerHTML = `
             ${summaryHtml}
@@ -266,6 +278,12 @@ window.App.Features.Bilan = (function () {
                     <td class="label" style="font-weight:700;">تفاوت:</td>
                     <td class="num text-left" style="color:${diffColor}; font-weight:700;">
                         ${H.fmt(Math.abs(data.difference))} — ${H.esc(data.resultText)}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="label" style="border-top: 1px solid #ccc; padding-top: 8px;">مبلغ تراز به حروف:</td>
+                    <td class="text-left" style="border-top: 1px solid #ccc; padding-top: 8px; font-weight:700; color:${diffColor};">
+                        ${H.toPersianWords(Math.abs(data.totalAssets))}
                     </td>
                 </tr>
             </table>`;

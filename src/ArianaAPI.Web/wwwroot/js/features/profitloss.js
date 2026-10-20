@@ -179,6 +179,10 @@ window.App.Features.ProfitLoss = (function () {
                         <div style="font-size:22px; font-weight:700; color:${netColor}; direction:ltr;">
                             ${H.fmt(Math.abs(data.netProfit))}
                         </div>
+                        <!-- ⭐ این خط اضافه شد -->
+                        <div style="font-size:12px; margin-top:8px; color:${netColor}; font-weight:600;">
+                            ${H.toPersianWords(Math.abs(data.netProfit))}
+                        </div>
                     </div>
                 </div>
             </div>`;
@@ -256,7 +260,7 @@ window.App.Features.ProfitLoss = (function () {
             ${revenuesBlock ? `<div class="section-title">💰 درآمدها</div>${revenuesBlock}` : ''}
             ${expensesBlock ? `<div class="section-title">💸 هزینه‌ها</div>${expensesBlock}` : ''}
 
-            <div class="section-title">📊 خلاصه سود و زیان</div>
+           <div class="section-title">📊 خلاصه سود و زیان</div>
             <table>
                 <tr>
                     <td class="label" style="width:180px;">جمع درآمدها:</td>
@@ -270,6 +274,13 @@ window.App.Features.ProfitLoss = (function () {
                     <td class="label" style="font-weight:700;">${H.esc(data.resultText)}:</td>
                     <td class="num text-left" style="color:${netColor}; font-weight:700; font-size:14px;">
                         ${H.fmt(Math.abs(data.netProfit))}
+                    </td>
+                </tr>
+                <!-- ⭐ ردیف جدید برای چاپ -->
+                <tr>
+                    <td class="label" style="border-top: 1px solid #ccc; padding-top: 8px;">مبلغ به حروف:</td>
+                    <td class="text-left" style="border-top: 1px solid #ccc; padding-top: 8px; font-weight:700; color:${netColor};">
+                        ${H.toPersianWords(Math.abs(data.netProfit))}
                     </td>
                 </tr>
             </table>`;

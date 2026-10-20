@@ -563,6 +563,7 @@ window.App.Features.FactorForm = (function () {
     }
 
     // ─── جمع‌ها ───
+    // ─── جمع‌ها ───
     function buildTotalsSection() {
         return '' +
             '<div class="ff-totals" id="ffTotals">' +
@@ -578,12 +579,15 @@ window.App.Features.FactorForm = (function () {
             '<div class="ff-total-item">' +
             '<span>جمع حمل:</span><strong id="ffTotalTrans">0</strong>' +
             '</div>' +
-            '<div class="ff-total-item ff-total-final">' +
+            '<div class="ff-total-item ff-total-final" style="flex-direction: column; align-items: flex-start;">' +
+            '<div style="display:flex; justify-content:space-between; width:100%;">' +
             '<span>مبلغ نهایی:</span><strong id="ffTotalFinall">0</strong>' +
+            '</div>' +
+            // ⭐ خط جدید برای نمایش مبلغ به حروف
+            '<div id="ffTotalWords" style="font-size: 12px; color: #4F46E5; margin-top: 6px; font-weight: 600;"></div>' +
             '</div>' +
             '</div>';
     }
-
     // ─── Footer ───
     function buildFooter() {
         const isPish = _state.factorKind === 4;   // پیش‌فاکتور
@@ -1223,6 +1227,9 @@ window.App.Features.FactorForm = (function () {
         setText('ffTotalFinall', H.fmt(sumFinall));
         setText('ffFooterTotal', H.fmt(sumFinall));
 
+        // ⭐ آپدیت مبلغ به حروف
+        setText('ffTotalWords', H.toPersianWords(sumFinall));
+
         _state.header.totalCost = sumFinall;
     }
 
@@ -1617,6 +1624,8 @@ window.App.Features.FactorForm = (function () {
             btn.innerHTML = orig;
         }
     }
+ 
+
     // ═══════════════════════════════════════════════════
     //  API عمومی
     // ═══════════════════════════════════════════════════

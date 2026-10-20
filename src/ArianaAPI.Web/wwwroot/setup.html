@@ -277,14 +277,56 @@
                     <select id="sazmanSelect" class="form-control" onchange="onSazmanChange()"></select>
                     <div class="license-info" id="licenseInfo"></div>
                 </div>
-                <div id="newSazmanFields" style="display: none;">
-                    <div class="form-group">
-                        <label>نام سازمان جدید</label>
-                        <input type="text" id="newSazmanName" class="form-control" placeholder="مثلاً: شرکت نمونه">
-                    </div>
-                    <div class="form-group">
-                        <label>کد سازمان (Licence)</label>
-                        <input type="text" id="newSazmanCode" class="form-control" placeholder="کد را وارد کنید">
+
+                <!-- ⭐ بخش فیلدهای سازمان جدید -->
+                <div id="newSazmanFields" style="display: none; margin-top: 15px; padding: 15px; background: #F8FAFC; border-radius: 8px; border: 1px solid #E2E8F0;">
+                    <h4 style="margin-top:0; margin-bottom:15px; color:#2563EB; font-size:14px;">مشخصات کامل سازمان جدید</h4>
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                        <div class="form-group">
+                            <label>نام سازمان <span style="color:red">*</span></label>
+                            <input type="text" id="newSazmanName" class="form-control" placeholder="مثلاً: شرکت نمونه">
+                        </div>
+                        <div class="form-group">
+                            <label>کد سازمان (Licence) <span style="color:red">*</span></label>
+                            <input type="text" id="newSazmanCode" class="form-control" placeholder="کد را وارد کنید">
+                        </div>
+                        <div class="form-group">
+                            <label>شناسه ملی</label>
+                            <input type="text" id="newSazmanNationalCode" class="form-control" dir="ltr">
+                        </div>
+                        <div class="form-group">
+                            <label>شماره ثبت</label>
+                            <input type="text" id="newSazmanRegNo" class="form-control" dir="ltr">
+                        </div>
+                        <div class="form-group">
+                            <label>کد اقتصادی</label>
+                            <input type="text" id="newSazmanEcoNo" class="form-control" dir="ltr">
+                        </div>
+                        <div class="form-group">
+                            <label>کد پستی</label>
+                            <input type="text" id="newSazmanPostalCode" class="form-control" dir="ltr">
+                        </div>
+                        <div class="form-group">
+                            <label>استان</label>
+                            <input type="text" id="newSazmanOstan" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>شهرستان</label>
+                            <input type="text" id="newSazmanCityName1" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>شهر</label>
+                            <input type="text" id="newSazmanCityName2" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>تلفن / نمابر</label>
+                            <input type="text" id="newSazmanPhoneNo" class="form-control" dir="ltr">
+                        </div>
+                        <div class="form-group" style="grid-column: span 2;">
+                            <label>نشانی کامل دفتر مرکزی</label>
+                            <input type="text" id="newSazmanAddress" class="form-control">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -566,6 +608,15 @@
                 SazmanId: parseInt(document.getElementById('sazmanSelect').value) || 0,
                 SazmanName: document.getElementById('newSazmanName').value,
                 SazmanCode: document.getElementById('newSazmanCode').value,
+                SazmanNationalCode: document.getElementById('newSazmanNationalCode').value,
+                SazmanRegNo: document.getElementById('newSazmanRegNo').value,
+                SazmanEcoNo: document.getElementById('newSazmanEcoNo').value,
+                SazmanPostalCode: document.getElementById('newSazmanPostalCode').value,
+                SazmanOstan: document.getElementById('newSazmanOstan').value,
+                SazmanCityName1: document.getElementById('newSazmanCityName1').value,
+                SazmanCityName2: document.getElementById('newSazmanCityName2').value,
+                SazmanAddress: document.getElementById('newSazmanAddress').value,
+                SazmanPhoneNo: document.getElementById('newSazmanPhoneNo').value,
                 Name: document.getElementById('dorehName').value,
                 BeginDate: beginDateVal,
                 EndDate: endDateVal,

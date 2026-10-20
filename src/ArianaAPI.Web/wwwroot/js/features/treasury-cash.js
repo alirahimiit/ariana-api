@@ -474,7 +474,7 @@ window.App.Features.TreasuryCash = (function () {
 
             // ⭐ مبلغ به حروف
             const el = document.getElementById('tcfAmountWords');
-            if (el) el.textContent = numVal > 0 ? toPersianWords(numVal) : '';
+            if (el) el.textContent = numVal > 0 ? H.toPersianWords(numVal) : '';
         });
         // ⭐ فقط اگه مقدار داره، input event بزن
         if (costInput && costInput.value.trim()) {
@@ -852,42 +852,7 @@ window.App.Features.TreasuryCash = (function () {
         }
     }
 
-    function toPersianWords(n) {
-        if (!n) return '';
-        const yekan = ['', 'یک', 'دو', 'سه', 'چهار', 'پنج', 'شش', 'هفت', 'هشت', 'نه'];
-        const dahgan = ['', '', 'بیست', 'سی', 'چهل', 'پنجاه', 'شصت', 'هفتاد', 'هشتاد', 'نود'];
-        const dah = ['ده', 'یازده', 'دوازده', 'سیزده', 'چهارده', 'پانزده', 'شانزده', 'هفده', 'هجده', 'نوزده'];
-        const sadgan = ['', 'صد', 'دویست', 'سیصد', 'چهارصد', 'پانصد', 'ششصد', 'هفتصد', 'هشتصد', 'نهصد'];
-
-        function three(x) {
-            const s = Math.floor(x / 100);
-            const d = Math.floor((x % 100) / 10);
-            const y = x % 10;
-            let out = [];
-            if (s > 0) out.push(sadgan[s]);
-            if (d === 1) out.push(dah[y]);
-            else {
-                if (d > 1) out.push(dahgan[d]);
-                if (y > 0) out.push(yekan[y]);
-            }
-            return out.join(' و ');
-        }
-
-        n = Math.floor(Math.abs(n));
-        if (n === 0) return 'صفر';
-
-        const parts = [];
-        const million = Math.floor(n / 1000000);
-        const thousand = Math.floor((n % 1000000) / 1000);
-        const rest = n % 1000;
-
-        if (million > 0) parts.push(three(million) + ' میلیون');
-        if (thousand > 0) parts.push(three(thousand) + ' هزار');
-        if (rest > 0) parts.push(three(rest));
-
-        return parts.join(' و ') + ' ریال';
-    }
-
+   
     return {
         render,
         loadList,

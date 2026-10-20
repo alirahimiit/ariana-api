@@ -455,9 +455,13 @@ window.App.Features.Sanad = (function () {
     //  DOWNLOAD TEMPLATE
     // ═══════════════════════════════════════════
     function downloadTemplate() {
-        const header = 'شماره سند;تاريخ سند;شرح سند;شرح رديف;بدهکار;بستانکار;رديف;کد کل;کد معين;کد تفصيلي;کد تفصيلي2;شناسه تفضيلي2;مقدار\n';
-        const sample = '1001;1404/01/01;نمونه شرح سند;شرح ردیف 1;1000000;0;1;1101;1;0;0;0;0\n' +
-            '1001;1404/01/01;نمونه شرح سند;شرح ردیف 2;0;1000000;2;1102;1;0;0;0;0\n';
+        // ⭐ استفاده از sep=; برای اینکه اکسل ستون‌ها را تشخیص دهد
+        // ⭐ استفاده از ="..." برای مبالغ تا اکسل آن‌ها را به فرمت علمی تبدیل نکند
+        // ⭐ ستون ردیف (ستون 7) به صورت 1 و 2 قرار داده شده تا کاربر بداند باید ترتیبی باشد
+        const header = 'sep=;\nشماره سند;تاريخ سند;شرح سند;شرح رديف;بدهکار;بستانکار;رديف;کد کل;کد معين;کد تفصيلي;کد تفصيلي2;شناسه تفضيلي2;مقدار\n';
+
+        const sample = '1001;1404/01/01;نمونه شرح سند;شرح ردیف 1;="1000000";="0";1;1101;1;0;0;0;="0"\n' +
+            '1001;1404/01/01;نمونه شرح سند;شرح ردیف 2;="0";="1000000";2;1102;1;0;0;0;="0"\n';
 
         const blob = new Blob(['\uFEFF' + header + sample], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -525,7 +529,16 @@ window.App.Features.Sanad = (function () {
             status.style.display = 'block';
             status.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
-            const content = await file.text();
+            // ⭐ خواندن هوشمند فایل (پشتیبانی از UTF-8 و ANSI ویندوز)
+            const buffer = await file.arrayBuffer();
+            let content = '';
+            try {
+                // تلاش برای خواندن با UTF-8
+                content = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+            } catch (e) {
+                // اگر خطا داد، یعنی فایل با اکسل (ANSI) ذخیره شده است
+                content = new TextDecoder('windows-1256').decode(buffer);
+            }
 
             const preview = await window.App.Http.api('/api/sanad/import-preview', {
                 method: 'POST',

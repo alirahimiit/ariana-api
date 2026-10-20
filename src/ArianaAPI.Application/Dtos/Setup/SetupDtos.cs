@@ -40,6 +40,16 @@ public class SetupRequestDto
     public string? SazmanName { get; set; }
     public string? SazmanCode { get; set; }
 
+    public string? SazmanNationalCode { get; set; }
+    public string? SazmanRegNo { get; set; }
+    public string? SazmanEcoNo { get; set; }
+    public string? SazmanPostalCode { get; set; }
+    public string? SazmanOstan { get; set; }
+    public string? SazmanCityName1 { get; set; }
+    public string? SazmanCityName2 { get; set; }
+    public string? SazmanAddress { get; set; }
+    public string? SazmanPhoneNo { get; set; }
+
     public string Name { get; set; } = string.Empty;
     public string BeginDate { get; set; } = string.Empty;
     public string EndDate { get; set; } = string.Empty;
@@ -67,4 +77,31 @@ public class SetupResultDto
     public string Message { get; set; } = string.Empty;
     public long NewDorehMaliId { get; set; }
     public string NewDbName { get; set; } = string.Empty;
+}
+
+public class SazmanEditDto
+{
+    public long SazmanId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? LicenceSazman { get; set; }
+    public string? NationalCode { get; set; }
+    public string? RegNo { get; set; }
+    public string? EcoNo { get; set; }
+    public string? PostalCode { get; set; }
+    public string? Ostan { get; set; }
+    public string? CityName1 { get; set; }
+    public string? CityName2 { get; set; }
+    public string? Address { get; set; }
+    public string? PhoneNo { get; set; }
+}
+
+public class DorehMaliEditDto
+{
+    public long DorehMaliId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string BeginDate { get; set; } = string.Empty;
+    public string EndDate { get; set; } = string.Empty;
+    public decimal Tax_Per { get; set; }
+    public decimal Avarez_Per { get; set; }
+    public string? UpDate_Database { get; set; }
 }

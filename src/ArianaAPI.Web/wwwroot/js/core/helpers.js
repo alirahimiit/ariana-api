@@ -129,6 +129,56 @@ App.Helpers = (function () {
         // خروجی: 1404/09/26 (خودش اسلش می‌ذاره)
     }
 
+
+    // ═══════════════════════════════════════════════════
+    //  تبدیل عدد به حروف فارسی (پشتیبانی از میلیارد و تریلیون)
+    // ═══════════════════════════════════════════════════
+    function toPersianWords(n) {
+        if (!n || isNaN(n)) return '';
+
+        n = Math.floor(Math.abs(n));
+        if (n === 0) return 'صفر ریال';
+
+        const yekan = ['', 'یک', 'دو', 'سه', 'چهار', 'پنج', 'شش', 'هفت', 'هشت', 'نه'];
+        const dahgan = ['', '', 'بیست', 'سی', 'چهل', 'پنجاه', 'شصت', 'هفتاد', 'هشتاد', 'نود'];
+        const dah = ['ده', 'یازده', 'دوازده', 'سیزده', 'چهارده', 'پانزده', 'شانزده', 'هفده', 'هجده', 'نوزده'];
+        const sadgan = ['', 'صد', 'دویست', 'سیصد', 'چهارصد', 'پانصد', 'ششصد', 'هفتصد', 'هشتصد', 'نهصد'];
+
+        function threeDigitsToWords(x) {
+            const s = Math.floor(x / 100);
+            const d = Math.floor((x % 100) / 10);
+            const y = x % 10;
+            const out = [];
+            if (s > 0) out.push(sadgan[s]);
+            if (d === 1) out.push(dah[y]);
+            else {
+                if (d > 1) out.push(dahgan[d]);
+                if (y > 0) out.push(yekan[y]);
+            }
+            return out.join(' و ');
+        }
+
+        const parts = [];
+        const scales = ['', 'هزار', 'میلیون', 'میلیارد', 'همت'];
+        let scaleIndex = 0;
+
+        // حلقه برای خواندن عدد به صورت سه رقم سه رقم (هزار، میلیون، میلیارد و ...)
+        while (n > 0) {
+            const chunk = n % 1000;
+            if (chunk > 0) {
+                const words = threeDigitsToWords(chunk);
+                if (words) {
+                    parts.unshift(words + (scales[scaleIndex] ? ' ' + scales[scaleIndex] : ''));
+                }
+            }
+            n = Math.floor(n / 1000);
+            scaleIndex++;
+        }
+
+        return parts.join(' و ') + ' ریال';
+    }
+
+
     return {
         fmt,
         fmtT,
@@ -139,6 +189,7 @@ App.Helpers = (function () {
         parseNumber,
         isValidDate,
         compareDates,
-        todayPersian
+        todayPersian,
+        toPersianWords: toPersianWords
     };
 })();

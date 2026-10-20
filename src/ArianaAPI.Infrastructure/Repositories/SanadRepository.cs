@@ -493,11 +493,12 @@ public class SanadRepository : ISanadRepository
         if (dto.Items == null || dto.Items.Count == 0)
             throw new InvalidOperationException("سند باید حداقل یک ردیف داشته باشد");
         // ⭐ چک اعتبار Vazeit
-        ValidateForVazeit(new SanadCreateDto       {
+        ValidateForVazeit(new SanadCreateDto
+        {
             Vazeit = dto.Vazeit,
             Items = dto.Items
         });
-         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         if (conn.State != ConnectionState.Open)
             await conn.OpenAsync(ct);
 
@@ -692,7 +693,6 @@ public class SanadRepository : ISanadRepository
 
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
 
-        // ⭐ همیشه از VIEW استفاده کن (طبق قواعد طلایی)
         const string sql = @"
             SELECT 
                 P.NO_Sanad,
@@ -719,9 +719,11 @@ public class SanadRepository : ISanadRepository
         if (rows.Count == 0)
             throw new InvalidOperationException("سندی برای خروجی یافت نشد");
 
-        // ─── ساخت CSV ───
         var sb = new StringBuilder();
-        // ⭐ هدر با BOM (توسط لایه بالاتر مدیریت می‌شه)
+
+        // ⭐ اضافه کردن sep=; برای اینکه اکسل ستون‌ها را درست تشخیص دهد
+        sb.AppendLine("sep=;");
+
         sb.AppendLine("شماره سند;تاريخ سند;شرح سند;شرح رديف;بدهکار;بستانکار;رديف;کد کل;کد معين;کد تفصيلي;کد تفصيلي2;شناسه تفضيلي2;مقدار");
 
         foreach (var r in rows)
@@ -730,21 +732,26 @@ public class SanadRepository : ISanadRepository
             var dateIn = (string?)r.Date_IN ?? "";
             var sharh = Escape((string?)r.OtherParentSharh ?? "");
             var itemSharh = Escape((string?)r.OtherSharh ?? "");
-            var mabBed = ((decimal?)r.Mab_Bed ?? 0m).ToString("0.####");
-            var mabBes = ((decimal?)r.Mab_Bes ?? 0m).ToString("0.####");
+
+            // ⭐ استفاده از ExcelText برای جلوگیری از تبدیل شدن به فرمت علمی در اکسل
+            var mabBed = ExcelText(((decimal?)r.Mab_Bed ?? 0m).ToString("0.####", CultureInfo.InvariantCulture));
+            var mabBes = ExcelText(((decimal?)r.Mab_Bes ?? 0m).ToString("0.####", CultureInfo.InvariantCulture));
+
             var rowNum = (int)(decimal)(r.RowNum ?? 0);
             var codeCol = (int)(decimal)r.Code_Col;
             var codeMoein = (int)(decimal)r.Code_Moein;
             var codeTafzil = (int)(decimal)r.Code_Tafzil;
             var codeTafzili2 = (int)(decimal)(r.Code_Tafzili2 ?? 0);
             var tafzili2Id = (int)(decimal)(r.Tafzili2ID ?? 0);
-            var meghdar = ((decimal?)r.Meghdar ?? 0m).ToString("0.####");
+
+            var meghdar = ExcelText(((decimal?)r.Meghdar ?? 0m).ToString("0.####", CultureInfo.InvariantCulture));
 
             sb.AppendLine($"{noSanad};{dateIn};{sharh};{itemSharh};{mabBed};{mabBes};{rowNum};{codeCol};{codeMoein};{codeTafzil};{codeTafzili2};{tafzili2Id};{meghdar}");
         }
 
         return sb.ToString();
     }
+
 
     private static string Escape(string s)
     {
@@ -753,6 +760,12 @@ public class SanadRepository : ISanadRepository
         if (s.Contains(';') || s.Contains('"') || s.Contains('\n') || s.Contains('\r'))
             return "\"" + s.Replace("\"", "\"\"") + "\"";
         return s;
+    }
+
+    // ⭐ فرمت‌دهی متن برای جلوگیری از تبدیل به فرمت علمی در اکسل
+    private static string ExcelText(string val)
+    {
+        return "=\"" + val + "\"";
     }
 
     // ═══════════════════════════════════════════════════
@@ -771,55 +784,43 @@ public class SanadRepository : ISanadRepository
             return result;
         }
 
-        // حذف BOM
         csvContent = csvContent.TrimStart('\uFEFF');
-
         var lines = csvContent.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None)
                               .Where(l => !string.IsNullOrWhiteSpace(l))
                               .ToList();
 
+        // ⭐ حذف خط sep=; اگر وجود داشت
+        if (lines.Count > 0 && lines[0].StartsWith("sep=", StringComparison.OrdinalIgnoreCase))
+        {
+            lines.RemoveAt(0);
+        }
+
         if (lines.Count < 2)
         {
-            result.Errors.Add(new SanadImportError
-            {
-                LineNumber = 0,
-                Message = "فایل باید حداقل یک خط هدر و یک خط داده داشته باشد"
-            });
+            result.Errors.Add(new SanadImportError { LineNumber = 0, Message = "فایل باید حداقل یک خط هدر و یک خط داده داشته باشد" });
             return result;
         }
 
-        // ─── چک هدر ───
         var header = lines[0].Trim();
         var headerCols = header.Split(';').Select(x => x.Trim()).ToList();
 
         if (headerCols.Count < 10)
         {
-            result.Errors.Add(new SanadImportError
-            {
-                LineNumber = 1,
-                Message = $"هدر باید حداقل 10 ستون داشته باشد. تعداد فعلی: {headerCols.Count}"
-            });
+            result.Errors.Add(new SanadImportError { LineNumber = 1, Message = $"هدر باید حداقل 10 ستون داشته باشد. تعداد فعلی: {headerCols.Count}" });
             return result;
         }
 
-        // ─── پردازش خطوط داده ───
         var parsedRows = new List<ParsedRow>();
 
         for (int i = 1; i < lines.Count; i++)
         {
-            var lineNumber = i + 1;   // چون 1-based برای نمایش
+            var lineNumber = i + 1;
             var raw = lines[i];
-
             var cols = SplitCsvLine(raw);
 
             if (cols.Count < 10)
             {
-                result.Errors.Add(new SanadImportError
-                {
-                    LineNumber = lineNumber,
-                    Message = $"تعداد ستون‌ها کمتر از 10 است ({cols.Count} ستون). " +
-                              "احتمالاً کاراکتر ; داخل فیلدها بدون \"...\" نوشته شده"
-                });
+                result.Errors.Add(new SanadImportError { LineNumber = lineNumber, Message = $"تعداد ستون‌ها کمتر از 10 است ({cols.Count} ستون)." });
                 continue;
             }
 
@@ -843,15 +844,16 @@ public class SanadRepository : ISanadRepository
                     Meghdar = cols.Count > 12 ? ParseDecimal(cols[12]) : 0m
                 };
 
-                // ─── اعتبارسنجی ───
+                // ⭐⭐ اگر ردیف کاملاً خالی بود (شماره سند، کد، و مبالغ صفر بودند)، از آن رد شو
+                if (row.NoSanad == 0 && row.CodeCol == 0 && row.MabBed == 0 && row.MabBes == 0)
+                {
+                    continue;
+                }
+
                 var rowErrors = ValidateRow(row);
                 foreach (var err in rowErrors)
                 {
-                    result.Errors.Add(new SanadImportError
-                    {
-                        LineNumber = lineNumber,
-                        Message = err
-                    });
+                    result.Errors.Add(new SanadImportError { LineNumber = lineNumber, Message = err });
                 }
 
                 parsedRows.Add(row);
@@ -859,11 +861,7 @@ public class SanadRepository : ISanadRepository
             }
             catch (Exception ex)
             {
-                result.Errors.Add(new SanadImportError
-                {
-                    LineNumber = lineNumber,
-                    Message = "خطا در پردازش خط: " + ex.Message
-                });
+                result.Errors.Add(new SanadImportError { LineNumber = lineNumber, Message = "خطا در پردازش خط: " + ex.Message });
             }
         }
 
@@ -873,10 +871,7 @@ public class SanadRepository : ISanadRepository
             return result;
         }
 
-        // ─── گروه‌بندی بر اساس شماره سند ───
         var groups = parsedRows.GroupBy(r => r.NoSanad).OrderBy(g => g.Key).ToList();
-
-        // ─── شماره‌گذاری جدید ───
         var nextNo = existing.Count > 0 ? existing.Max() + 1 : 1;
 
         foreach (var g in groups)
@@ -890,18 +885,13 @@ public class SanadRepository : ISanadRepository
 
             if (existing.Contains(sourceNo))
             {
-                // شماره تکراری → شماره جدید
                 newNo = nextNo++;
-                result.Warnings.Add(new SanadImportWarning
-                {
-                    LineNumber = g.First().LineNumber,
-                    Message = $"شماره سند {sourceNo} قبلاً وجود دارد → با شماره {newNo} ثبت می‌شود"
-                });
+                result.Warnings.Add(new SanadImportWarning { LineNumber = g.First().LineNumber, Message = $"شماره سند {sourceNo} قبلاً وجود دارد → با شماره {newNo} ثبت می‌شود" });
             }
             else
             {
                 newNo = sourceNo;
-                existing.Add(newNo);   // تا در گروه‌های بعدی تداخل نکنه
+                existing.Add(newNo);
                 if (newNo >= nextNo) nextNo = newNo + 1;
             }
 
@@ -921,11 +911,7 @@ public class SanadRepository : ISanadRepository
 
             if (!balanced)
             {
-                result.Warnings.Add(new SanadImportWarning
-                {
-                    LineNumber = firstItem.LineNumber,
-                    Message = $"سند {sourceNo}: جمع بدهکار ({bed:N0}) با بستانکار ({bes:N0}) تراز نیست"
-                });
+                result.Warnings.Add(new SanadImportWarning { LineNumber = firstItem.LineNumber, Message = $"سند {sourceNo}: جمع بدهکار ({bed:N0}) با بستانکار ({bes:N0}) تراز نیست" });
             }
 
             result.ItemCount += g.Count();
@@ -977,22 +963,44 @@ public class SanadRepository : ISanadRepository
     private static int ParseInt(string? s)
     {
         if (string.IsNullOrWhiteSpace(s)) return 0;
+
         s = NormalizeDigits(s).Replace(",", "").Replace(" ", "").Trim();
+        s = s.Replace("٬", "").Replace("،", "");
+
+        if (s.StartsWith("=")) s = s.Substring(1);
+        if (s.StartsWith("\"") && s.EndsWith("\"") && s.Length >= 2)
+            s = s.Substring(1, s.Length - 2);
+
+        // ⭐ اگر علامت‌های بی‌معنی مثل نقطه یا خط تیره بود، صفر برگردان
+        if (string.IsNullOrWhiteSpace(s) || s == "." || s == "-" || s == "_") return 0;
+
+        if (s.Contains('E') || s.Contains('e'))
+            throw new FormatException($"عدد '{s}' دارای فرمت علمی است. اکسل ارقام آن را از بین برده است. لطفاً ستون را در اکسل Text کنید.");
+
         return int.TryParse(s, out var v) ? v : throw new FormatException($"عدد نامعتبر: '{s}'");
     }
-
     private static decimal ParseDecimal(string? s)
     {
         if (string.IsNullOrWhiteSpace(s)) return 0m;
+
         s = NormalizeDigits(s).Replace(",", "").Replace(" ", "").Trim();
-        // حذف کاراکترهای فارسی اضافی
         s = s.Replace("٬", "").Replace("،", "");
+
+        if (s.StartsWith("=")) s = s.Substring(1);
+        if (s.StartsWith("\"") && s.EndsWith("\"") && s.Length >= 2)
+            s = s.Substring(1, s.Length - 2);
+
+        // ⭐ اگر علامت‌های بی‌معنی مثل نقطه یا خط تیره بود، صفر برگردان
+        if (string.IsNullOrWhiteSpace(s) || s == "." || s == "-" || s == "_") return 0m;
+
+        if (s.Contains('E') || s.Contains('e'))
+            throw new FormatException($"مبلغ '{s}' به صورت فرمت علمی ذخیره شده است. لطفاً در اکسل ستون مبلغ را به فرمت Text تغییر دهید.");
+
         return decimal.TryParse(s, System.Globalization.NumberStyles.Any,
             System.Globalization.CultureInfo.InvariantCulture, out var v)
             ? v
             : throw new FormatException($"عدد اعشاری نامعتبر: '{s}'");
     }
-
     private static string NormalizeDigits(string s)
     {
         if (string.IsNullOrEmpty(s)) return s;
@@ -1072,20 +1080,15 @@ public class SanadRepository : ISanadRepository
         if (conn.State != ConnectionState.Open)
             await conn.OpenAsync(ct);
 
-        // ─── ۱. ابتدا شماره‌های موجود رو بگیر ───
         var existingNos = (await conn.QueryAsync<int>(
-            new CommandDefinition(
-                "SELECT NO_Sanad FROM ParentSanad",
-                cancellationToken: ct))).ToList();
+            new CommandDefinition("SELECT NO_Sanad FROM ParentSanad", cancellationToken: ct))).ToList();
 
-        // ─── ۲. Parse + Validate (بدون DB write) ───
         var preview = ParseAndValidateCsv(csvContent, existingNos);
 
         if (!preview.IsValid)
             throw new InvalidOperationException(
                 "فایل معتبر نیست. " + string.Join(" | ", preview.Errors.Take(5).Select(e => $"خط {e.LineNumber}: {e.Message}")));
 
-        // ─── ۳. اگه کاربر ForceNewNumbers زده، همه با شماره جدید ───
         if (forceNewNumbers)
         {
             var nextNo = existingNos.Count > 0 ? existingNos.Max() + 1 : 1;
@@ -1095,7 +1098,6 @@ public class SanadRepository : ISanadRepository
             }
         }
 
-        // ─── ۴. Transaction + Insert ───
         using var tx = conn.BeginTransaction();
         try
         {
@@ -1103,15 +1105,11 @@ public class SanadRepository : ISanadRepository
             var todayPersian = GetTodayPersian();
             var nowTime = GetCurrentTime();
 
-            // ⭐⭐ دوباره شماره‌های موجود رو داخل تراکنش چک کن
-            // (چون ممکنه در فاصله زمانی کوتاه یکی دیگه سند زده باشه)
             var lockedNos = (await conn.QueryAsync<int>(
-                new CommandDefinition(
-                    "SELECT NO_Sanad FROM ParentSanad WITH (TABLOCKX)",
-                    transaction: tx, cancellationToken: ct))).ToList();
+                new CommandDefinition("SELECT NO_Sanad FROM ParentSanad WITH (TABLOCKX)", transaction: tx, cancellationToken: ct))).ToList();
             var lockedSet = new HashSet<int>(lockedNos);
 
-            var parsed = ParseCsvContent(csvContent);   // parse مجدد برای دسترسی به ردیف‌ها
+            var parsed = ParseCsvContent(csvContent);
             var groups = parsed.GroupBy(r => r.NoSanad).OrderBy(g => g.Key).ToList();
 
             var nextNo = lockedNos.Count > 0 ? lockedNos.Max() + 1 : 1;
@@ -1119,13 +1117,8 @@ public class SanadRepository : ISanadRepository
             foreach (var g in groups)
             {
                 var sourceNo = g.Key;
-                int newNo;
+                int newNo = preview.Preview.FirstOrDefault(p => p.SourceNoSanad == sourceNo)?.NewNoSanad ?? sourceNo;
 
-                // پیدا کردن شماره جدید از preview
-                var previewItem = preview.Preview.FirstOrDefault(p => p.SourceNoSanad == sourceNo);
-                newNo = previewItem?.NewNoSanad ?? sourceNo;
-
-                // اگه بازم تداخل داشت (کاربر دیگه سند زده) → شماره جدید
                 if (lockedSet.Contains(newNo))
                 {
                     newNo = nextNo++;
@@ -1163,7 +1156,8 @@ public class SanadRepository : ISanadRepository
                         transaction: tx, cancellationToken: ct));
 
                 var rowNum = 1;
-                foreach (var item in g.OrderBy(x => x.RowNum))
+                // ⭐ حذف OrderBy(x => x.RowNum) برای شماره‌گذاری خودکار به ترتیب خطوط فایل
+                foreach (var item in g)
                 {
                     await conn.ExecuteAsync(
                         new CommandDefinition(@"
@@ -1220,19 +1214,25 @@ public class SanadRepository : ISanadRepository
         }
     }
 
+
     private static List<ParsedRow> ParseCsvContent(string csvContent)
     {
         var result = new List<ParsedRow>();
         csvContent = csvContent.TrimStart('\uFEFF');
-        var lines = csvContent.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+        var lines = csvContent.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None).ToList();
 
-        for (int i = 1; i < lines.Length; i++)
+        if (lines.Count > 0 && lines[0].StartsWith("sep=", StringComparison.OrdinalIgnoreCase))
+        {
+            lines.RemoveAt(0);
+        }
+
+        for (int i = 1; i < lines.Count; i++)
         {
             if (string.IsNullOrWhiteSpace(lines[i])) continue;
             var cols = SplitCsvLine(lines[i]);
             if (cols.Count < 10) continue;
 
-            result.Add(new ParsedRow
+            var row = new ParsedRow
             {
                 LineNumber = i + 1,
                 NoSanad = ParseInt(cols[0]),
@@ -1248,7 +1248,15 @@ public class SanadRepository : ISanadRepository
                 CodeTafzili2 = cols.Count > 10 ? ParseInt(cols[10]) : 0,
                 Tafzili2Id = cols.Count > 11 ? ParseInt(cols[11]) : 0,
                 Meghdar = cols.Count > 12 ? ParseDecimal(cols[12]) : 0m
-            });
+            };
+
+            // ⭐⭐ نادیده گرفتن خطوط کاملاً خالی
+            if (row.NoSanad == 0 && row.CodeCol == 0 && row.MabBed == 0 && row.MabBes == 0)
+            {
+                continue;
+            }
+
+            result.Add(row);
         }
         return result;
     }
