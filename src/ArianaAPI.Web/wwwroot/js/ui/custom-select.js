@@ -170,7 +170,14 @@ window.App.UI.CustomSelect = (function () {
     });
 
     // لایه ۳: هر بار صفحه scroll یا resize (بستن خودکار)
-    window.addEventListener('scroll', closeAll, true);
+    // لایه ۳: بستن هوشمند در زمان scroll (بدون حلقه بی‌نهایت)
+    window.addEventListener('scroll', function (e) {
+        // فقط اگر اسکرول مربوط به خود پنجره اصلی (Window) بود، منو را ببند
+        // اگر اسکرول داخل مودال بود، کاری نداشته باش
+        if (e.target === document || e.target === document.documentElement || e.target === window) {
+            closeAll();
+        }
+    });
     window.addEventListener('resize', closeAll);
 
     return {

@@ -138,15 +138,7 @@ window.App.Features.Sanad = (function () {
             const ids = new Set(_currentItems.map(x => x.parentSanadID));
             [..._selected].forEach(id => { if (!ids.has(id)) _selected.delete(id); });
 
-            if (_currentItems.length === 0) {
-                container.innerHTML = `
-                    <div class="empty">
-                        <div class="empty-icon">📭</div>
-                        <p>سندی یافت نشد</p>
-                    </div>`;
-                return;
-            }
-
+            // ⭐ همیشه لیست را با هدر (دکمه‌ها) رندر کن
             container.innerHTML = buildListHtml(_currentItems);
 
             if (window.App.UI.PermissionGuard) {
@@ -281,60 +273,61 @@ window.App.Features.Sanad = (function () {
                 <div class="card-title">
                     <span>📄 اسناد حسابداری</span>
                     <div style="display:flex; gap:6px; align-items:center;">
-                        <button class="btn btn-ghost btn-sm" id="importCsvBtn" title="ورود اسناد از فایل CSV">
-                            📥 ورود از فایل
-                        </button>
-                        <button class="btn btn-ghost btn-sm" id="downloadTemplateBtn" title="دانلود الگوی CSV">
-                            📋 الگو
-                        </button>
-                        <button class="btn btn-primary btn-sm"
-                            data-permission="101"
-                            onclick="App.Features.SanadForm.openCreate()">
-                              ➕ سند جدید
-                        </button>
+                        <!-- ⭐ دکمه‌های اینجا را دست نزنید، همان‌هایی که الان دارید بگذارید -->
+                        <button class="btn btn-ghost btn-sm" id="importCsvBtn" title="ورود اسناد از فایل CSV">📥 ورود از فایل</button>
+                        <button class="btn btn-ghost btn-sm" id="downloadTemplateBtn" title="دانلود الگوی CSV">📋 الگو</button>
+                        <button class="btn btn-info btn-sm" id="sanadOpeningBtn" data-permission="101">📂 افتتاحیه</button>
+                        <button class="btn btn-secondary btn-sm" id="sanadMovaghatBtn" data-permission="101">📝 سند موقت</button>
+                        <button class="btn btn-warning btn-sm" id="sanadClosingBtn" data-permission="101">🔒 اختتامیه سال</button>
+                        <button class="btn btn-primary btn-sm" data-permission="101" onclick="App.Features.SanadForm.openCreate()">➕ سند جدید</button>
                     </div>
                 </div>
-
-                <!-- ⭐ Toolbar انتخاب گروهی -->
+				<!-- ⭐ Toolbar انتخاب گروهی -->
                 <div id="sanadBulkToolbar" class="sanad-bulk-toolbar" style="display:none;">
                     <span class="bulk-count"><strong id="bulkCount">0</strong> سند انتخاب شده</span>
                     <div class="bulk-actions">
-                        <button class="btn btn-sm btn-ghost" id="bulkExportBtn" title="خروجی CSV">📤 خروجی CSV</button>
-                        <button class="btn btn-sm btn-primary" id="bulkChangeVazeitBtn" title="تغییر وضعیت">🔄 تغییر وضعیت</button>
-                        <button class="btn btn-sm btn-danger" id="bulkDeleteBtn" title="حذف گروهی">🗑️ حذف گروهی</button>
+                        <button class="btn btn-sm btn-ghost" id="bulkExportBtn">📤 خروجی CSV</button>
+                        <button class="btn btn-sm btn-primary" id="bulkChangeVazeitBtn">🔄 تغییر وضعیت</button>
+                        <button class="btn btn-sm btn-danger" id="bulkDeleteBtn">🗑️ حذف گروهی</button>
                         <button class="btn btn-sm btn-ghost" id="bulkClearBtn">✕ لغو انتخاب</button>
                     </div>
                 </div>
 
-                <div class="table-wrapper">
-                    <table>
-                      <thead>
-                            <tr>
-                                <th style="width:36px;">
-                                    <input type="checkbox" id="sanadSelectAll" ${allSelected ? 'checked' : ''}>
-                                </th>
-                                <th class="sortable-th" onclick="App.Features.Sanad.sortBy('noSanad')">شماره ${sortIcon('noSanad')}</th>
-                                <th class="sortable-th" onclick="App.Features.Sanad.sortBy('dateIn')">تاریخ ${sortIcon('dateIn')}</th>
-                                <th class="sortable-th" onclick="App.Features.Sanad.sortBy('sharh')">شرح ${sortIcon('sharh')}</th>
-                                <th class="sortable-th" onclick="App.Features.Sanad.sortBy('vazeit')">وضعیت ${sortIcon('vazeit')}</th>
-                                <th class="sortable-th" onclick="App.Features.Sanad.sortBy('kindSanad')">نوع ${sortIcon('kindSanad')}</th>
-                                <th style="width:80px;">ایراد</th>
-                                <th class="sortable-th text-left" onclick="App.Features.Sanad.sortBy('mabBed')">بدهکار ${sortIcon('mabBed')}</th>
-                                <th class="sortable-th text-left" onclick="App.Features.Sanad.sortBy('mabBes')">بستانکار ${sortIcon('mabBes')}</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>${rows}</tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="pagination">
-                <button ${page <= 1 ? 'disabled' : ''}
-                        onclick="App.Features.Sanad.gotoPage(${page - 1})">قبلی</button>
-                <span>صفحه ${page}</span>
-                <button ${items.length < pageSize ? 'disabled' : ''}
-                        onclick="App.Features.Sanad.gotoPage(${page + 1})">بعدی</button>
-            </div>`;
+                <!-- ⭐ این بخش شرطی شد: اگر لیست خالی بود پیام بده، وگرنه جدول -->
+                ${items.length === 0 ? `
+                    <div class="empty" style="padding: 60px 20px; text-align: center;">
+                        <div class="empty-icon" style="font-size: 40px; margin-bottom: 15px;">📭</div>
+                        <p style="color: #64748B; font-size: 16px;">سندی با این فیلترها یافت نشد.</p>
+                        <button class="btn btn-primary" style="margin-top: 15px;" onclick="App.Features.SanadForm.openCreate()">➕ ثبت اولین سند</button>
+                    </div>
+                ` : `
+                    <div class="table-wrapper">
+                        <table>
+                          <thead>
+                                <tr>
+                                    <th style="width:36px;">
+                                        <input type="checkbox" id="sanadSelectAll" ${allSelected ? 'checked' : ''}>
+                                    </th>
+                                    <th class="sortable-th" onclick="App.Features.Sanad.sortBy('noSanad')">شماره ${sortIcon('noSanad')}</th>
+                                    <th class="sortable-th" onclick="App.Features.Sanad.sortBy('dateIn')">تاریخ ${sortIcon('dateIn')}</th>
+                                    <th class="sortable-th" onclick="App.Features.Sanad.sortBy('sharh')">شرح ${sortIcon('sharh')}</th>
+                                    <th class="sortable-th" onclick="App.Features.Sanad.sortBy('vazeit')">وضعیت ${sortIcon('vazeit')}</th>
+                                    <th class="sortable-th" onclick="App.Features.Sanad.sortBy('kindSanad')">نوع ${sortIcon('kindSanad')}</th>
+                                    <th style="width:80px;">ایراد</th>
+                                    <th class="sortable-th text-left" onclick="App.Features.Sanad.sortBy('mabBed')">بدهکار ${sortIcon('mabBed')}</th>
+                                    <th class="sortable-th text-left" onclick="App.Features.Sanad.sortBy('mabBes')">بستانکار ${sortIcon('mabBes')}</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </div>
+                `}
+                <div class="pagination">
+                    <button ${page <= 1 ? 'disabled' : ''} onclick="App.Features.Sanad.gotoPage(${page - 1})">قبلی</button>
+                    <span>صفحه ${page}</span>
+                    <button ${items.length < pageSize ? 'disabled' : ''} onclick="App.Features.Sanad.gotoPage(${page + 1})">بعدی</button>
+                </div>`;
     }
 
     // ═══════════════════════════════════════════
@@ -390,6 +383,9 @@ window.App.Features.Sanad = (function () {
         // ═══ دکمه‌های ورود/الگو ═══
         document.getElementById('importCsvBtn')?.addEventListener('click', openImportDialog);
         document.getElementById('downloadTemplateBtn')?.addEventListener('click', downloadTemplate);
+        document.getElementById('sanadClosingBtn')?.addEventListener('click', openClosingDialog);
+        document.getElementById('sanadOpeningBtn')?.addEventListener('click', openOpeningDialog);
+        document.getElementById('sanadMovaghatBtn')?.addEventListener('click', () => window.App.Features.SanadMovaghat.openDialog());
     }
 
     function updateBulkToolbar() {
@@ -1457,7 +1453,150 @@ window.App.Features.Sanad = (function () {
         }
     }
 
-    return { render, loadList, gotoPage, showDetail, buildUrl, sortBy, openBulkChangeVazeitDialog };
+    // ═══════════════════════════════════════════
+    //  CLOSING SANAD — سند اختتامیه
+    // ═══════════════════════════════════════════
+    async function openClosingDialog() {
+        const u = window.App.state.user || {};
+        const orgId = u.orgId;
+        const fyId = u.fyId;
+
+        if (!orgId || !fyId) {
+            window.App.toast('اطلاعات سازمان/دوره در دسترس نیست', 'error');
+            return;
+        }
+
+        try {
+            const val = await window.App.Http.api('/api/sanad/closing/validate', {
+                method: 'POST',
+                body: JSON.stringify({ orgId, fyId })
+            });
+
+
+
+            // ⭐ اگر سند واقعاً وجود دارد، قفل می‌کنیم
+            if (val.alreadyClosed) {
+                await window.App.alert.warning(
+                    `سند اختتامیه قبلاً صادر شده است (شماره ${val.endSanadNum}).\n\n` +
+                    `اگر مایل به صدور مجدد هستید، ابتدا سند اختتامیه را از لیست اسناد حذف کنید و سپس دوباره این دکمه را بزنید.`,
+                    { title: '🔒 سند اختتامیه موجود است' }
+                );
+                return;
+            }
+
+
+
+            if (!val.ok) {
+                const issues = (val.issues || []).join('\n• ');
+                const unconfirmed = (val.unconfirmedList || []).slice(0, 10)
+                    .map(x => `#${x.noSanad} (${x.vazeit === 1 ? 'رسیدگی' : 'پیش‌نویس'})`)
+                    .join('، ');
+                await window.App.alert.warning(
+                    `امکان صدور سند اختتامیه نیست:\n\n• ${issues}` +
+                    (unconfirmed ? `\n\nاسناد نامشخص: ${unconfirmed}` : ''),
+                    { title: '⛔ پیش‌نیازها برقرار نیست' }
+                );
+                return;
+            }
+
+
+            const pickerRes = await window.App.UI.HesabPicker.open({ mode: 'moein' });
+            if (!pickerRes) {
+                window.App.toast('برای صدور سند اختتامیه، باید حساب اختتامیه را انتخاب کنید.', 'warning');
+                return;
+            }
+
+
+            const ok = await window.App.confirm(
+                `آیا از صدور سند اختتامیه مطمئن هستید؟\n\n` +
+                `📊 مجموع اسناد: ${val.totalSanads}\n` +
+                `✅ همه قطعی (Vazeit=2)\n` +
+                `🏦 حساب اختتامیه: ${pickerRes.codeCol} / ${pickerRes.codeMoein}\n\n` +
+                `⚠️ پس از این عملیات، شماره سند اختتامیه در جدول دوره مالی ثبت می‌شود و امکان صدور مجدد از طریق UI وجود ندارد.`,
+                {
+                    title: '🔒 صدور سند اختتامیه',
+                    type: 'warning',
+                    okText: 'بله، صادر کن',
+                    cancelText: 'لغو'
+                }
+            );
+            if (!ok) return;
+
+            const result = await window.App.Http.api('/api/sanad/closing/create', {
+                method: 'POST',
+                body: JSON.stringify({
+                    orgId,
+                    fyId,
+                    closingCodeCol: pickerRes.codeCol,
+                    closingCodeMoein: pickerRes.codeMoein,
+                    closingCodeTafzil: pickerRes.codeTafzil || 0
+                }),
+                successMsg: 'در حال صدور سند اختتامیه...'
+            });
+
+            if (result.success) {
+                await window.App.alert.success(
+                    `✅ سند اختتامیه شماره ${result.noSanad} با ${result.rowsCreated} ردیف صادر شد.\n\n` +
+                    `جمع بدهکار: ${window.App.Helpers.fmt(result.totalBed)}\n` +
+                    `جمع بستانکار: ${window.App.Helpers.fmt(result.totalBes)}`,
+                    { title: 'انجام شد' }
+                );
+                loadList();
+            } else {
+                await window.App.alert.error(
+                    'خطا در صدور سند اختتامیه:\n\n' + (result.message || 'خطای نامشخص'),
+                    { title: '⛔ خطا' }
+                );
+            }
+        } catch (err) {
+            await window.App.alert.error(err.message || 'خطا در ارتباط با سرور', {
+                title: 'خطا'
+            });
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  OPENING SANAD — سند افتتاحیه
+    // ═══════════════════════════════════════════
+    async function openOpeningDialog() {
+        const u = window.App.state.user || {};
+        const orgId = u.orgId;
+        const fyId = u.fyId;
+        if (!orgId || !fyId) {
+            window.App.toast('اطلاعات سازمان/دوره در دسترس نیست', 'error');
+            return;
+        }
+
+        const ok = await window.App.confirm(
+            'آیا از صدور سند افتتاحیه برای این دوره مطمئن هستید؟\n\n' +
+            '⚠️ این عملیات فقط یک بار برای هر دوره امکان‌پذیر است و از سال قبل کپی می‌شود.',
+            { title: '📂 سند افتتاحیه', type: 'warning', okText: 'بله، صادر کن' }
+        );
+        if (!ok) return;
+
+        try {
+            const res = await window.App.Http.api('/api/setup/opening-sanad', {
+                method: 'POST',
+                body: JSON.stringify({ orgId, fyId }),
+                silent: true
+            });
+            if (res.success) {
+                await window.App.alert.success(
+                    `✅ سند افتتاحیه (شماره ${res.noSanad}) با ${res.rowsCopied} ردیف صادر شد.`,
+                    { title: 'انجام شد' }
+                );
+                loadList();
+            } else {
+                await window.App.alert.error(res.message, { title: 'خطا در صدور افتتاحیه' });
+            }
+        } catch (err) {
+            await window.App.alert.error(err.message, { title: 'خطا' });
+        }
+    }
+
+
+    return { render, loadList, gotoPage, showDetail, buildUrl, sortBy, openBulkChangeVazeitDialog, openClosingDialog, openOpeningDialog };
+
 })();
 
 window.App.Features = window.App.Features || {};

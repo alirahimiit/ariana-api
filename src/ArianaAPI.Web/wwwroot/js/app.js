@@ -533,14 +533,18 @@ window.App = Object.assign(window.App || {}, {
         const hasLogo = !!this.getLogo();
         const pageSizeOptions = [10, 20, 30, 50, 75, 100, 200, 300, 500, 1000];
 
+        // ساخت گزینه‌ها برای CustomSelect
+        const pageSizeCsOptions = pageSizeOptions.map(v => ({
+            value: String(v),
+            label: `${v} ردیف`
+        }));
+
         const body = `
         <div class="form-group">
             <label>لوگوی برنامه</label>
             <div style="display:flex; align-items:center; gap:12px; padding:12px; background:#F9FAFB; border-radius:10px; margin-bottom:16px;">
                 <div class="logo-preview" style="width:56px; height:56px; font-size:22px;">
-                    ${hasLogo
-                ? `<img src="${this.getLogo()}" alt="لوگو">`
-                : '<span>آ</span>'}
+                    ${hasLogo ? `<img src="${this.getLogo()}" alt="لوگو">` : '<span>آ</span>'}
                 </div>
                 <div style="flex:1;">
                     <p style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">
@@ -555,19 +559,11 @@ window.App = Object.assign(window.App || {}, {
 
         <div class="form-group">
             <label>تعداد ردیف در هر صفحه (صفحه‌بندی)</label>
-            <div class="custom-select" id="setPageSizeWrap">
-                <button type="button" class="custom-select-trigger" id="setPageSizeTrigger">
-                    <span class="custom-select-value">${s.pageSize} ردیف</span>
-                    <span class="custom-select-arrow">▼</span>
-                </button>
-                <div class="custom-select-menu" id="setPageSizeMenu">
-                    ${pageSizeOptions.map(v => `
-                        <div class="custom-select-option ${s.pageSize === v ? 'selected' : ''}"
-                             data-value="${v}">${v} ردیف</div>
-                    `).join('')}
-                </div>
+            <!-- 👇 استفاده از CustomSelect استاندارد -->
+            <div id="csPageSizeWrapper">
+                ${window.App.UI.CustomSelect.html('setPageSizeCustom', pageSizeCsOptions, String(s.pageSize), 'انتخاب کنید...')}
             </div>
-            <p class="form-hint">این مقدار روی همه‌ی جدول‌های برنامه اعمال می‌شود.</p>
+            <p class="form-hint" style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">این مقدار روی همه‌ی جدول‌های برنامه اعمال می‌شود.</p>
         </div>
 
         <div style="display:flex; gap:10px; margin-top:20px;">
@@ -579,44 +575,18 @@ window.App = Object.assign(window.App || {}, {
         this.openModal('⚙️ تنظیمات', body);
 
         const modalBody = document.getElementById('modalBody');
-        let selectedPageSize = s.pageSize;
 
-        // ═══ Custom Select Logic ═══
-        const wrap = modalBody.querySelector('#setPageSizeWrap');
-        const trigger = modalBody.querySelector('#setPageSizeTrigger');
-        const menu = modalBody.querySelector('#setPageSizeMenu');
-        const valueEl = modalBody.querySelector('.custom-select-value');
-
-        trigger.addEventListener('click', (e) => {
-            e.stopPropagation();
-            wrap.classList.toggle('open');
-        });
-
-        menu.querySelectorAll('.custom-select-option').forEach(opt => {
-            opt.addEventListener('click', (e) => {
-                e.stopPropagation();
-                selectedPageSize = parseInt(opt.dataset.value);
-                valueEl.textContent = `${selectedPageSize} ردیف`;
-                menu.querySelectorAll('.custom-select-option')
-                    .forEach(o => o.classList.remove('selected'));
-                opt.classList.add('selected');
-                wrap.classList.remove('open');
+        // ⭐ فعال‌سازی CustomSelect بعد از باز شدن مودال
+        setTimeout(() => {
+            window.App.UI.CustomSelect.bind('setPageSizeCustom', (val) => {
+                // در صورت نیاز به واکنش فوری
             });
-        });
-
-        // بستن با کلیک بیرون
-        const closeHandler = (e) => {
-            if (!wrap.contains(e.target)) {
-                wrap.classList.remove('open');
-            }
-        };
-        document.addEventListener('click', closeHandler);
+        }, 50);
 
         // دکمه لوگو
         const logoBtn = modalBody.querySelector('#openLogoDialogBtn');
         if (logoBtn) {
             logoBtn.addEventListener('click', () => {
-                document.removeEventListener('click', closeHandler);
                 this.closeModal();
                 setTimeout(() => this.openLogoDialog(), 100);
             });
@@ -624,14 +594,15 @@ window.App = Object.assign(window.App || {}, {
 
         // ذخیره
         modalBody.querySelector('#setSaveBtn').addEventListener('click', () => {
+            // ⭐ خواندن مقدار از CustomSelect
+            const selectedPageSize = parseInt(window.App.UI.CustomSelect.getValue('setPageSizeCustom'));
+
             this.state.settings.pageSize = selectedPageSize;
             localStorage.setItem('ariana_settings', JSON.stringify(this.state.settings));
-            document.removeEventListener('click', closeHandler);
             this.closeModal();
             this.toast('تنظیمات ذخیره شد', 'success');
 
             // رفرش صفحه فعلی
-            const page = this.state.currentPage;
             if (this.state.currentPage === 'sanad') {
                 this.state.sanadPage = 1;
                 window.App.Features.Sanad.loadList();
@@ -641,21 +612,16 @@ window.App = Object.assign(window.App || {}, {
                 window.App.Features.Factor.runList(1);
             } else if (this.state.currentPage === 'tafzili2') {
                 window.App.Features.Tafzili2.runList(1);
-            } else if (this.state.currentPage === 'ledger') {
-                // کاربر باید دوباره تهیه گزارش بزنه
             }
         });
 
         // بستن
         modalBody.querySelectorAll('[data-close]').forEach(el => {
             el.addEventListener('click', () => {
-                document.removeEventListener('click', closeHandler);
                 this.closeModal();
             });
         });
-    },
-
-    
+    },  
 
     // ═══════════════════════════════════════════
     //  API HELPER

@@ -253,3 +253,84 @@
             font-size: 14px;
         }
 }
+
+/* ═══════════════════════════════════════════════════════
+   ⭐ رفع مشکل باز شدن لیست تنظیمات (بدون قطع شدن و بدون تداخل)
+   ═══════════════════════════════════════════════════════ */
+.custom-select {
+    position: relative;
+    width: 100%;
+}
+
+    .custom-select .cs-menu,
+    .custom-select .custom-select-menu {
+        /* با استفاده از relative، لیست فرم را به پایین هل می‌دهد تا قطع نشود */
+        position: relative !important;
+        width: 100%;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        margin-top: 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 999;
+        /* حالت بسته */
+        display: none !important;
+    }
+
+    /* حالت باز (وقتی کلاس open روی والد است) */
+    .custom-select.open .cs-menu,
+    .custom-select.open .custom-select-menu {
+        display: block !important;
+    }
+/* ═══ Fix CustomSelect inside Modals ═══ */
+.cs-menu {
+    max-height: 250px !important; /* محدود کردن ارتفاع منو */
+    overflow-y: auto !important; /* فعال کردن اسکرول */
+    z-index: 11000 !important; /* نمایش روی مودال */
+}
+
+    /* استایل اسکرول‌بار برای زیبایی */
+    .cs-menu::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .cs-menu::-webkit-scrollbar-thumb {
+        background: #CBD5E1;
+        border-radius: 4px;
+    }
+
+/* برای اینکه مودال تنظیمات، منو رو نبره */
+.modal-box {
+    overflow: visible !important;
+}
+
+.modal-body {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+}
+    /* ═══ Fix Dropdown inside Modals (CustomSelect) ═══ */
+    /* محدود کردن ارتفاع لیست کشویی داخل مودال */
+    .modal-body .cs-menu {
+        max-height: 200px !important;
+        overflow-y: auto !important;
+        z-index: 10500 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+        border: 1px solid #E2E8F0 !important;
+        background: #fff !important;
+    }
+        /* اسکرول‌بار زیبا */
+        .modal-body .cs-menu::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .modal-body .cs-menu::-webkit-scrollbar-thumb {
+            background: #CBD5E1;
+            border-radius: 4px;
+        }
+
+/* برای اینکه منوی باز شده از کادر مودال بیرون بزند */
+.modal-box {
+    overflow: visible !important;
+}

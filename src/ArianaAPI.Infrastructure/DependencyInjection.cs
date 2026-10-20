@@ -80,6 +80,11 @@ public static class DependencyInjection
 
         // ⭐  مرتب‌ساز اطلاعات
         services.AddScoped<ISanadRenumberRepository, SanadRenumberRepository>();
+
+        // ⭐ سند افتتاحیه/اختتامیه/موقت
+        services.AddScoped<ISanadOpeningService, SanadOpeningService>();
+        services.AddScoped<ISanadClosingService, SanadClosingService>();
+        services.AddScoped<ISanadMovaghatService, SanadMovaghatService>();
         // ⭐  راه‌اندازی اولیه
         services.AddScoped<ISetupRepository, SetupRepository>();
 

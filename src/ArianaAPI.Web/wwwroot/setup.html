@@ -369,7 +369,7 @@
                     <span>ایجاد سند افتتاحیه به صورت خودکار</span>
                 </label>
                 <div class="alert-warning">
-                    ⚠️ توجه: پیاده‌سازی سند افتتاحیه در جلسه ۵۳ انجام می‌شود. در حال حاضر این گزینه غیرفعال است.
+                    ⚠️ پیش‌نیاز: سند اختتامیه سال قبل باید صادر شده باشد (EndSanadNum > 0). در غیر این صورت، دوره ساخته می‌شود اما سند افتتاحیه صادر نمی‌شود.
                 </div>
             </div>
 
@@ -545,10 +545,6 @@
         }
 
         async function submitSetup() {
-            if (document.getElementById('createSanadEftetah').checked) {
-                App.alert.warning('سند افتتاحیه در جلسه ۵۳ پیاده‌سازی می‌شود و فعلاً ایجاد نمی‌گردد.');
-            }
-
             const beginDateVal = document.getElementById('beginDate').value;
             const endDateVal = document.getElementById('endDate').value;
 
@@ -613,13 +609,69 @@
 
                 if (!res.ok) throw new Error(data.error);
 
-                App.toast('دوره مالی با موفقیت ایجاد شد!', 'success');
+                // ═══ سند افتتاحیه (اختیاری — تراکنش مستقل) ═══
+
+                if (payload.CreateSanadEftetah) {
+                    try {
+                        App.toast('در حال ساخت سند افتتاحیه...', 'info');
+
+                        // ⭐ استخراج هوشمند شناسه‌ها (ممکن است نام فیلدهای پاسخ متفاوت باشد)
+                        const reqOrgId = data.orgId || data.sazmanID || data.SazmanID || 0;
+                        const reqFyId = data.fyId || data.dorehMaliID || data.DorehMaliID || 0;
+
+                        if (!reqOrgId || !reqFyId) {
+                            throw new Error("شناسه سازمان یا دوره در پاسخ سرور یافت نشد.");
+                        }
+
+                        const openingRes = await fetch('/api/setup/opening-sanad', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
+                            body: JSON.stringify({ orgId: reqOrgId, fyId: reqFyId })
+                        });
+
+                        // ⭐ چک کردن خطای HTTP قبل از خواندن JSON
+                        if (!openingRes.ok) {
+                            throw new Error(`خطای ارتباط با سرور (کد ${openingRes.status})`);
+                        }
+
+                        const textResp = await openingRes.text();
+                        if (!textResp) {
+                            throw new Error("پاسخ سرور خالی است.");
+                        }
+
+                        const opData = JSON.parse(textResp);
+
+                        if (opData.success) {
+                            App.toast(
+                                `✅ دوره مالی + سند افتتاحیه (شماره ${opData.noSanad}) با ${opData.rowsCopied} ردیف ساخته شد`,
+                                'success',
+                                { duration: 5000 }
+                            );
+                        } else {
+                            await App.alert.warning(
+                                `✅ دوره مالی با موفقیت ایجاد شد.\n\n` +
+                                `⚠️ اما سند افتتاحیه صادر نشد:\n\n${opData.message}\n\n` +
+                                `می‌توانید بعداً از صفحه اسناد، سند افتتاحیه را به‌صورت دستی بسازید.`,
+                                { title: 'دوره ایجاد شد — سند افتتاحیه ناموفق' }
+                            );
+                        }
+                    } catch (opErr) {
+                        await App.alert.warning(
+                            `✅ دوره مالی ایجاد شد.\n\n⚠️ خطا در ساخت سند افتتاحیه:\n\n${opErr.message}`,
+                            { title: 'سند افتتاحیه ناموفق' }
+                        );
+                    }
+                } else {
+                    App.toast('دوره مالی با موفقیت ایجاد شد!', 'success');
+                }
+
                 setTimeout(() => window.location.href = '/index.html', 3000);
             } catch (err) {
                 document.getElementById('loadingOverlay').style.display = 'none';
                 App.alert.error('خطا: ' + err.message);
             }
         }
+
     </script>
 </body>
 </html>
