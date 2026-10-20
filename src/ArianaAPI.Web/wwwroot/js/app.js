@@ -832,7 +832,7 @@ window.App = Object.assign(window.App || {}, {
             article: 'کالاها',
             sharh: 'شرح‌ها',
             kind: 'انواع سند',
-
+            'taraz-6-sotooni': 'تراز آزمایشی ۶ ستونی',            
             // ⭐ منوی ورود/خروج کالا
             'factor-buy': 'فاکتور خرید',
             'factor-sell': 'فاکتور فروش',
@@ -884,6 +884,7 @@ window.App = Object.assign(window.App || {}, {
             case 'dashboard': window.App.Features.Dashboard.render(); break;
             case 'sanad': window.App.Features.Sanad.render(); break;
             case 'taraz': window.App.Features.Taraz.render(); break;
+            case 'taraz-6-sotooni': window.App.Features.TarazSheshSotooni.render(); break;
             case 'ledger': window.App.Features.Ledger.render(); break;
             case 'profitloss': window.App.Features.ProfitLoss.render(); break;
             case 'bilan': window.App.Features.Bilan.render(); break;

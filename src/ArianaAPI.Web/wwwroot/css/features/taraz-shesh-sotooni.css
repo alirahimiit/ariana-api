@@ -1,0 +1,48 @@
+﻿/* ═══════════════════════════════════════════════════
+   Taraz Shesh Sotooni — تراز آزمایشی ۶ ستونی
+   ═══════════════════════════════════════════════════ */
+
+/* ─── استایل ستون‌های بدهکار / بستانکار ─── */
+.t6-table .t6-col-debit {
+    color: #059669; /* رنگ سبز برای بدهکار */
+    font-variant-numeric: tabular-nums;
+}
+
+.t6-table .t6-col-credit {
+    color: #DC2626; /* رنگ قرمز برای بستانکار */
+    font-variant-numeric: tabular-nums;
+}
+
+/* ─── استایل هدر جدول ─── */
+.t6-table thead th {
+    text-align: center;
+    vertical-align: middle;
+    background: #EEF2FF;
+    color: #1E293B;
+    font-weight: 700;
+    padding: 8px 10px;
+    border-bottom: 1px solid #CBD5E1;
+    white-space: nowrap;
+}
+
+.t6-table thead tr:first-child th {
+    border-bottom: 1px solid #CBD5E1;
+}
+
+.t6-table thead tr:last-child th {
+    background: #F1F5F9;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 10px;
+}
+
+/* ─── ردیف‌ها ─── */
+.t6-table tbody tr:hover {
+    background: #F8FAFC;
+}
+
+.t6-table tbody td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #F1F5F9;
+    vertical-align: middle;
+}
