@@ -1785,3 +1785,56 @@ tr.row-selected {
     .sf-tafzil-name:empty {
         display: none;
     }
+
+/* ⭐ استایل ردیف هایلایت شده در سند */
+.sd-row-highlight {
+    background-color: #FEF08A !important; /* زرد ملایم */
+    border-right: 4px solid #EAB308 !important;
+    animation: pulseHighlight 1s ease-in-out 2;
+}
+
+    .sd-row-highlight td {
+        font-weight: 700 !important;
+        color: #854D0E !important;
+    }
+
+@keyframes pulseHighlight {
+    0% {
+        background-color: #FEF08A;
+    }
+
+    50% {
+        background-color: #FDE047;
+    }
+
+    100% {
+        background-color: #FEF08A;
+    }
+}
+
+/* ⭐ هایلایت آبی رنگ برای فرم ویرایش (بدون تداخل با تیک زرد) */
+.sf-row.sf-row-highlight {
+    background-color: #EFF6FF !important; /* آبی خیلی ملایم */
+    border-right: 4px solid #3B82F6 !important; /* خط آبی پررنگ */
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) inset;
+    animation: highlightPulse 1s ease-in-out 2;
+}
+
+/* اگه ردیف هم تیک داشت، فقط خط آبی رو نشون بده تا زردی از بین نره */
+.sf-row.sf-row-tik.sf-row-highlight {
+    border-right: 4px solid #3B82F6 !important;
+}
+
+@keyframes highlightPulse {
+    0% {
+        background-color: #DBEAFE;
+    }
+
+    50% {
+        background-color: #BFDBFE;
+    }
+
+    100% {
+        background-color: #EFF6FF;
+    }
+}

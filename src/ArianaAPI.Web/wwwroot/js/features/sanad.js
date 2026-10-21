@@ -13,7 +13,7 @@ window.App.Features.Sanad = (function () {
     let _sort = { by: 'noSanad', dir: 'desc' };
     let _accountFilter = { codeCol: 0, codeMoein: 0, codeTafzil: 0, label: '' };
 
-    let _detailFilter = { errorType: 'all' };
+    let _detailFilter = { errorType: 'all', highlightRowId: null }; // ⭐ highlightRowId اضافه شد
     let _detailData = { detail: null, items: [] };
 
     // ⭐ جدید: انتخاب چندتایی
@@ -90,7 +90,7 @@ window.App.Features.Sanad = (function () {
                     { name: 'toDate', label: 'تا تاریخ', type: 'date' },
                     { name: 'noFrom', label: 'از شماره', type: 'number', placeholder: '۱' },
                     { name: 'noTo', label: 'تا شماره', type: 'number' },
-                    { name: 'sharh', label: 'شرح سند', type: 'text', placeholder: 'جستجوی بخشی از شرح سند...' }, 
+                    { name: 'sharh', label: 'شرح سند', type: 'text', placeholder: 'جستجوی بخشی از شرح سند...' },
                     { name: 'rowSharh', label: 'شرح ردیف', type: 'text', placeholder: 'جستجوی بخشی از شرح ردیف...' }
                 ]
             },
@@ -398,26 +398,19 @@ window.App.Features.Sanad = (function () {
     }
 
     // ═══════════════════════════════════════════
-    //  COPY DIALOG
-    // ═══════════════════════════════════════════
-    // ═══════════════════════════════════════════
     //  EXPORT CSV
     // ═══════════════════════════════════════════
     async function exportCsv() {
         if (_selected.size === 0) { window.App.toast('ابتدا سند انتخاب کنید', 'warn'); return; }
 
         try {
-            // ⭐ از Http.api استفاده نمی‌کنیم چون blob برمی‌گردونه
-            // پس headerها رو دستی می‌سازیم — دقیقاً مثل Http.api
             const headers = { 'Content-Type': 'application/json' };
 
-            // API Key
             const apiKey = window.App.state.apiKey
                 || localStorage.getItem('ariana_api_key')
                 || (window.App.config && window.App.config.apiKey);
             if (apiKey) headers['X-Api-Key'] = apiKey;
 
-            // JWT Token
             const token = window.App.state.token
                 || localStorage.getItem('ariana_token')
                 || localStorage.getItem('token');
@@ -451,13 +444,11 @@ window.App.Features.Sanad = (function () {
             });
         }
     }
+
     // ═══════════════════════════════════════════
     //  DOWNLOAD TEMPLATE
     // ═══════════════════════════════════════════
     function downloadTemplate() {
-        // ⭐ استفاده از sep=; برای اینکه اکسل ستون‌ها را تشخیص دهد
-        // ⭐ استفاده از ="..." برای مبالغ تا اکسل آن‌ها را به فرمت علمی تبدیل نکند
-        // ⭐ ستون ردیف (ستون 7) به صورت 1 و 2 قرار داده شده تا کاربر بداند باید ترتیبی باشد
         const header = 'sep=;\nشماره سند;تاريخ سند;شرح سند;شرح رديف;بدهکار;بستانکار;رديف;کد کل;کد معين;کد تفصيلي;کد تفصيلي2;شناسه تفضيلي2;مقدار\n';
 
         const sample = '1001;1404/01/01;نمونه شرح سند;شرح ردیف 1;="1000000";="0";1;1101;1;0;0;0;="0"\n' +
@@ -529,14 +520,11 @@ window.App.Features.Sanad = (function () {
             status.style.display = 'block';
             status.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
-            // ⭐ خواندن هوشمند فایل (پشتیبانی از UTF-8 و ANSI ویندوز)
             const buffer = await file.arrayBuffer();
             let content = '';
             try {
-                // تلاش برای خواندن با UTF-8
                 content = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
             } catch (e) {
-                // اگر خطا داد، یعنی فایل با اکسل (ANSI) ذخیره شده است
                 content = new TextDecoder('windows-1256').decode(buffer);
             }
 
@@ -665,7 +653,7 @@ window.App.Features.Sanad = (function () {
 
                 await window.App.alert.success(
                     `✅ ${result.createdSanads} سند با ${result.createdItems} ردیف ثبت شد`,
-                    { title: 'انجام شد' } );
+                    { title: 'انجام شد' });
                 window.App.closeModal();
                 loadList();
             } catch (err) {
@@ -689,7 +677,6 @@ window.App.Features.Sanad = (function () {
             return;
         }
 
-        // ⭐⭐ چک: چند سند غیرپیش‌نویس انتخاب شده؟
         const lockedItems = _currentItems.filter(x =>
             _selected.has(x.parentSanadID) && x.vazeit !== 0
         );
@@ -725,7 +712,7 @@ window.App.Features.Sanad = (function () {
                 method: 'POST',
                 body: JSON.stringify({ sanadIds: [..._selected] })
             });
-            window.App.toast(`✅ ${result.deleted} سند حذف شد`, 'success', { title:'عملیات موفق' });
+            window.App.toast(`✅ ${result.deleted} سند حذف شد`, 'success', { title: 'عملیات موفق' });
             _selected.clear();
             loadList();
         } catch (err) {
@@ -742,14 +729,12 @@ window.App.Features.Sanad = (function () {
     async function openBulkChangeVazeitDialog() {
         if (_selected.size === 0) return;
 
-        // ⭐ محاسبه‌ی وضعیت‌های موجود در انتخاب
         const selectedItems = _currentItems.filter(x => _selected.has(x.parentSanadID));
         const vazeitCounts = { 0: 0, 1: 0, 2: 0 };
         selectedItems.forEach(x => {
             if (vazeitCounts[x.vazeit] !== undefined) vazeitCounts[x.vazeit]++;
         });
 
-        // ⭐ چک دسترسی برای هر گروه
         const P = window.App.Permissions;
         const perms = {
             can_102: P ? P.can(102) : true,
@@ -758,7 +743,6 @@ window.App.Features.Sanad = (function () {
             can_105: P ? P.can(105) : true
         };
 
-        // ⭐ آیا کاربر می‌تونه هر گروه رو تغییر بده؟
         const canChangeFrom0 = perms.can_102;
         const canChangeFrom1 = perms.can_104 || perms.can_105;
         const canChangeFrom2 = perms.can_103;
@@ -824,13 +808,11 @@ window.App.Features.Sanad = (function () {
 
         window.App.openModal('🔄 تغییر وضعیت گروهی', body);
 
-        // ⭐ Disable گزینه‌های غیرمجاز
         const modalBody = document.getElementById('modalBody');
         modalBody.querySelectorAll('.bvd-radio').forEach(radio => {
             const input = radio.querySelector('input');
             const targetV = parseInt(input.value);
 
-            // آیا می‌تونه از هر وضعیت مبدأ به این target بره؟
             let canChange = true;
             if (vazeitCounts[0] > 0 && !canChangeFrom0 && targetV !== 0) canChange = false;
             if (vazeitCounts[1] > 0 && !canChangeFrom1 && targetV !== 1) canChange = false;
@@ -879,7 +861,6 @@ window.App.Features.Sanad = (function () {
                 })
             });
 
-            // ⭐ پیام نتیجه
             let msg = `✅ ${result.updatedCount} سند با موفقیت تغییر یافت.`;
             if (result.skippedCount > 0) {
                 msg += `\n\n⚠️ ${result.skippedCount} سند رد شد:`;
@@ -909,6 +890,7 @@ window.App.Features.Sanad = (function () {
             });
         }
     }
+
     // ═══════════════════════════════════════════
     //  KEYBOARD SHORTCUTS
     // ═══════════════════════════════════════════
@@ -939,18 +921,20 @@ window.App.Features.Sanad = (function () {
     }
 
     // ═══════════════════════════════════════════
-    //  SHOW DETAIL (بدون تغییر)
+    //  SHOW DETAIL
     // ═══════════════════════════════════════════
     async function showDetail(sanadId, options = {}) {
         if (!sanadId) return;
 
-        // ⭐ تشخیص: از کجا باز شده؟
         const isFromExternal = options.fromExternal === true
             || window.App.state.currentPage !== 'sanad';
 
         window.App.openModal('جزئیات سند',
             `<div class="loading"><div class="spinner"></div></div>`);
+
+        // ⭐ ست کردن هایلایت
         _detailFilter.errorType = 'all';
+        _detailFilter.highlightRowId = options.highlightRowId || null;
 
         try {
             const [detail, items] = await Promise.all([
@@ -967,6 +951,17 @@ window.App.Features.Sanad = (function () {
                 filename: 'Sanad_' + (detail?.noSanad || 'detail'),
                 customHtml: () => buildDetailPrintHtml(detail, items)
             });
+
+            // ⭐ اسکرول خودکار به ردیف هایلایت شده
+            if (_detailFilter.highlightRowId) {
+                setTimeout(() => {
+                    const row = document.querySelector('.sd-row-highlight');
+                    if (row) {
+                        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 150);
+            }
+
         } catch (err) {
             document.getElementById('modalBody').innerHTML =
                 `<div class="error-box">${err.message}</div>`;
@@ -992,7 +987,6 @@ window.App.Features.Sanad = (function () {
             ? itemsWithErrors
             : itemsWithErrors.filter(x => x._errors.some(e => e.code === f));
 
-        // ⭐ تشخیص نمایش دکمه ویرایش
         const canEdit = !window.App.Permissions || window.App.Permissions.can(102);
         const isConfirmed = (detail?.vazeit || 0) === 2;
         const showEditBtn = opts.isFromExternal && canEdit && !isConfirmed;
@@ -1067,7 +1061,13 @@ window.App.Features.Sanad = (function () {
                 </span>`).join('');
             const hasError = (it._errors || []).some(e => e.severity === 'error');
             const hasWarn = (it._errors || []).some(e => e.severity === 'warn');
-            const rowClass = hasError ? 'sd-row-err' : (hasWarn ? 'sd-row-warn' : '');
+
+            // ⭐ تشخیص ردیف هایلایت شده
+            const isHighlighted = _detailFilter.highlightRowId &&
+                (it.sanadID === _detailFilter.highlightRowId || it.sanadId === _detailFilter.highlightRowId);
+
+            let rowClass = hasError ? 'sd-row-err' : (hasWarn ? 'sd-row-warn' : '');
+            if (isHighlighted) rowClass += ' sd-row-highlight'; // ⭐ اضافه کردن کلاس هایلایت
 
             return `
                 <tr class="${rowClass}">
@@ -1167,13 +1167,19 @@ window.App.Features.Sanad = (function () {
             });
         }
 
-        // ⭐ دکمه ویرایش
+        // در فایل sanad.js، تابع bindDetailFilter را پیدا کنید و فقط بخش دکمه ویرایش را آپدیت کنید:
+
         document.getElementById('sdEditBtn')?.addEventListener('click', () => {
             const id = _detailData.detail?.parentSanadID;
             if (!id) return;
+
+            // ⭐ شناسه ردیف را قبل از بستن مودال ذخیره می‌کنیم
+            const highlightId = _detailFilter.highlightRowId;
+
             window.App.closeModal();
             setTimeout(() => {
-                window.App.Features.SanadForm.openEdit(id);
+                // ⭐ شناسه ردیف را به فرم ویرایش پاس می‌دهیم
+                window.App.Features.SanadForm.openEdit(id, { highlightRowId: highlightId });
             }, 100);
         });
     }
@@ -1261,7 +1267,6 @@ window.App.Features.Sanad = (function () {
     }
 
     function renderErrorBadge(s) {
-        // ⭐ اگر سند هیچ ردیفی ندارد
         if (s.itemCount === 0) {
             return '<span class="sanad-list-err" title="این سند هیچ ردیفی ندارد (خالی است)">⛔ خالی</span>';
         }
@@ -1322,12 +1327,10 @@ window.App.Features.Sanad = (function () {
             const f = filter.trim().toLowerCase();
             let html = '';
 
-            // حساب‌های کل
             const filteredCols = !f ? cols : cols.filter(c =>
                 String(c.codeCol).includes(f) ||
                 (c.name || '').toLowerCase().includes(f));
 
-            // حساب‌های معین
             const filteredMoeins = !f ? moeins.slice(0, 200) : moeins.filter(m =>
                 String(m.codeMoein).includes(f) ||
                 (m.name || '').toLowerCase().includes(f) ||
@@ -1366,12 +1369,11 @@ window.App.Features.Sanad = (function () {
             const codeCol = parseInt(item.dataset.col);
             const codeMoein = parseInt(item.dataset.moein);
 
-            // ⭐ اگه معین بود، بپرس آیا تفصیلی هم فیلتر بشه
             if (codeMoein > 0) {
                 const moeinObj = moeins.find(x => x.codeCol === codeCol && x.codeMoein === codeMoein);
                 if (moeinObj && moeinObj.hasTafzili) {
                     const t = await askTafzil(codeCol, codeMoein);
-                    if (t === null) return;   // انصراف
+                    if (t === null) return;
                     applyAccountFilter(codeCol, codeMoein, t);
                     return;
                 }
@@ -1427,7 +1429,6 @@ window.App.Features.Sanad = (function () {
         _accountFilter.codeMoein = codeMoein;
         _accountFilter.codeTafzil = codeTafzil;
 
-        // برچسب نمایش
         const parts = [];
         if (codeCol > 0) parts.push('کل: ' + codeCol);
         if (codeMoein > 0) parts.push('معین: ' + codeMoein);
@@ -1485,9 +1486,6 @@ window.App.Features.Sanad = (function () {
                 body: JSON.stringify({ orgId, fyId })
             });
 
-
-
-            // ⭐ اگر سند واقعاً وجود دارد، قفل می‌کنیم
             if (val.alreadyClosed) {
                 await window.App.alert.warning(
                     `سند اختتامیه قبلاً صادر شده است (شماره ${val.endSanadNum}).\n\n` +
@@ -1496,8 +1494,6 @@ window.App.Features.Sanad = (function () {
                 );
                 return;
             }
-
-
 
             if (!val.ok) {
                 const issues = (val.issues || []).join('\n• ');
@@ -1512,13 +1508,11 @@ window.App.Features.Sanad = (function () {
                 return;
             }
 
-
             const pickerRes = await window.App.UI.HesabPicker.open({ mode: 'moein' });
             if (!pickerRes) {
                 window.App.toast('برای صدور سند اختتامیه، باید حساب اختتامیه را انتخاب کنید.', 'warning');
                 return;
             }
-
 
             const ok = await window.App.confirm(
                 `آیا از صدور سند اختتامیه مطمئن هستید؟\n\n` +

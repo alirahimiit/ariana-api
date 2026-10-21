@@ -260,7 +260,7 @@ window.App.Features.SanadForm = (function () {
         populateSharhDatalists();
     }
 
-    async function openEdit(id) {
+    async function openEdit(id, options = {}) {
         if (window.App.Permissions && !window.App.Permissions.can(102)) {
             window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
             return;
@@ -303,14 +303,16 @@ window.App.Features.SanadForm = (function () {
             ]);
             // ⭐ شروع بارگذاری شرح‌ها — fire-and-forget
             ensureSharhLists().then(populateSharhDatalists).catch(() => { });
+
             _state = {
                 isEdit: true,
                 parentSanadId: id,
                 focusedIdx: 0,
                 dirty: false,
                 selectedRows: new Set(),
-                originalVazeit: currentVazeit,   
+                originalVazeit: currentVazeit,
                 items: (items || []).map(it => ({
+                    sanadId: it.sanadID || it.sanadId || it.SanadID, // ⭐⭐ این خط اضافه شد تا شناسه ردیف حفظ شود
                     codeCol: it.code_Col || 0,
                     codeMoein: it.code_Moein || 0,
                     codeTafzil: it.code_Tafzil || 0,
@@ -322,12 +324,15 @@ window.App.Features.SanadForm = (function () {
                     mabBes: it.mabBes || 0,
                     meghdar: Math.abs(it.meghdar || 0),
                     tikRow: it.tikRow || it.TikRow || 0,
-                    doDate: it.doDate || '',                                    // ⭐
-                    doOK: it.doOK === true || it.doOk === true                   // ⭐
+                    doDate: it.doDate || '',
+                    doOK: it.doOK === true || it.doOk === true
                 }))
             };
+
             // ⭐ _clipboard رو دست نزن — بین اسناد حفظ می‌شه
             if (_state.items.length === 0) _state.items = [emptyRow()];
+
+            _state.highlightRowId = options.highlightRowId || null; // ⭐ ذخیره شناسه ردیف
 
             const body = buildFormHtml({
                 noSanad: detail?.noSanad || '',
@@ -336,17 +341,25 @@ window.App.Features.SanadForm = (function () {
                 vazeit: detail?.vazeit || 0,
                 kindSanad: detail?.kindSanad || 0
             });
+
             window.App.openModal('✏️ ویرایش سند شماره ' + (detail?.noSanad || ''), body);
             document.querySelector('.modal-box')?.classList.add('wide-modal');
             bindEvents();
             renderRows();
-            focusRow(0, 'bed');   // ⭐
+            focusRow(0, 'bed');
             populateSharhDatalists();
+
+            // ⭐ اسکرول خودکار به ردیف هایلایت شده
+            if (_state.highlightRowId) {
+                const idx = _state.items.findIndex(x => x.sanadId === _state.highlightRowId);
+                if (idx !== -1) {
+                    setTimeout(() => scrollToRow(idx), 300);
+                }
+            }
         } catch (err) {
             window.App.toast('خطا: ' + err.message, 'error');
         }
     }
-
     // ═══ BUILD FORM — ساختار تمیز ═══
     function buildFormHtml(h) {
         const vazeitOpts = [
@@ -534,9 +547,10 @@ window.App.Features.SanadForm = (function () {
         const besStr = bes ? bes.toLocaleString('en-US') : '';
         const meghStr = megh ? parseFloat(Number(megh).toFixed(4)).toString() : '';
         const isTik = (item.tikRow || 0) === 1;
+        const isHighlight = _state.highlightRowId && (item.sanadId === _state.highlightRowId || item.SanadID === _state.highlightRowId); // ⭐
 
-        return `<div class="sf-row ${idx === _state.focusedIdx ? 'sf-row-focused' : ''} ${_state.selectedRows?.has(idx) ? 'sf-row-selected' : ''}" data-row-idx="${idx}">
-                <div class="sf-row-num">
+        return `<div class="sf-row ${idx === _state.focusedIdx ? 'sf-row-focused' : ''} ${_state.selectedRows?.has(idx) ? 'sf-row-selected' : ''} ${isTik ? 'sf-row-tik' : ''} ${isHighlight ? 'sf-row-highlight' : ''}" data-row-idx="${idx}">
+                 <div class="sf-row-num">
                     <input type="checkbox" class="sf-row-check" data-idx="${idx}"
                     ${_state.selectedRows?.has(idx) ? 'checked' : ''} title="انتخاب برای کپی (Ctrl+F9)">
                     <span class="sf-row-num-text">${idx + 1}</span>

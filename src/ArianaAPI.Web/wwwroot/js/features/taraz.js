@@ -84,10 +84,12 @@ window.App.Features.Taraz = (function () {
 
         <div class="form-group">
             <label>نمایش سطوح</label>
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-                <input type="checkbox" id="tarazSetDetail">
-                <span>نمایش همه سطوح کدینگ</span>
-            </label>
+            <div style="display: flex; align-items: center; height: 40px;">
+                <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; margin: 0; font-weight: normal; width: auto;">
+                    <input type="checkbox" id="tarazSetDetail" style="width: 18px; height: 18px; margin: 0; cursor: pointer;">
+                    <span>نمایش همه سطوح کدینگ</span>
+                </label>
+            </div>
         </div>
 
         <div class="filters">
@@ -617,7 +619,7 @@ window.App.Features.Taraz = (function () {
     }
 
     // ═══════════════════════════════════════════
-    //  MODAL — دفتر اسناد حساب
+    //  OVERLAY — دفتر اسناد حساب (مستقل)
     // ═══════════════════════════════════════════
     async function showAccountSanads(row) {
         const d = _drill;
@@ -633,8 +635,30 @@ window.App.Features.Taraz = (function () {
         if (codeTafzil) codeParts.push(`تفصیلی ${codeTafzil}`);
         if (codeTafzili2) codeParts.push(`تفصیلی ۲ ${codeTafzili2}`);
 
-        window.App.openModal(`📒 اسناد حساب - ${codeParts.join(' / ')}`,
-            `<div class="loading"><div class="spinner"></div></div>`);
+        // ⭐ بستن Overlay قبلی اگر باز است
+        document.getElementById('tarazLedgerOverlay')?.remove();
+
+        // ⭐ ساخت Overlay مستقل
+        const overlay = document.createElement('div');
+        overlay.id = 'tarazLedgerOverlay';
+        overlay.className = 'hp-overlay';
+        overlay.style.zIndex = '11000';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+
+        overlay.innerHTML = `
+            <div class="hp-box" style="width: 95%; max-width: 1300px; max-height: 95vh; display: flex; flex-direction: column; padding: 0; overflow: hidden; border-radius: 12px;">
+                <div style="padding: 12px 20px; border-bottom: 1px solid #E5E7EB; display: flex; justify-content: space-between; align-items: center; background: #fff;">
+                    <h3 style="margin:0; font-size: 16px; color: var(--text);">📒 اسناد حساب - ${codeParts.join(' / ')}</h3>
+                    <button onclick="document.getElementById('tarazLedgerOverlay').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666; transition: 0.2s;" onmouseover="this.style.color='#DC2626'" onmouseout="this.style.color='#666'">✕</button>
+                </div>
+                <div id="tarazLedgerBody" style="padding: 16px; overflow-y: auto; flex: 1; background: #F8FAFC;">
+                    <div class="loading" style="padding:40px;text-align:center;"><div class="spinner"></div></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
 
         try {
             const payload = {
@@ -648,9 +672,10 @@ window.App.Features.Taraz = (function () {
                 body: JSON.stringify(payload)
             }) || [];
 
+            const bodyEl = document.getElementById('tarazLedgerBody');
+
             if (items.length === 0) {
-                document.getElementById('modalBody').innerHTML =
-                    `<div class="empty"><div class="empty-icon">📭</div><p>سندی برای این حساب یافت نشد</p></div>`;
+                bodyEl.innerHTML = `<div class="empty"><div class="empty-icon">📭</div><p>سندی برای این حساب یافت نشد</p></div>`;
                 return;
             }
 
@@ -664,19 +689,18 @@ window.App.Features.Taraz = (function () {
                 return (a.noSanad || 0) - (b.noSanad || 0);
             });
 
-            document.getElementById('modalBody').innerHTML =
-                buildAccountDetailHtml(items, first, totalBed, totalBes, totalMan);
+            bodyEl.innerHTML = buildAccountDetailHtml(items, first, totalBed, totalBes, totalMan);
 
-            Exporter.attach(document.getElementById('modalBody'), {
+            Exporter.attach(bodyEl, {
                 title: `دفتر حساب - ${codeParts.join(' / ')}`,
                 subtitle: subtitle(),
                 filename: `Ledger_${codeCol}_${codeMoein || 0}_${codeTafzil || 0}`,
                 customHtml: () => buildAccountPrintHtml(items, first, totalBed, totalBes, totalMan)
             });
 
-            window.App.enhanceTables(document.getElementById('modalBody'));
+            window.App.enhanceTables(bodyEl);
         } catch (err) {
-            document.getElementById('modalBody').innerHTML =
+            document.getElementById('tarazLedgerBody').innerHTML =
                 `<div class="error-box">${H.esc(err.message)}</div>`;
         }
     }
@@ -689,9 +713,13 @@ window.App.Features.Taraz = (function () {
             const mandehDir = running >= 0 ? 'بد' : 'بس';
             const mandehColor = running >= 0 ? '#059669' : '#DC2626';
 
+            // ⭐ پاس دادن پارامتر isFromExternal برای نمایش دکمه ویرایش
+            const editParam = `{ isFromExternal: true, fromExternal: true, highlightRowId: ${it.sanadId} }`; // ⭐ اضافه کردن highlightRowId
+            const clickAction = `const m=document.getElementById('modal'); if(m) m.style.zIndex='12000'; App.Features.Sanad.showDetail(${it.parentSanadId}, ${editParam})`;
+
             return `
                 <tr class="clickable-row"
-                    onclick="App.Features.Sanad.showDetail(${it.parentSanadId})"
+                    onclick="${clickAction}"
                     title="کلیک برای مشاهده سند">
                     <td class="num text-center">${H.fmt(it.noSanad)}</td>
                     <td class="num">${H.esc(it.dateIn || '')}</td>
@@ -704,7 +732,7 @@ window.App.Features.Taraz = (function () {
                     </td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-ghost"
-                                onclick="App.Features.Sanad.showDetail(${it.parentSanadId})">
+                                onclick="event.stopPropagation(); ${clickAction}">
                             🔍
                         </button>
                     </td>
@@ -713,7 +741,7 @@ window.App.Features.Taraz = (function () {
 
         return `
             <div class="stats-grid" style="margin-bottom:16px;">
-                <div class="stat-card">
+                <div class="stat-card" style="background:#fff;">
                     <div>
                         <div class="stat-label">حساب</div>
                         <div class="stat-value" style="font-size:14px;">
@@ -724,19 +752,19 @@ window.App.Features.Taraz = (function () {
                         </div>
                     </div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" style="background:#fff;">
                     <div>
                         <div class="stat-label">جمع بدهکار</div>
                         <div class="stat-value" style="font-size:15px;">${H.fmt(totalBed)}</div>
                     </div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" style="background:#fff;">
                     <div>
                         <div class="stat-label">جمع بستانکار</div>
                         <div class="stat-value" style="font-size:15px;">${H.fmt(totalBes)}</div>
                     </div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" style="background:#fff;">
                     <div>
                         <div class="stat-label">مانده نهایی</div>
                         <div class="stat-value" style="font-size:15px; color:${totalMan >= 0 ? '#059669' : '#DC2626'};">
@@ -746,7 +774,7 @@ window.App.Features.Taraz = (function () {
                 </div>
             </div>
 
-            <div class="table-wrapper">
+            <div class="table-wrapper" style="background:#fff;">
                 <table>
                     <thead>
                         <tr>

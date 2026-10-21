@@ -310,7 +310,7 @@ window.App.Features.Ledger = (function () {
 
             return `
                 <tr class="clickable-row"
-                    onclick="App.Features.Sanad.showDetail(${it.parentSanadID})"
+                    onclick="App.Features.Sanad.showDetail(${it.parentSanadID}, { highlightRowId: ${it.sanadID} })"
                     title="کلیک برای مشاهده سند">
                     <td class="num text-center">${H.fmt(it.noSanad)}</td>
                     <td class="num">${data.isMonthly
