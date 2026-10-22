@@ -139,7 +139,7 @@ public class TarazSheshSotooniRepository : ITarazSheshSotooniRepository
         await conn.OpenAsync(ct);
 
         var rows = (await conn.QueryAsync<TarazSheshSotooniItemDto>(
-            new CommandDefinition(finalSql, p, cancellationToken: ct))).ToList();
+            new CommandDefinition(finalSql, p, commandTimeout: 120, cancellationToken: ct))).ToList();
 
         foreach (var r in rows)
         {

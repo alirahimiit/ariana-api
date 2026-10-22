@@ -80,6 +80,99 @@ window.App.Features.Dashboard = (function () {
                 ${buildConnection()}
             </div>`;
     }
+    // تابع کمکی برای محاسبه روز هفته و روز از سال شمسی
+    function getPersianDateInfo() {
+        try {
+            const now = new Date();
+            const faFormatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long' });
+            const weekday = faFormatter.format(now);
+
+            const partsFormatter = new Intl.DateTimeFormat('en-US-u-ca-persian', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            const parts = partsFormatter.formatToParts(now);
+            const year = parseInt(parts.find(p => p.type === 'year').value, 10);
+            const month = parseInt(parts.find(p => p.type === 'month').value, 10);
+            const day = parseInt(parts.find(p => p.type === 'day').value, 10);
+
+            // محاسبه روز از سال (تقویم شمسی)
+            const isLeap = (year % 33 === 1 || year % 33 === 5 || year % 33 === 9 || year % 33 === 13 || year % 33 === 17 || year % 33 === 22 || year % 33 === 26 || year % 33 === 30);
+            const monthDays = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, isLeap ? 30 : 29];
+            let dayOfYear = 0;
+            for (let i = 0; i < month - 1; i++) {
+                dayOfYear += monthDays[i];
+            }
+            dayOfYear += day;
+
+            return { weekday, dayOfYear };
+        } catch (e) {
+            return { weekday: '', dayOfYear: '-' };
+        }
+    }
+    // تابع کمکی برای تبدیل تاریخ به حروف فارسی (مثلاً: سه شنبه بیست و هشتم مهرماه یک هزار و چهارصد و پنج)
+    function getPersianFullText() {
+        try {
+            const now = new Date();
+            const partsFormatter = new Intl.DateTimeFormat('en-US-u-ca-persian', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            const parts = partsFormatter.formatToParts(now);
+            const year = parseInt(parts.find(p => p.type === 'year').value, 10);
+            const month = parseInt(parts.find(p => p.type === 'month').value, 10);
+            const day = parseInt(parts.find(p => p.type === 'day').value, 10);
+
+            const weekdayFa = new Intl.DateTimeFormat('fa-IR', { weekday: 'long' }).format(now);
+            const monthNames = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
+            const monthName = monthNames[month - 1];
+
+            // تبدیل عدد به حروف
+            function numToWords(n) {
+                const yekan = ['', 'یک', 'دو', 'سه', 'چهار', 'پنج', 'شش', 'هفت', 'هشت', 'نه'];
+                const dahgan = ['', '', 'بیست', 'سی', 'چهل', 'پنجاه', 'شصت', 'هفتاد', 'هشتاد', 'نود'];
+                const dah = ['ده', 'یازده', 'دوازده', 'سیزده', 'چهارده', 'پانزده', 'شانزده', 'هفده', 'هجده', 'نوزده'];
+                const sadgan = ['', 'صد', 'دویست', 'سیصد', 'چهارصد', 'پانصد', 'ششصد', 'هفتصد', 'هشتصد', 'نهصد'];
+
+                function three(x) {
+                    const s = Math.floor(x / 100);
+                    const d = Math.floor((x % 100) / 10);
+                    const y = x % 10;
+                    const out = [];
+                    if (s > 0) out.push(sadgan[s]);
+                    if (d === 1) out.push(dah[y]);
+                    else {
+                        if (d > 1) out.push(dahgan[d]);
+                        if (y > 0) out.push(yekan[y]);
+                    }
+                    return out.join(' و ');
+                }
+                n = Math.floor(Math.abs(n));
+                if (n === 0) return 'صفر';
+                const p = [];
+                const million = Math.floor(n / 1000000);
+                const thousand = Math.floor((n % 1000000) / 1000);
+                const rest = n % 1000;
+                if (million > 0) p.push(three(million) + ' میلیون');
+                if (thousand > 0) p.push(three(thousand) + ' هزار');
+                if (rest > 0) p.push(three(rest));
+                return p.join(' و ');
+            }
+
+            // تبدیل روز به ترتیبی (مثلاً بیست و هشتم)
+            function getDayOrdinal(d) {
+                if (d === 1) return 'اول';
+                const yekan = ['', 'یکم', 'دوم', 'سوم', 'چهارم', 'پنجم', 'ششم', 'هفتم', 'هشتم', 'نهم'];
+                const dah = ['دهم', 'یازدهم', 'دوازدهم', 'سیزدهم', 'چهاردهم', 'پانزدهم', 'شانزدهم', 'هفدهم', 'هجدهم', 'نوزدهم'];
+                const d10 = Math.floor(d / 10);
+                const d1 = d % 10;
+                if (d10 === 0) return yekan[d1];
+                if (d10 === 1) return dah[d1];
+                if (d10 === 2) return d1 === 0 ? 'بیستم' : 'بیست و ' + yekan[d1];
+                if (d10 === 3) return d1 === 0 ? 'سی‌ام' : 'سی و ' + yekan[d1];
+                return '';
+            }
+
+            return `${weekdayFa} ${getDayOrdinal(day)} ${monthName}ماه ${numToWords(year)}`;
+        } catch (e) {
+            return '';
+        }
+    }
+
 
     function buildGreeting() {
         const u = window.App.state.user || {};
@@ -89,13 +182,34 @@ window.App.Features.Dashboard = (function () {
         if (hour >= 12 && hour < 17) greet = 'وقت بخیر';
         else if (hour >= 17 || hour < 6) greet = 'شب بخیر';
 
+        const dateInfo = getPersianDateInfo();
+        const todayDate = H.todayPersian ? H.todayPersian() : '';
+
         return `
             <div class="dash-greeting">
                 <div>
                     <h2>${greet}، <strong>${H.esc(name)}</strong> 👋</h2>
                     <p class="muted">${H.esc(u.orgName || '')} — ${H.esc(u.fyName || '')}</p>
                 </div>
-                <div class="dash-date">${H.todayPersian ? H.todayPersian() : ''}</div>
+                
+                <!-- کانتینر جدید برای قرار دادن متن زیر تاریخ -->
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                    
+                    <!-- بخش تاریخ قبلی (بدون هیچ تغییری) -->
+                    <div class="dash-date" style="display: flex; align-items: center; gap: 8px; direction: rtl; margin: 0;">
+                        <span dir="ltr" style="font-weight: 700;">${todayDate}</span>
+                        ${dateInfo.weekday ? `<span style="color: #CBD5E1; font-size: 11px;">|</span>` : ''}
+                        ${dateInfo.weekday ? `<span style="font-size: 12px; color: #475569;">${dateInfo.weekday}</span>` : ''}
+                        ${dateInfo.dayOfYear !== '-' ? `<span style="color: #CBD5E1; font-size: 11px;">|</span>` : ''}
+                        ${dateInfo.dayOfYear !== '-' ? `<span style="font-size: 12px; color: #475569;">روز ${dateInfo.dayOfYear} سال</span>` : ''}
+                    </div>
+                    
+                    <!-- 👇 متن تاریخ کامل با فونت ریز -->
+                    <div style="font-size: 11px; color: #64748B; direction: rtl; padding-left: 4px; font-weight: 500;">
+                        ${getPersianFullText()}
+                    </div>
+                    
+                </div>
             </div>`;
     }
 

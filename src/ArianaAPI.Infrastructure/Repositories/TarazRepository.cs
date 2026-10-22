@@ -87,7 +87,7 @@ public class TarazRepository : ITarazRepository
             {whereSql} {levelFilter}
             GROUP BY {mainGroupCols}";
 
-        await conn.ExecuteAsync(new CommandDefinition(mainSql, parameters, cancellationToken: ct));
+        await conn.ExecuteAsync(new CommandDefinition(mainSql, parameters, commandTimeout: 120, cancellationToken: ct));
 
         // ═══════════════════════════════════════════════
         //  ۲. اگر SetDetail → سطرهای خلاصه سطوح بالاتر
@@ -107,7 +107,7 @@ public class TarazRepository : ITarazRepository
                 INNER JOIN ParentSanad P ON P.ParentSanadID = S.ParentSanadCode
                 {whereSql}
                 GROUP BY S.Code_Col",
-                parameters, cancellationToken: ct));
+                parameters, commandTimeout: 120, cancellationToken: ct));
 
             // خلاصه سطح معین (اگر سطح ≥ تفصیلی)
             if (level == "tafzil" || level == "tafzil2")
@@ -124,7 +124,7 @@ public class TarazRepository : ITarazRepository
                     INNER JOIN ParentSanad P ON P.ParentSanadID = S.ParentSanadCode
                     {whereSql} AND ISNULL(S.Code_Moein,0) > 0
                     GROUP BY S.Code_Col, S.Code_Moein",
-                    parameters, cancellationToken: ct));
+                    parameters, commandTimeout: 120, cancellationToken: ct));
             }
 
             // خلاصه سطح تفصیلی (اگر سطح = تفصیلی2)
@@ -142,7 +142,7 @@ public class TarazRepository : ITarazRepository
                     INNER JOIN ParentSanad P ON P.ParentSanadID = S.ParentSanadCode
                     {whereSql} AND ISNULL(S.Code_Tafzil,0) > 0
                     GROUP BY S.Code_Col, S.Code_Moein, S.Code_Tafzil",
-                    parameters, cancellationToken: ct));
+                    parameters, commandTimeout: 120, cancellationToken: ct));
             }
         }
 
@@ -214,7 +214,7 @@ public class TarazRepository : ITarazRepository
                 T.Code_Col, T.Code_Moein, T.Code_Tafzil, T.Code_Tafzili2";
 
         var allItems = (await conn.QueryAsync<TarazItemDto>(
-            new CommandDefinition(resultSql, cancellationToken: ct))).ToList();
+            new CommandDefinition(resultSql, commandTimeout: 120, cancellationToken: ct))).ToList();
 
         await conn.ExecuteAsync("DROP TABLE #TarazPrint");
 
@@ -506,7 +506,7 @@ public class TarazRepository : ITarazRepository
 
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         return await conn.QueryAsync<TarazSanadItemDto>(
-            new CommandDefinition(sql, p, cancellationToken: ct));
+            new CommandDefinition(sql, p, commandTimeout: 120, cancellationToken: ct));
     }
 
 }

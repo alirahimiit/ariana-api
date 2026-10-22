@@ -184,7 +184,9 @@ window.App.Features.SanadForm = (function () {
     function fillDatalist(id, items) {
         const el = document.getElementById(id);
         if (!el) return;
+        // ⭐ محدود کردن به ۵۰۰ آیتم برای جلوگیری از فریز شدن مرورگر
         el.innerHTML = (items || [])
+            .slice(0, 500)
             .map(x => {
                 const s = String(x ?? '').trim();
                 if (!s) return '';
@@ -192,6 +194,7 @@ window.App.Features.SanadForm = (function () {
             })
             .join('');
     }
+
     function moeinsOfCol(codeCol) {
         return _cache.moeins.filter(m => m.codeCol === codeCol);
     }
@@ -464,21 +467,16 @@ window.App.Features.SanadForm = (function () {
         const wrap = document.getElementById('sfRowsWrap');
         if (!wrap) return;
 
-        // ⭐ پاکسازی selectedRows اگه یه idx دیگه وجود نداشت
         if (!_state.selectedRows) _state.selectedRows = new Set();
-        _state.selectedRows = new Set(
-            [..._state.selectedRows].filter(i => i < _state.items.length)
-        );
+        _state.selectedRows = new Set([..._state.selectedRows].filter(i => i < _state.items.length));
 
-        // ⭐ نوار ابزار بالای ردیف‌ها (چک‌باکس انتخاب همه)
-        const allSelected = _state.items.length > 0
-            && _state.selectedRows.size === _state.items.length;
+        const allSelected = _state.items.length > 0 && _state.selectedRows.size === _state.items.length;
 
         const topBar = `
             <div class="sf-rows-toolbar">
                 <label class="sf-select-all-label">
                     <input type="checkbox" id="sfSelectAllRows" ${allSelected ? 'checked' : ''}>
-                    <span>انتخاب همه</span>
+                    <span>انتخاب همه (${_state.items.length} ردیف)</span>
                 </label>
                 <span class="sf-selected-count ${_state.selectedRows.size > 0 ? 'has-selection' : ''}" id="sfSelectedCount">
                     ${_state.selectedRows.size > 0 ? `${_state.selectedRows.size} ردیف انتخاب شده` : ''}
@@ -488,38 +486,54 @@ window.App.Features.SanadForm = (function () {
                 : ''}
             </div>`;
 
-        wrap.innerHTML = topBar + _state.items.map((it, i) => buildRowHtml(it, i)).join('');
+        // ⭐ یک کانتینر خالی می‌سازیم که ردیف‌ها رو تیکه تیکه (Chunk) بهش اضافه کنیم
+        wrap.innerHTML = topBar + `<div id="sfRowsChunkContainer"></div>`;
+        const chunkContainer = document.getElementById('sfRowsChunkContainer');
 
-        recalcTotals();
-        updateRowCount();
-        updateFocusedRow();
-        updatePasteBtnState();
+        const CHUNK_SIZE = 50; // ۵۰ ردیف در هر مرحله
+        let currentIndex = 0;
 
-        // ⭐ Bind چک‌باکس انتخاب همه
-        document.getElementById('sfSelectAllRows')?.addEventListener('change', function () {
-            if (this.checked) {
-                _state.items.forEach((_, i) => _state.selectedRows.add(i));
-            } else {
-                _state.selectedRows.clear();
+        function renderChunk() {
+            if (currentIndex >= _state.items.length) {
+                // همه ردیف‌ها رندر شدن
+                recalcTotals();
+                updateRowCount();
+                updateFocusedRow();
+                updatePasteBtnState();
+                return;
             }
-            renderRows();
-        });
 
-        document.getElementById('sfClearSelBtn')?.addEventListener('click', () => {
-            _state.selectedRows.clear();
-            renderRows();
-        });
+            const chunkItems = _state.items.slice(currentIndex, currentIndex + CHUNK_SIZE);
+            let htmlStr = '';
+            for (let i = 0; i < chunkItems.length; i++) {
+                htmlStr += buildRowHtml(chunkItems[i], currentIndex + i);
+            }
 
-        // ⭐ Bind چک‌باکس هر ردیف
-        wrap.querySelectorAll('.sf-row-check').forEach(cb => {
-            cb.addEventListener('change', function (e) {
-                e.stopPropagation();
-                const idx = parseInt(this.dataset.idx);
-                if (this.checked) _state.selectedRows.add(idx);
-                else _state.selectedRows.delete(idx);
-                renderRows();
-            });
-        });
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = htmlStr;
+
+            // استفاده از DocumentFragment برای افزایش سرعت DOM
+            const fragment = document.createDocumentFragment();
+            while (tempDiv.firstChild) {
+                fragment.appendChild(tempDiv.firstChild);
+            }
+
+            chunkContainer.appendChild(fragment);
+            currentIndex += CHUNK_SIZE;
+
+            // رندر تکه‌ی بعدی در فریم بعدی مرورگر (UI فریز نمیشه)
+            if (currentIndex < _state.items.length) {
+                requestAnimationFrame(renderChunk);
+            } else {
+                recalcTotals();
+                updateRowCount();
+                updateFocusedRow();
+                updatePasteBtnState();
+            }
+        }
+
+        // شروع رندر تدریجی
+        requestAnimationFrame(renderChunk);
     }
 
     function buildRowHtml(item, idx) {
@@ -1140,64 +1154,123 @@ window.App.Features.SanadForm = (function () {
     if (e.key === 'Escape') {
         e.preventDefault();
         handleClose();
-    }
+     }
+
+
+     // ⭐ آپدیت UI انتخاب‌ها بدون re-render کل ردیف‌ها
+     function updateSelectionUI() {
+         const counter = document.getElementById('sfSelectedCount');
+         const clearBtn = document.getElementById('sfClearSelBtn');
+         if (!counter) return;
+
+         counter.textContent = _state.selectedRows.size > 0 ? `${_state.selectedRows.size} ردیف انتخاب شده` : '';
+         counter.classList.toggle('has-selection', _state.selectedRows.size > 0);
+
+         if (_state.selectedRows.size > 0 && !clearBtn) {
+             const btn = document.createElement('button');
+             btn.className = 'sf-clear-sel';
+             btn.id = 'sfClearSelBtn';
+             btn.textContent = '✕ لغو انتخاب';
+             counter.parentElement.appendChild(btn);
+         } else if (_state.selectedRows.size === 0 && clearBtn) {
+             clearBtn.remove();
+         }
+     }
 }
     // ═══ BIND ═══
-  function bindEvents() {
-    const mb = document.getElementById('modalBody');
-      if (!mb) return;
+    function bindEvents() {
+        const mb = document.getElementById('modalBody');
+        if (!mb) return;
 
-      _state.dirty = false;
+        _state.dirty = false;
 
-    document.getElementById('sfAddRow')?.addEventListener('click', () => {
-        addRowAt(_state.items.length - 1);
-    });
-    document.getElementById('sfSaveBtn')?.addEventListener('click', save);
-    document.getElementById('sfCancelBtn')?.addEventListener('click', handleClose);  // ⭐
-    document.getElementById('sfCopyBtn')?.addEventListener('click', copyRows);
-    document.getElementById('sfPasteBtn')?.addEventListener('click', pasteRows);
-    document.getElementById('sfHelpBtn')?.addEventListener('click', toggleHelpPanel);
+        document.getElementById('sfAddRow')?.addEventListener('click', () => {
+            addRowAt(_state.items.length - 1);
+        });
+        document.getElementById('sfSaveBtn')?.addEventListener('click', save);
+        document.getElementById('sfCancelBtn')?.addEventListener('click', handleClose);
+        document.getElementById('sfCopyBtn')?.addEventListener('click', copyRows);
+        document.getElementById('sfPasteBtn')?.addEventListener('click', pasteRows);
+        document.getElementById('sfHelpBtn')?.addEventListener('click', toggleHelpPanel);
 
-      mb.addEventListener('change', onFieldChange);
-      mb.addEventListener('input', onFieldInput);
-      mb.addEventListener('click', onRowClick);
-      mb.addEventListener('focusin', onRowFocus);
-      mb.addEventListener('keydown', onMoneyAddZerosKey);
+        mb.addEventListener('change', onFieldChange);
+        mb.addEventListener('input', onFieldInput);
+        mb.addEventListener('click', onRowClick);
+        mb.addEventListener('focusin', onRowFocus);
+        mb.addEventListener('keydown', onMoneyAddZerosKey);
 
-      if (_keyHandler) document.removeEventListener('keydown', _keyHandler, true);
-      _keyHandler = handleGlobalKey;
-      document.addEventListener('keydown', _keyHandler, true);
+        // ⭐ Event Delegation برای چک‌باکس‌ها (بدون listener به تک تک ردیف‌ها)
+        if (window._sfCheckboxHandler) mb.removeEventListener('change', window._sfCheckboxHandler);
+        window._sfCheckboxHandler = function (e) {
+            const target = e.target;
 
-      // ⭐ F3 / F4 → باز کردن Picker معین (جلوگیری از search فایرفاکس)
-      if (_pickerKeyHandler) {
-          document.removeEventListener('keydown', _pickerKeyHandler, true);
-      }
-      _pickerKeyHandler = (e) => {
-          if (document.querySelector('.hp-overlay')) return;
-          // فقط F3 یا F4
-          if (e.key !== 'F3' && e.key !== 'F4') return;
-          if (e.ctrlKey || e.altKey || e.shiftKey) return;
+            if (target.id === 'sfSelectAllRows') {
+                const isChecked = target.checked;
+                if (isChecked) {
+                    _state.items.forEach((_, i) => _state.selectedRows.add(i));
+                } else {
+                    _state.selectedRows.clear();
+                }
+                document.querySelectorAll('#sfRowsWrap .sf-row-check').forEach(cb => cb.checked = isChecked);
+                document.querySelectorAll('#sfRowsWrap .sf-row').forEach(row => row.classList.toggle('sf-row-selected', isChecked));
+                updateSelectionUI();
+            } else if (target.classList.contains('sf-row-check')) {
+                const idx = parseInt(target.dataset.idx);
+                if (target.checked) _state.selectedRows.add(idx);
+                else _state.selectedRows.delete(idx);
 
-          // فقط وقتی مودال سند بازه
-          const mb = document.getElementById('modalBody');
-          if (!mb || !mb.querySelector('.sf-row')) return;
+                target.closest('.sf-row').classList.toggle('sf-row-selected', target.checked);
 
-          // ⭐ جلوگیری از search فایرفاکس
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
+                const allCb = document.getElementById('sfSelectAllRows');
+                if (allCb) allCb.checked = _state.items.length > 0 && _state.selectedRows.size === _state.items.length;
+                updateSelectionUI();
+            }
+        };
+        mb.addEventListener('change', window._sfCheckboxHandler);
 
-          // باز کردن Picker معین روی ردیف جاری
-          const idx = getFocusedRowIdx();
-          openMoeinPicker(idx);
-          return false;
-      };
-      document.addEventListener('keydown', _pickerKeyHandler, true);
+        // ⭐ Event Delegation برای دکمه لغو انتخاب
+        if (window._sfClearHandler) mb.removeEventListener('click', window._sfClearHandler);
+        window._sfClearHandler = function (e) {
+            if (e.target.id === 'sfClearSelBtn') {
+                _state.selectedRows.clear();
+                document.querySelectorAll('#sfRowsWrap .sf-row-check').forEach(cb => cb.checked = false);
+                document.querySelectorAll('#sfRowsWrap .sf-row').forEach(row => row.classList.remove('sf-row-selected'));
+                const allCb = document.getElementById('sfSelectAllRows');
+                if (allCb) allCb.checked = false;
+                updateSelectionUI();
+            }
+        };
+        mb.addEventListener('click', window._sfClearHandler);
 
-      // ⭐ اگه بافر قبلی پر بود، دکمه paste فعال بمونه
-      updatePasteBtnState();
-  
-  }
+        if (_keyHandler) document.removeEventListener('keydown', _keyHandler, true);
+        _keyHandler = handleGlobalKey;
+        document.addEventListener('keydown', _keyHandler, true);
+
+        if (_pickerKeyHandler) {
+            document.removeEventListener('keydown', _pickerKeyHandler, true);
+        }
+        _pickerKeyHandler = (e) => {
+            if (document.querySelector('.hp-overlay')) return;
+            if (e.key !== 'F3' && e.key !== 'F4') return;
+            if (e.ctrlKey || e.altKey || e.shiftKey) return;
+
+            const mb = document.getElementById('modalBody');
+            if (!mb || !mb.querySelector('.sf-row')) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+
+            const idx = getFocusedRowIdx();
+            openMoeinPicker(idx);
+            return false;
+        };
+        document.addEventListener('keydown', _pickerKeyHandler, true);
+
+        updatePasteBtnState();
+    }
+
+
     // ⭐⭐ کلید + : افزودن 000 به bed/bes
     function onMoneyAddZerosKey(e) {
         const t = e.target;

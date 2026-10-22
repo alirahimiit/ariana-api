@@ -232,7 +232,7 @@ public class SanadRepository : ISanadRepository
 
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         return await conn.QueryAsync<SanadListDto>(
-            new CommandDefinition(sql, parameters, cancellationToken: ct));
+            new CommandDefinition(sql, parameters, commandTimeout: 120, cancellationToken: ct));
     }
 
     // ═══════════════════════════════════════════════════
@@ -356,7 +356,7 @@ public class SanadRepository : ISanadRepository
 
         await using var conn = _factory.CreateTenantConnection(orgId, fyId);
         return await conn.ExecuteScalarAsync<int>(
-            new CommandDefinition(sql, parameters, cancellationToken: ct));
+            new CommandDefinition(sql, parameters, commandTimeout: 120, cancellationToken: ct));
     }
 
     // ═══════════════════════════════════════════════════

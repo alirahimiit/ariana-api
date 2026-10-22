@@ -2,6 +2,7 @@
    Feature / Taraz (تراز حساب‌ها)
    مسئولیت: تراز با ۴ سطح + drill-down + breadcrumb
              + modal دفتر اسناد حساب
+             + خروجی دفاتر تجاری (Dafater Tejari)
    ═══════════════════════════════════════════════════ */
 
 window.App = window.App || {};
@@ -373,8 +374,10 @@ window.App.Features.Taraz = (function () {
         container.innerHTML = `
             ${bcHtml}
             <div class="card">
-                <div class="card-title">
+                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                     <span>⚖️ تراز - سطح ${levelName(level)} (${H.fmt(items.length)} از ${H.fmt(totalCount)})</span>
+                    <!-- ⭐ دکمه خروجی دفاتر تجاری -->
+
                 </div>
                 <div class="table-wrapper">
                     <table>
@@ -538,6 +541,190 @@ window.App.Features.Taraz = (function () {
             </div>`;
     }
 
+    // ═══════════════════════════════════════════
+    //  ⭐ EXPORT DAFATER TEJARI
+    // ═══════════════════════════════════════════
+    function openDafaterModal() {
+        // پیدا کردن سال مالی برای پیش‌فرض تاریخ افتتاحیه
+        const u = window.App.state.user || {};
+        let defaultOpeningDate = H.todayPersian();
+        if (u.fyName) {
+            const match = String(u.fyName).match(/\d{4}/);
+            if (match) defaultOpeningDate = match[0] + '/01/01'; // مثلا 1404/01/01
+        }
+
+        const body = `
+        <div style="background:#F8FAFC; border:1px solid #E2E8F0; padding:12px; border-radius:8px; margin-bottom:16px; font-size:12px; line-height:1.6;">
+            <strong>راهنمای سامانه دفاتر تجاری:</strong><br>
+            • مانده اول دوره (افتتاحیه) در <b>ردیف صفر</b> ثبت می‌شود.<br>
+            • گردش دوره در ردیف مشخص‌شده توسط شما ثبت می‌شود.<br>
+            • مبالغ برای جلوگیری از تغییر دقت، با فرمت متنی در اکسل ذخیره می‌شوند.
+        </div>
+        <div class="form-group" style="margin-bottom:12px;">
+            <label>تاریخ ردیف افتتاحیه (ردیف 0) <span style="color:red">*</span></label>
+            <input type="text" id="dtOpeningDate" class="form-control" value="${defaultOpeningDate}" placeholder="1404/01/01" dir="ltr" style="text-align:center;">
+        </div>
+        <div class="form-group" style="margin-bottom:12px;">
+            <label>تاریخ ردیف گردش دوره <span style="color:red">*</span></label>
+            <input type="text" id="dtMainDate" class="form-control" value="${H.todayPersian()}" placeholder="1404/12/29" dir="ltr" style="text-align:center;">
+        </div>
+        <div class="form-group" style="margin-bottom:12px;">
+            <label>شماره ردیف گردش دوره <span style="color:red">*</span></label>
+            <input type="number" id="dtRowNum" class="form-control" value="1" min="1" style="text-align:center;">
+            <small class="text-muted" style="display:block; margin-top:4px; font-size:11px;">طبق دستورالعمل، سطرهای یک رویداد باید ردیف یکسان داشته باشند.</small>
+        </div>
+        <div class="form-group" style="margin-bottom:20px;">
+            <label>شرح ثابت</label>
+            <input type="text" id="dtSharh" class="form-control" value="گردش حساب" placeholder="مثلا: گردش حساب">
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <button class="btn btn-primary" id="dtExportBtn">📥 دریافت فایل اکسل</button>
+            <button class="btn btn-ghost" onclick="App.closeModal()">انصراف</button>
+        </div>
+    `;
+        window.App.openModal('📥 خروجی استاندارد دفاتر تجاری', body);
+
+        document.getElementById('dtExportBtn').addEventListener('click', doExportDafater);
+    }
+    async function doExportDafater() {
+        const openingDate = document.getElementById('dtOpeningDate').value.trim();
+        const mainDate = document.getElementById('dtMainDate').value.trim();
+        const rowNum = parseInt(document.getElementById('dtRowNum').value) || 1;
+        const sharhDefault = document.getElementById('dtSharh').value.trim();
+
+        if (!openingDate || !mainDate) {
+            window.App.toast('تاریخ‌ها الزامی هستند', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('dtExportBtn');
+        const orig = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = 'در حال تهیه...';
+
+        try {
+            // ⭐ استفاده از API تراز ۶ ستونی برای گرفتن مانده اول و گردش دوره
+            const tarazPayload = buildPayload(1, 500000);
+            const s6Payload = {
+                level: tarazPayload.level,
+                fromDate: tarazPayload.fromDate,
+                toDate: tarazPayload.toDate,
+                filterOption: tarazPayload.filterOption === 'all' ? 'all' : 'noZeroBoth',
+                fromCodeCol: tarazPayload.fromCodeCol,
+                toCodeCol: tarazPayload.toCodeCol,
+                fromCodeMoein: tarazPayload.fromCodeMoein,
+                toCodeMoein: tarazPayload.toCodeMoein,
+                fromCodeTafzil: tarazPayload.fromCodeTafzil,
+                toCodeTafzil: tarazPayload.toCodeTafzil,
+                codeTafzili2: tarazPayload.codeTafzili2
+            };
+
+            const data = await window.App.Http.api('/api/taraz-shesh-sotooni/report', {
+                method: 'POST',
+                body: JSON.stringify(s6Payload),
+                silent: true
+            });
+
+            const items = data.items || [];
+            if (items.length === 0) {
+                window.App.toast('داده‌ای برای خروجی وجود ندارد', 'warning');
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                return;
+            }
+
+            const headers = [
+                'ردیف',
+                'تاریخ',
+                'کد حساب کل',
+                'عنوان حساب کل',
+                'کد حساب معین',
+                'عنوان حساب معین',
+                'شرح',
+                'مبلغ بدهکار (ریال)',
+                'مبلغ بستانکار (ریال)'
+            ];
+            const aoa = [headers];
+
+            items.forEach(it => {
+                const colCode = it.codeCol || '';
+                const colName = it.colName || '';
+
+                const moeinCode = (it.codeMoein && it.codeMoein !== 0) ? it.codeMoein : '';
+                const moeinName = (it.codeMoein && it.codeMoein !== 0) ? (it.moeinName || '') : '';
+
+                // ۱. ثبت سند افتتاحیه در ردیف صفر (طبق صفحه ۱۰ PDF)
+                const openBed = it.openingDebit || 0;
+                const openBes = it.openingCredit || 0;
+                if (openBed > 0 || openBes > 0) {
+                    aoa.push([
+                        0, // شماره ردیف حتما صفر
+                        openingDate,
+                        colCode,
+                        colName,
+                        moeinCode,
+                        moeinName,
+                        'مانده انتقالی از سال قبل',
+                        openBed > 0 ? String(openBed) : 0,
+                        openBes > 0 ? String(openBes) : 0
+                    ]);
+                }
+
+                // ۲. ثبت گردش دوره در ردیف درخواستی کاربر
+                const turnBed = it.turnoverDebit || 0;
+                const turnBes = it.turnoverCredit || 0;
+                if (turnBed > 0 || turnBes > 0) {
+                    aoa.push([
+                        rowNum,
+                        mainDate,
+                        colCode,
+                        colName,
+                        moeinCode,
+                        moeinName,
+                        sharhDefault || it.hesabName || 'گردش حساب',
+                        turnBed > 0 ? String(turnBed) : 0,
+                        turnBes > 0 ? String(turnBes) : 0
+                    ]);
+                }
+            });
+
+            if (aoa.length === 1) {
+                window.App.toast('هیچ داده‌ای برای خروجی یافت نشد', 'warning');
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                return;
+            }
+
+            const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+            ws['!cols'] = [
+                { wch: 8 }, { wch: 12 }, { wch: 15 }, { wch: 30 },
+                { wch: 15 }, { wch: 30 }, { wch: 40 }, { wch: 18 }, { wch: 18 }
+            ];
+
+            // ⭐ تنظیم فرمت مبالغ به صورت متن برای جلوگیری از نماد علمی در اکسل
+            for (let R = 1; R < aoa.length; ++R) {
+                const cellH = XLSX.utils.encode_cell({ r: R, c: 7 });
+                const cellI = XLSX.utils.encode_cell({ r: R, c: 8 });
+                if (ws[cellH]) ws[cellH].z = '@';
+                if (ws[cellI]) ws[cellI].z = '@';
+            }
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'دفاتر تجاری');
+
+            const fileName = `Dafater_Tejari_${mainDate.replace(/\//g, '-')}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+
+            window.App.toast('فایل اکسل با موفقیت دانلود شد', 'success');
+            window.App.closeModal();
+        } catch (err) {
+            window.App.toast(err.message || 'خطا در تهیه فایل', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = orig;
+        }
+    }
     // ═══════════════════════════════════════════
     //  DRILL-DOWN
     // ═══════════════════════════════════════════
@@ -713,8 +900,7 @@ window.App.Features.Taraz = (function () {
             const mandehDir = running >= 0 ? 'بد' : 'بس';
             const mandehColor = running >= 0 ? '#059669' : '#DC2626';
 
-            // ⭐ پاس دادن پارامتر isFromExternal برای نمایش دکمه ویرایش
-            const editParam = `{ isFromExternal: true, fromExternal: true, highlightRowId: ${it.sanadId} }`; // ⭐ اضافه کردن highlightRowId
+            const editParam = `{ isFromExternal: true, fromExternal: true, highlightRowId: ${it.sanadId} }`;
             const clickAction = `const m=document.getElementById('modal'); if(m) m.style.zIndex='12000'; App.Features.Sanad.showDetail(${it.parentSanadId}, ${editParam})`;
 
             return `
@@ -896,7 +1082,8 @@ window.App.Features.Taraz = (function () {
         run,
         drill,
         goBack,
-        showAccountSanads
+        showAccountSanads,
+        openDafaterModal // ⭐ اضافه شد
     };
 })();
 
