@@ -563,7 +563,6 @@ window.App.Features.FactorForm = (function () {
     }
 
     // ─── جمع‌ها ───
-    // ─── جمع‌ها ───
     function buildTotalsSection() {
         return '' +
             '<div class="ff-totals" id="ffTotals">' +
@@ -1633,8 +1632,7 @@ window.App.Features.FactorForm = (function () {
         openCreate: openCreate,
         openEdit: openEdit,
         delete: deleteFactor,
-        // برای دیالوگ ردیف (فاز 4b)
-        _getState: function () { return _state; }
+       _getState: function () { return _state; }
     };
 })();
 

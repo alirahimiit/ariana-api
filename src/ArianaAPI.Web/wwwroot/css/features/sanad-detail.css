@@ -1838,3 +1838,49 @@ tr.row-selected {
         background-color: #EFF6FF;
     }
 }
+
+/* ═══════════════════════════════════════════════════
+   رفع تداخل رنگ هایلایت با TikRow
+   ═══════════════════════════════════════════════════ */
+
+/* هایلایت در فرم ویرایش — آبی (متمایز از زرد TikRow) */
+.sf-row.sf-row-highlight {
+    background-color: #EFF6FF !important; /* آبی خیلی ملایم */
+    border-right: 4px solid #3B82F6 !important; /* خط آبی پررنگ */
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.4) !important;
+    animation: highlightPulseBlue 1.5s ease-in-out infinite;
+    position: relative;
+    z-index: 2;
+}
+
+@keyframes highlightPulseBlue {
+    0%, 100% {
+        background-color: #EFF6FF;
+    }
+
+    50% {
+        background-color: #DBEAFE;
+    }
+}
+
+/* هایلایت در مودال نمایش — زرد پررنگ با خط قرمز */
+.sd-row-highlight {
+    background-color: #FEF08A !important; /* زرد روشن */
+    border: 2px solid #EAB308 !important;
+    box-shadow: 0 0 10px rgba(234, 179, 8, 0.5) !important;
+    animation: highlightPulseYellow 2s ease-in-out infinite;
+}
+
+@keyframes highlightPulseYellow {
+    0% {
+        box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.7);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(234, 179, 8, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(234, 179, 8, 0);
+    }
+}

@@ -8,12 +8,10 @@
 window.App = window.App || {};
 window.App.Features = window.App.Features || {};
 
-window.App.Features.Taraz = (function () {
+window.App.Features.Taraz = (function() {
     'use strict';
-
     const H = window.App.Helpers;
-
-    // state drill (محلی)
+    /* state drill (محلی)*/
     let _drill = null;
     let _currentItems = [];
 

@@ -832,6 +832,7 @@ window.App = Object.assign(window.App || {}, {
             article: 'کالاها',
             sharh: 'شرح‌ها',
             kind: 'انواع سند',
+
             'taraz-6-sotooni': 'تراز آزمایشی ۶ ستونی',            
             // ⭐ منوی ورود/خروج کالا
             'factor-buy': 'فاکتور خرید',
@@ -905,6 +906,10 @@ window.App = Object.assign(window.App || {}, {
             case 'factor-sell-return': window.App.Features.Factor.render(3); break;
             case 'factor-scrap': window.App.Features.Factor.render(9); break;
             case 'factor-pre': window.App.Features.Factor.render(4); break;
+                // در نقشه route ها:
+            case 'stock-receipt': window.App.renderStockReceipt(); break;
+            case 'stock-transfer': window.App.renderStockTransfer(); break;
+            case 'stock-return-receipt': window.App.renderStockReturnReceipt(); break;
             case 'article': window.App.Features.Article.render(); break;
             case 'hesab': window.App.Features.Hesab.render(); break;
             case 'tafzili': window.App.Features.Tafzili.render(); break;

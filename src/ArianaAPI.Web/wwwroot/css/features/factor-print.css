@@ -1,0 +1,48 @@
+﻿/* ═══ Print Options Grid ═══ */
+.print-options-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    padding: 10px;
+}
+
+.print-option-card {
+    border: 2px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 20px 15px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #fff;
+}
+
+    .print-option-card:hover {
+        border-color: #4F46E5;
+        background: #F8FAFC;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.1);
+    }
+
+.print-icon {
+    font-size: 32px;
+    margin-bottom: 10px;
+}
+
+.print-title {
+    font-weight: bold;
+    color: #1E293B;
+    margin-bottom: 5px;
+    font-size: 14px;
+}
+
+.print-desc {
+    font-size: 11px;
+    color: #64748B;
+    line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+    .print-options-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

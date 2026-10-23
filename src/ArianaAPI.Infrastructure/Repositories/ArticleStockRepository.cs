@@ -30,64 +30,90 @@ public class ArticleStockRepository : IArticleStockRepository
         var p = new DynamicParameters();
 
         // ═══════════════════════════════════════════════════
-        //  Pivot حرکات فاکتوری
+        //  CTE: FactorMoves + FactorPivot + StockMoves + StockPivot
+        //  ⭐ ستون‌های جدید: InStockQty/Val, OutStockQty/Val
         // ═══════════════════════════════════════════════════
         sb.Append(@"
-        ;WITH Moves AS (
-            SELECT 
-                FD.ArticleID,
-                FP.FactorKind,
-                SUM(ISNULL(FD.ArticleCount, 0)) AS Qty,
-                SUM(ISNULL(FD.CostItem, 0))     AS Val
-            FROM FactorDetail_VIEW FD
-            INNER JOIN FactorParent_View FP ON FP.ID = FD.FactorID
-            WHERE FP.FactorKind IN (0,1,2,3,9)
-            GROUP BY FD.ArticleID, FP.FactorKind
-        ),
-        Pivoted AS (
-            SELECT 
-                ArticleID,
-                SUM(CASE WHEN FactorKind = 0 THEN Qty ELSE 0 END) AS BuyQty,
-                SUM(CASE WHEN FactorKind = 0 THEN Val ELSE 0 END) AS BuyVal,
-                SUM(CASE WHEN FactorKind = 1 THEN Qty ELSE 0 END) AS SellQty,
-                SUM(CASE WHEN FactorKind = 1 THEN Val ELSE 0 END) AS SellVal,
-                SUM(CASE WHEN FactorKind = 2 THEN Qty ELSE 0 END) AS BuyBackQty,
-                SUM(CASE WHEN FactorKind = 2 THEN Val ELSE 0 END) AS BuyBackVal,
-                SUM(CASE WHEN FactorKind = 3 THEN Qty ELSE 0 END) AS SellBackQty,
-                SUM(CASE WHEN FactorKind = 3 THEN Val ELSE 0 END) AS SellBackVal,
-                SUM(CASE WHEN FactorKind = 9 THEN Qty ELSE 0 END) AS ScrapQty,
-                SUM(CASE WHEN FactorKind = 9 THEN Val ELSE 0 END) AS ScrapVal
-            FROM Moves
-            GROUP BY ArticleID
-        )
-
+    ;WITH FactorMoves AS (
         SELECT 
-            AN.ID                                     AS ArticleId,
-            CAST(AN.Code AS NVARCHAR(50))             AS ArticleCode,
-            AN.Name                                   AS ArticleName,
-            AN.ArticleUnitName                        AS ArticleUnitName,
-            CAST(AN.ArticleGroupCode AS NVARCHAR(50)) AS ArticleGroupCode,
-            AN.ArticleGroupName                       AS ArticleGroupName,
-            CAST(AN.StockTypeCode AS NVARCHAR(50))    AS StockTypeCode,
-            AN.StockTypeName                          AS StockTypeName,
-            ISNULL(AN.AmountFirst, 0)                 AS AmountFirst,
-            ISNULL(AN.CostFirst, 0)                   AS CostFirst,
-            ISNULL(AN.AmountSale, 0)                  AS SalePrice,
-            ISNULL(P.BuyQty, 0)                       AS TotalBuyQty,
-            ISNULL(P.BuyVal, 0)                       AS TotalBuyVal,
-            ISNULL(P.SellQty, 0)                      AS TotalSellQty,
-            ISNULL(P.SellVal, 0)                      AS TotalSellVal,
-            ISNULL(P.BuyBackQty, 0)                   AS BackBuyQty,
-            ISNULL(P.BuyBackVal, 0)                   AS BackBuyVal,
-            ISNULL(P.SellBackQty, 0)                  AS BackSellQty,
-            ISNULL(P.SellBackVal, 0)                  AS BackSellVal,
-            ISNULL(P.ScrapQty, 0)                     AS ScrapQty,
-            ISNULL(P.ScrapVal, 0)                     AS ScrapVal
-        FROM ArticleNew_VIEW AN
-        LEFT JOIN Pivoted P ON P.ArticleID = AN.ID
-        WHERE 1 = 1 ");
+            FD.ArticleID,
+            FP.FactorKind,
+            SUM(ISNULL(FD.ArticleCount, 0)) AS Qty,
+            SUM(ISNULL(FD.CostItem, 0))     AS Val
+        FROM FactorDetail_VIEW FD
+        INNER JOIN FactorParent_View FP ON FP.ID = FD.FactorID
+        WHERE FP.FactorKind IN (0,1,2,3,9)
+        GROUP BY FD.ArticleID, FP.FactorKind
+    ),
+    FactorPivot AS (
+        SELECT 
+            ArticleID,
+            SUM(CASE WHEN FactorKind = 0 THEN Qty ELSE 0 END) AS BuyQty,
+            SUM(CASE WHEN FactorKind = 0 THEN Val ELSE 0 END) AS BuyVal,
+            SUM(CASE WHEN FactorKind = 1 THEN Qty ELSE 0 END) AS SellQty,
+            SUM(CASE WHEN FactorKind = 1 THEN Val ELSE 0 END) AS SellVal,
+            SUM(CASE WHEN FactorKind = 2 THEN Qty ELSE 0 END) AS BuyBackQty,
+            SUM(CASE WHEN FactorKind = 2 THEN Val ELSE 0 END) AS BuyBackVal,
+            SUM(CASE WHEN FactorKind = 3 THEN Qty ELSE 0 END) AS SellBackQty,
+            SUM(CASE WHEN FactorKind = 3 THEN Val ELSE 0 END) AS SellBackVal,
+            SUM(CASE WHEN FactorKind = 9 THEN Qty ELSE 0 END) AS ScrapQty,
+            SUM(CASE WHEN FactorKind = 9 THEN Val ELSE 0 END) AS ScrapVal
+        FROM FactorMoves
+        GROUP BY ArticleID
+    ),
+    StockMoves AS (
+        SELECT 
+            SFM.ArticleID,
+            SF.Kind,  -- 0=رسید، 1=حواله، 2=رسید برگشتی
+            SUM(ISNULL(SFM.Val, 0))                       AS Qty,
+            SUM(ISNULL(SFM.Val, 0) * ISNULL(SFM.Cost, 0)) AS Val
+        FROM Stock_Factor_Mat SFM
+        INNER JOIN Stock_Factor SF ON SF.ID = SFM.StockFacorID
+        GROUP BY SFM.ArticleID, SF.Kind
+    ),
+    StockPivot AS (
+        SELECT 
+            ArticleID,
+            SUM(CASE WHEN Kind IN (0, 2) THEN Qty ELSE 0 END) AS InStockQty,
+            SUM(CASE WHEN Kind IN (0, 2) THEN Val ELSE 0 END) AS InStockVal,
+            SUM(CASE WHEN Kind = 1 THEN Qty ELSE 0 END)       AS OutStockQty,
+            SUM(CASE WHEN Kind = 1 THEN Val ELSE 0 END)       AS OutStockVal
+        FROM StockMoves
+        GROUP BY ArticleID
+    )
 
-        // ═══ فیلترها ═══
+    SELECT 
+        AN.ID                                     AS ArticleId,
+        CAST(AN.Code AS NVARCHAR(50))             AS ArticleCode,
+        AN.Name                                   AS ArticleName,
+        AN.ArticleUnitName                        AS ArticleUnitName,
+        CAST(AN.ArticleGroupCode AS NVARCHAR(50)) AS ArticleGroupCode,
+        AN.ArticleGroupName                       AS ArticleGroupName,
+        CAST(AN.StockTypeCode AS NVARCHAR(50))    AS StockTypeCode,
+        AN.StockTypeName                          AS StockTypeName,
+        ISNULL(AN.AmountFirst, 0)                 AS AmountFirst,
+        ISNULL(AN.CostFirst, 0)                   AS CostFirst,
+        ISNULL(AN.AmountSale, 0)                  AS SalePrice,
+        ISNULL(FP.BuyQty, 0)                      AS TotalBuyQty,
+        ISNULL(FP.BuyVal, 0)                      AS TotalBuyVal,
+        ISNULL(FP.SellQty, 0)                     AS TotalSellQty,
+        ISNULL(FP.SellVal, 0)                     AS TotalSellVal,
+        ISNULL(FP.BuyBackQty, 0)                  AS BackBuyQty,
+        ISNULL(FP.BuyBackVal, 0)                  AS BackBuyVal,
+        ISNULL(FP.SellBackQty, 0)                 AS BackSellQty,
+        ISNULL(FP.SellBackVal, 0)                 AS BackSellVal,
+        ISNULL(FP.ScrapQty, 0)                    AS ScrapQty,
+        ISNULL(FP.ScrapVal, 0)                    AS ScrapVal,
+        ISNULL(SP.InStockQty, 0)                  AS InStockQty,
+        ISNULL(SP.InStockVal, 0)                  AS InStockVal,
+        ISNULL(SP.OutStockQty, 0)                 AS OutStockQty,
+        ISNULL(SP.OutStockVal, 0)                 AS OutStockVal
+    FROM ArticleNew_VIEW AN
+    LEFT JOIN FactorPivot FP ON FP.ArticleID = AN.ID
+    LEFT JOIN StockPivot  SP ON SP.ArticleID = AN.ID
+    WHERE 1 = 1 ");
+
+        // ═══ فیلترها (بدون تغییر) ═══
         if (req.StockId is > 0)
         {
             sb.Append(" AND AN.StockTypeID = @stockId ");
@@ -112,15 +138,16 @@ public class ArticleStockRepository : IArticleStockRepository
         var orderBy = (req.OrderBy ?? "name").ToLower() switch
         {
             "code" => "AN.Code",
-
             "stock" => @"(ISNULL(AN.AmountFirst, 0) 
-                  + ISNULL(P.BuyQty, 0) + ISNULL(P.SellBackQty, 0) 
-                  - ISNULL(P.SellQty, 0) - ISNULL(P.BuyBackQty, 0) - ISNULL(P.ScrapQty, 0)) DESC",
-
+              + ISNULL(FP.BuyQty, 0) + ISNULL(FP.SellBackQty, 0)
+              + ISNULL(SP.InStockQty, 0)
+              - ISNULL(FP.SellQty, 0) - ISNULL(FP.BuyBackQty, 0)
+              - ISNULL(FP.ScrapQty, 0) - ISNULL(SP.OutStockQty, 0)) DESC",
             "value" => @"(ISNULL(AN.CostFirst, 0) 
-                  + ISNULL(P.BuyVal, 0) + ISNULL(P.SellBackVal, 0) 
-                  - ISNULL(P.SellVal, 0) - ISNULL(P.BuyBackVal, 0) - ISNULL(P.ScrapVal, 0)) DESC",
-
+              + ISNULL(FP.BuyVal, 0) + ISNULL(FP.SellBackVal, 0)
+              + ISNULL(SP.InStockVal, 0)
+              - ISNULL(FP.SellVal, 0) - ISNULL(FP.BuyBackVal, 0)
+              - ISNULL(FP.ScrapVal, 0) - ISNULL(SP.OutStockVal, 0)) DESC",
             _ => "AN.Name"
         };
         sb.Append($" ORDER BY {orderBy} ");
@@ -128,7 +155,6 @@ public class ArticleStockRepository : IArticleStockRepository
         var rows = await conn.QueryAsync<dynamic>(
             new CommandDefinition(sb.ToString(), p, cancellationToken: ct));
 
-        // ═══ محاسبه‌ی نهایی در C# ═══
         var items = new List<ArticleStockItemDto>();
 
         foreach (var r in rows)
@@ -147,10 +173,16 @@ public class ArticleStockRepository : IArticleStockRepository
             decimal bsVal = GetDec(d, "BackSellVal");
             decimal scrapQty = GetDec(d, "ScrapQty");
             decimal scrapVal = GetDec(d, "ScrapVal");
+            decimal inStockQty = GetDec(d, "InStockQty");
+            decimal inStockVal = GetDec(d, "InStockVal");
+            decimal outStockQty = GetDec(d, "OutStockQty");
+            decimal outStockVal = GetDec(d, "OutStockVal");
 
-            // FinalQty = first + buy + sellBack - sell - buyBack - scrap
-            decimal finalQty = amountFirst + buyQty + bsQty - sellQty - bbQty - scrapQty;
-            decimal finalVal = costFirst + buyVal + bsVal - sellVal - bbVal - scrapVal;
+            // ⭐ فرمول نهایی: موجودی اول + خرید + برگشت فروش + رسید − فروش − برگشت خرید − ضایعات − حواله
+            decimal finalQty = amountFirst + buyQty + bsQty + inStockQty
+                             - sellQty - bbQty - scrapQty - outStockQty;
+            decimal finalVal = costFirst + buyVal + bsVal + inStockVal
+                             - sellVal - bbVal - scrapVal - outStockVal;
 
             items.Add(new ArticleStockItemDto
             {
@@ -165,10 +197,10 @@ public class ArticleStockRepository : IArticleStockRepository
 
                 AmountFirst = amountFirst,
                 CostFirst = costFirst,
-                TotalBuyQty = buyQty,
-                TotalBuyVal = buyVal,
-                TotalSellQty = sellQty,
-                TotalSellVal = sellVal,
+                TotalBuyQty = buyQty + inStockQty,      // ⭐ رسید هم جزء خرید
+                TotalBuyVal = buyVal + inStockVal,
+                TotalSellQty = sellQty + outStockQty,   // ⭐ حواله هم جزء فروش
+                TotalSellVal = sellVal + outStockVal,
 
                 FinalQty = finalQty,
                 FinalVal = finalVal,
@@ -177,15 +209,12 @@ public class ArticleStockRepository : IArticleStockRepository
             });
         }
 
-        // ═══ فیلتر موجودی ═══
-        if (req.StockFilter == 1)
-            items = items.Where(x => x.FinalQty > 0).ToList();
-        else if (req.StockFilter == 2)
-            items = items.Where(x => x.FinalQty == 0).ToList();
-        else if (req.StockFilter == 3)
-            items = items.Where(x => x.FinalQty < 0).ToList();
+        // فیلتر موجودی
+        if (req.StockFilter == 1) items = items.Where(x => x.FinalQty > 0).ToList();
+        else if (req.StockFilter == 2) items = items.Where(x => x.FinalQty == 0).ToList();
+        else if (req.StockFilter == 3) items = items.Where(x => x.FinalQty < 0).ToList();
 
-        // ═══ جمع‌ها ═══
+        // جمع‌ها
         var result = new ArticleStockResultDto
         {
             TotalCount = items.Count,
@@ -197,14 +226,12 @@ public class ArticleStockRepository : IArticleStockRepository
             NegativeCount = items.Count(x => x.FinalQty < 0)
         };
 
-        // ═══ صفحه‌بندی ═══
         var page = req.Page < 1 ? 1 : req.Page;
         var pageSize = req.PageSize < 1 ? 50 : (req.PageSize > 100000 ? 100000 : req.PageSize);
 
         result.Page = page;
         result.PageSize = pageSize;
         result.TotalPages = (int)Math.Ceiling(result.TotalCount / (double)pageSize);
-
         result.Items = items
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -212,7 +239,6 @@ public class ArticleStockRepository : IArticleStockRepository
 
         return result;
     }
-
     // ═══ Helpers ═══
     private static decimal GetDec(IDictionary<string, object> d, string key)
     {

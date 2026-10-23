@@ -264,7 +264,7 @@ public class KardexRepository : IKardexRepository
         var sb = new StringBuilder(@"
             SELECT
                 SF.DateIN                 AS [Date],
-                CAST('' AS NVARCHAR(8))   AS [Time],
+                ISNULL(SF.Time_Op, '')    AS [Time], 
                 SF.Kind                   AS StockKind,
                 SF.ID                     AS StockFactorId,
                 SF.Code                   AS DocNo,
@@ -273,6 +273,8 @@ public class KardexRepository : IKardexRepository
                 ISNULL(SFM.Val, 0)        AS Val,
                 ISNULL(SFM.Cost, 0)       AS UnitCost,
                 ISNULL(SF.StockTypeID, 0) AS StockId
+                SF.NoSanad                AS SanadNo,      
+                SF.Parent_Sanad_ID        AS ParentSanadId
             FROM Stock_Factor_Mat SFM
             INNER JOIN Stock_Factor SF ON SF.ID = SFM.StockFacorID
             LEFT JOIN StockType ST     ON ST.ID = SF.StockTypeID
@@ -340,6 +342,7 @@ public class KardexRepository : IKardexRepository
                 InValue = inVal,
                 OutValue = outVal,
                 SortKind = 3,
+                SanadNo = TryLong(d, "SanadNo"),
                 SortId = TryLong(d, "StockFactorId") ?? 0
             });
         }

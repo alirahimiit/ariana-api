@@ -1,0 +1,242 @@
+﻿/* ═══ Stock Form ═══ */
+.stock-form-box {
+    display: flex;
+    flex-direction: column;
+}
+
+.sfk-body {
+    padding: 16px 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.sfk-header-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.sfk-col-span2 {
+    grid-column: span 2;
+}
+
+/* ═══ رفع بهم ریختگی Dropdown ها و گریدها ═══ */
+.filter-card {
+    position: relative;
+    z-index: 10;
+    overflow: visible !important;
+}
+
+.filter-body {
+    overflow: visible !important;
+}
+
+.sfk-header-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+
+.sfk-header-card {
+    position: relative;
+    z-index: 10;
+}
+
+.hp-box {
+    overflow: visible !important;
+}
+
+.hp-body {
+    max-height: calc(92vh - 60px);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+/* استایل سلکت‌ها */
+.sfk-header-card select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #CBD5E1;
+    border-radius: 6px;
+    background-color: #fff;
+    font-family: inherit;
+}
+    /* محدود کردن عرض سلکت‌ها در فرم */
+    .sfk-header-card select,
+    .sfk-header-card .custom-select-wrapper {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box;
+    }
+
+/* رفع مشکل ارتفاع زیاد dropdown سند */
+.sfk-checkboxes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed #E2E8F0;
+}
+
+    .sfk-checkboxes.single-col {
+        grid-template-columns: 1fr;
+    }
+
+.sfk-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    font-weight: 600;
+    color: #1E293B;
+}
+
+    .sfk-checkbox input {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+    }
+
+.sfk-items-card .table-wrapper {
+    max-height: 400px;
+    overflow: auto;
+}
+
+.sfk-items-table input[type="text"] {
+    width: 100%;
+    padding: 4px 6px;
+    font-size: 13px;
+    border: 1px solid #CBD5E1;
+    border-radius: 4px;
+}
+
+.sfk-items-table input.num-input {
+    text-align: left;
+    direction: ltr;
+}
+
+.sfk-total-row td {
+    background: #EEF2FF;
+    font-weight: 700;
+}
+
+.sfk-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding-top: 10px;
+    border-top: 1px solid #E2E8F0;
+}
+
+/* ═══ List Badges ═══ */
+.badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.badge-success {
+    background: #D1FAE5;
+    color: #065F46;
+}
+
+.badge-warning {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+.badge-muted {
+    background: #E5E7EB;
+    color: #4B5563;
+}
+
+.stk-actions {
+    white-space: nowrap;
+}
+
+    .stk-actions .btn-icon {
+        padding: 2px 6px;
+        font-size: 14px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+    }
+
+        .stk-actions .btn-icon:hover {
+            background: #F1F5F9;
+            border-radius: 4px;
+        }
+
+        .stk-actions .btn-icon:disabled {
+            opacity: .35;
+            cursor: not-allowed;
+        }
+
+/* ═══ Responsive ═══ */
+@media (max-width: 900px) {
+    .sfk-header-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .sfk-col-span2 {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 600px) {
+    .sfk-header-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .sfk-col-span2 {
+        grid-column: span 1;
+    }
+
+    .sfk-checkboxes {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .sfk-actions {
+        flex-direction: column-reverse;
+    }
+
+        .sfk-actions .btn {
+            width: 100%;
+        }
+}
+
+/* ═══ استایل فرم و فوتر چسبان ═══ */
+.stock-form-box {
+    display: flex;
+    flex-direction: column;
+    max-height: 92vh;
+    overflow: hidden;
+}
+
+.sfk-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    padding-bottom: 0; /* پدینگ پایین حذف می‌شود چون فوتر پدینگ دارد */
+}
+
+.sfk-actions {
+    flex-shrink: 0;
+    padding: 14px 20px;
+    background: #fff;
+    border-top: 1px solid #E2E8F0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    z-index: 10;
+}
+
+.sfk-checkboxes.single-col {
+    grid-template-columns: 1fr;
+}

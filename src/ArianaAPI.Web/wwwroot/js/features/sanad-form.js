@@ -304,7 +304,7 @@ window.App.Features.SanadForm = (function () {
                 window.App.Http.api(`/api/sanad/${id}`),
                 window.App.Http.api(`/api/sanad/${id}/items`)
             ]);
-            // ⭐ شروع بارگذاری شرح‌ها — fire-and-forget
+
             ensureSharhLists().then(populateSharhDatalists).catch(() => { });
 
             _state = {
@@ -314,8 +314,10 @@ window.App.Features.SanadForm = (function () {
                 dirty: false,
                 selectedRows: new Set(),
                 originalVazeit: currentVazeit,
+                highlightRowId: options.highlightRowId || null, // ⭐ شناسه ردیف مورد نظر
+                scrolledToHighlight: false, // ⭐ فلگ برای اینکه فقط یکبار اسکرول شود
                 items: (items || []).map(it => ({
-                    sanadId: it.sanadID || it.sanadId || it.SanadID, // ⭐⭐ این خط اضافه شد تا شناسه ردیف حفظ شود
+                    sanadId: it.sanadID || it.sanadId || it.SanadID || it.ID || it.id,
                     codeCol: it.code_Col || 0,
                     codeMoein: it.code_Moein || 0,
                     codeTafzil: it.code_Tafzil || 0,
@@ -332,10 +334,7 @@ window.App.Features.SanadForm = (function () {
                 }))
             };
 
-            // ⭐ _clipboard رو دست نزن — بین اسناد حفظ می‌شه
             if (_state.items.length === 0) _state.items = [emptyRow()];
-
-            _state.highlightRowId = options.highlightRowId || null; // ⭐ ذخیره شناسه ردیف
 
             const body = buildFormHtml({
                 noSanad: detail?.noSanad || '',
@@ -349,20 +348,19 @@ window.App.Features.SanadForm = (function () {
             document.querySelector('.modal-box')?.classList.add('wide-modal');
             bindEvents();
             renderRows();
-            focusRow(0, 'bed');
             populateSharhDatalists();
 
-            // ⭐ اسکرول خودکار به ردیف هایلایت شده
-            if (_state.highlightRowId) {
-                const idx = _state.items.findIndex(x => x.sanadId === _state.highlightRowId);
-                if (idx !== -1) {
-                    setTimeout(() => scrollToRow(idx), 300);
-                }
+            // ⭐ اگر ردیف خاصی برای اسکرول وجود ندارد، ردیف اول را فوکوس کن
+            if (!_state.highlightRowId) {
+                focusRow(0, 'bed');
             }
+            // (اگر وجود دارد، تابع renderRows خودش بعد از ساخت ردیف، فوکوس و اسکرول را انجام می‌دهد)
+
         } catch (err) {
             window.App.toast('خطا: ' + err.message, 'error');
         }
     }
+
     // ═══ BUILD FORM — ساختار تمیز ═══
     function buildFormHtml(h) {
         const vazeitOpts = [
@@ -495,11 +493,16 @@ window.App.Features.SanadForm = (function () {
 
         function renderChunk() {
             if (currentIndex >= _state.items.length) {
-                // همه ردیف‌ها رندر شدن
                 recalcTotals();
                 updateRowCount();
                 updateFocusedRow();
                 updatePasteBtnState();
+
+                // اگر ردیف مورد نظر اصلا پیدا نشد (مثلا آیدی اشتباه بود) ردیف اول را فوکوس کن
+                if (_state.highlightRowId && !_state.scrolledToHighlight) {
+                    focusRow(0, 'bed');
+                    _state.scrolledToHighlight = true;
+                }
                 return;
             }
 
@@ -512,7 +515,6 @@ window.App.Features.SanadForm = (function () {
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = htmlStr;
 
-            // استفاده از DocumentFragment برای افزایش سرعت DOM
             const fragment = document.createDocumentFragment();
             while (tempDiv.firstChild) {
                 fragment.appendChild(tempDiv.firstChild);
@@ -521,7 +523,25 @@ window.App.Features.SanadForm = (function () {
             chunkContainer.appendChild(fragment);
             currentIndex += CHUNK_SIZE;
 
-            // رندر تکه‌ی بعدی در فریم بعدی مرورگر (UI فریز نمیشه)
+            // ⭐⭐ اگر ردیف هایلایت در این تکه (Chunk) رندر شده است، فوکوس و اسکرول کن
+            if (_state.highlightRowId && !_state.scrolledToHighlight) {
+                const targetIdx = _state.items.findIndex(x =>
+                    String(x.sanadId) === String(_state.highlightRowId) ||
+                    String(x.SanadID) === String(_state.highlightRowId)
+                );
+
+                // آیا ردیف مورد نظر در بین ردیف‌هایی است که الان ساخته شدند؟
+                if (targetIdx !== -1 && targetIdx < currentIndex) {
+                    _state.scrolledToHighlight = true; // علامت می‌زنیم که دیگه اسکرول نکنه
+
+                    // یک تاخیر خیلی کوتاه برای اینکه DOM تازه ساخته شده کاملاً لود شود
+                    setTimeout(() => {
+                        focusRow(targetIdx, 'bed');
+                        scrollToRow(targetIdx);
+                    }, 50);
+                }
+            }
+
             if (currentIndex < _state.items.length) {
                 requestAnimationFrame(renderChunk);
             } else {
@@ -531,7 +551,6 @@ window.App.Features.SanadForm = (function () {
                 updatePasteBtnState();
             }
         }
-
         // شروع رندر تدریجی
         requestAnimationFrame(renderChunk);
     }
@@ -561,7 +580,9 @@ window.App.Features.SanadForm = (function () {
         const besStr = bes ? bes.toLocaleString('en-US') : '';
         const meghStr = megh ? parseFloat(Number(megh).toFixed(4)).toString() : '';
         const isTik = (item.tikRow || 0) === 1;
-        const isHighlight = _state.highlightRowId && (item.sanadId === _state.highlightRowId || item.SanadID === _state.highlightRowId); // ⭐
+        const rowIdStr = String(item.sanadId || item.SanadID || '');
+        const targetIdStr = String(_state.highlightRowId || '');
+        const isHighlight = rowIdStr !== '' && targetIdStr !== '' && rowIdStr === targetIdStr;
 
         return `<div class="sf-row ${idx === _state.focusedIdx ? 'sf-row-focused' : ''} ${_state.selectedRows?.has(idx) ? 'sf-row-selected' : ''} ${isTik ? 'sf-row-tik' : ''} ${isHighlight ? 'sf-row-highlight' : ''}" data-row-idx="${idx}">
                  <div class="sf-row-num">
@@ -1157,26 +1178,29 @@ window.App.Features.SanadForm = (function () {
      }
 
 
-     // ⭐ آپدیت UI انتخاب‌ها بدون re-render کل ردیف‌ها
-     function updateSelectionUI() {
-         const counter = document.getElementById('sfSelectedCount');
-         const clearBtn = document.getElementById('sfClearSelBtn');
-         if (!counter) return;
+  
+    }
 
-         counter.textContent = _state.selectedRows.size > 0 ? `${_state.selectedRows.size} ردیف انتخاب شده` : '';
-         counter.classList.toggle('has-selection', _state.selectedRows.size > 0);
+    // ⭐ آپدیت UI انتخاب‌ها بدون re-render کل ردیف‌ها
+    function updateSelectionUI() {
+        const counter = document.getElementById('sfSelectedCount');
+        const clearBtn = document.getElementById('sfClearSelBtn');
+        if (!counter) return;
 
-         if (_state.selectedRows.size > 0 && !clearBtn) {
-             const btn = document.createElement('button');
-             btn.className = 'sf-clear-sel';
-             btn.id = 'sfClearSelBtn';
-             btn.textContent = '✕ لغو انتخاب';
-             counter.parentElement.appendChild(btn);
-         } else if (_state.selectedRows.size === 0 && clearBtn) {
-             clearBtn.remove();
-         }
-     }
-}
+        counter.textContent = _state.selectedRows.size > 0 ? `${_state.selectedRows.size} ردیف انتخاب شده` : '';
+        counter.classList.toggle('has-selection', _state.selectedRows.size > 0);
+
+        if (_state.selectedRows.size > 0 && !clearBtn) {
+            const btn = document.createElement('button');
+            btn.className = 'sf-clear-sel';
+            btn.id = 'sfClearSelBtn';
+            btn.textContent = '✕ لغو انتخاب';
+            counter.parentElement.appendChild(btn);
+        } else if (_state.selectedRows.size === 0 && clearBtn) {
+            clearBtn.remove();
+        }
+    }
+
     // ═══ BIND ═══
     function bindEvents() {
         const mb = document.getElementById('modalBody');

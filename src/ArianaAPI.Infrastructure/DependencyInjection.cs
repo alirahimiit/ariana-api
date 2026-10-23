@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<ITarazRepository, TarazRepository>();
         services.AddScoped<ITarazSheshSotooniRepository, TarazSheshSotooniRepository>();
         services.AddScoped<IFactorRepository, FactorRepository>();
+        services.AddScoped<IStockRepository, StockRepository>();
         services.AddScoped<IArticleRepository, ArticleRepository>();
         services.AddScoped<ITafziliRepository, TafziliRepository>();
         services.AddScoped<IProfitLossRepository, ProfitLossRepository>();
@@ -71,6 +72,7 @@ public static class DependencyInjection
         services.AddScoped<IConstHesabRepository, ConstHesabRepository>();
         services.AddScoped<ITreasurySanadService, TreasurySanadService>();
         services.AddScoped<IResidRepository, ResidRepository>();
+
         // ═══ چک‌ها (Pay + Receive) ═══
         services.AddScoped<IChequeSanadService, ChequeSanadService>();
         services.AddScoped<IChequePayRepository, ChequePayRepository>();

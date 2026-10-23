@@ -127,7 +127,20 @@ public class FactorRepository : IFactorRepository
         var countSql = $@"SELECT COUNT(*) FROM FactorParent_View p {sb}";
         var total = await conn.ExecuteScalarAsync<int>(
             new CommandDefinition(countSql, p, cancellationToken: ct));
-
+        // ⭐ سورت داینامیک سراسری
+        var orderCol = (req.SortBy ?? "nofactor").ToLower() switch
+        {
+            "nofactor" => "p.NoFactor",
+            "datein" => "p.Date_In",
+            "factorkind" => "p.FactorKind",
+            "codetafzil" => "p.CodeTafzil",
+            "hesabname" => "p.HesabName",
+            "cost" => "p.Cost",
+            "nosanad" => "p.NO_Sanad",
+            "datesanad" => "p.DateSanad",
+            _ => "p.NoFactor"
+        };
+        var orderDir = (req.SortDir ?? "desc").ToLower() == "asc" ? "ASC" : "DESC";
         // ⭐ بعد پارامترهای صفحه رو اضافه کن
         p.Add("startRow", offset + 1);
         p.Add("endRow", offset + req.PageSize);
@@ -169,7 +182,7 @@ public class FactorRepository : IFactorRepository
                 p.MarkerName     AS MarkerName,
                 ISNULL(p.TransCost, 0) AS TransCost,
                 ISNULL((SELECT NoFactor FROM FactorParent WHERE ID = p.NoFactor_Per), 0) AS NoFactorPer,
-                ROW_NUMBER() OVER (ORDER BY p.NoFactor DESC, p.ID DESC) AS RowNum
+                ROW_NUMBER() OVER (ORDER BY {orderCol} {orderDir}, p.ID {orderDir}) AS RowNum
             FROM FactorParent_View p
             {sb}
         ) AS T

@@ -1063,11 +1063,13 @@ window.App.Features.Sanad = (function () {
             const hasWarn = (it._errors || []).some(e => e.severity === 'warn');
 
             // ⭐ تشخیص ردیف هایلایت شده
-            const isHighlighted = _detailFilter.highlightRowId &&
-                (it.sanadID === _detailFilter.highlightRowId || it.sanadId === _detailFilter.highlightRowId);
+            // ⭐ تشخیص ردیف هایلایت شده (با تبدیل به رشته برای جلوگیری از خطا)
+            const rowIdStr = String(it.sanadID || it.sanadId || '');
+            const targetIdStr = String(_detailFilter.highlightRowId || '');
+            const isHighlighted = rowIdStr !== '' && targetIdStr !== '' && rowIdStr === targetIdStr;
 
             let rowClass = hasError ? 'sd-row-err' : (hasWarn ? 'sd-row-warn' : '');
-            if (isHighlighted) rowClass += ' sd-row-highlight'; // ⭐ اضافه کردن کلاس هایلایت
+            if (isHighlighted) rowClass += ' sd-row-highlight'; 
 
             return `
                 <tr class="${rowClass}">
