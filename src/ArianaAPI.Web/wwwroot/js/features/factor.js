@@ -638,9 +638,9 @@ window.App.Features.Factor = (function () {
         const rows = items.map(function (it, idx) {
             return '<tr>' +
                 '<td class="num text-center">' + (idx + 1) + '</td>' +
-                '<td class="num">' + (it.articleCode || '') + '</td>' +
-                '<td>' + H.esc(it.articleName || '') + '</td>' +
-                '<td>' + H.esc(it.articleUnitName || '') + '</td>' +
+                '<td class="num text-center">' + (it.articleCode || '') + '</td>' +
+                '<td class="text-right">' + H.esc(it.articleName || '') + '</td>' +
+                '<td class="text-center">' + H.esc(it.articleUnitName || '') + '</td>' +
                 '<td class="num text-left">' + H.fmt(it.articleCount) + '</td>' +
                 '<td class="num text-left">' + H.fmt(it.cost) + '</td>' +
                 '<td class="num text-left">' + H.fmt(it.costItem) + '</td>' +
@@ -649,188 +649,108 @@ window.App.Features.Factor = (function () {
                 '<td class="num text-center">' + (it.taxFi > 0 ? H.fmt(it.taxFi) + '%' : '-') + '</td>' +
                 '<td class="num text-left">' + H.fmt(it.tax) + '</td>' +
                 '<td class="num text-left">' + H.fmt(it.transCost) + '</td>' +
-                '<td class="num text-left">' + H.fmt(it.finallCost) + '</td>' +
+                '<td class="num text-left text-primary" style="font-weight:700;">' + H.fmt(it.finallCost) + '</td>' +
                 '</tr>';
         }).join('');
 
-        return '' +
-            // ═══ Header ═══
-            '<div class="factor-header">' +
-            '<div class="factor-header-col">' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">شماره فاکتور:</span>' +
-            '<span class="factor-value">' + (h.noFactor || '-') + '</span>' +
-            '</div>' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">تاریخ:</span>' +
-            '<span class="factor-value">' + H.esc(h.dateIn || '-') + '</span>' +
-            '</div>' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">نوع:</span>' +
-            '<span class="factor-value">' + H.esc(h.factorKindTitle || '-') + '</span>' +
-            '</div>' +
-            '</div>' +
-            '<div class="factor-header-col">' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">شماره سند:</span>' +
-            '<span class="factor-value">' + (h.noSanad || '-') + '</span>' +
-            '</div>' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">تاریخ سند:</span>' +
-            '<span class="factor-value">' + H.esc(h.dateSanad || '-') + '</span>' +
-            '</div>' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">وضعیت:</span>' +
-            '<span class="factor-value">' +
+        // دکمه حذف سند
+        const deleteSanadBtn = h.parentSanadId ? `
+            <div class="fd-sanad-box">
+                <div class="fd-sanad-info">
+                    <span class="label">📄 سند حسابداری:</span>
+                    <span class="value">شماره ${h.noSanad || '—'}</span>
+                    <span class="value">تاریخ ${h.dateSanad || '—'}</span>
+                </div>
+                <button type="button" class="btn btn-ghost btn-sm text-danger" data-permission="201" onclick="App.Features.Factor.deleteSanad(${h.id})">
+                    🗑️ حذف سند
+                </button>
+            </div>
+        ` : '';
 
-            (h.parentSanadId ?
-                '<div class="factor-sanad-section">' +
-                '<div class="factor-sanad-info">' +
-                '<span class="factor-label">📄 سند حسابداری:</span> ' +
-                '<span class="factor-value">شماره ' + (h.noSanad || '—') + '</span>' +
-                '<span class="factor-value">تاریخ ' + (h.dateSanad || '—') + '</span>' +
-                '</div>' +
-                '<button type="button" class="btn btn-ghost btn-sm factor-sanad-delete" ' +
-                'data-permission="201" ' +
-                'onclick="App.Features.Factor.deleteSanad(' + h.id + ')">' +
-                '🗑️ حذف سند' +
-                '</button>' +
-                '</div>'
-                : '') +
-            '</div>' +
-            '</div>' +
-            '<div class="factor-header-col">' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">بازاریاب:</span>' +
-            '<span class="factor-value">' + H.esc(h.markerName || '-') + '</span>' +
-            '</div>' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">موبایل بازاریاب:</span>' +
-            '<span class="factor-value">' + H.esc(h.markerMobile || '-') + '</span>' +
-            '</div>' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">شماره ماشین:</span>' +
-            '<span class="factor-value">' + H.esc(h.carInfo || '-') + '</span>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
+        return `
+            <div class="fd-wrapper">
+                <!-- هدر -->
+                <div class="fd-header">
+                    <div class="fd-header-item"><span class="label">شماره فاکتور:</span><span class="value text-primary">${h.noFactor || '-'}</span></div>
+                    <div class="fd-header-item"><span class="label">تاریخ:</span><span class="value">${H.esc(h.dateIn || '-')}</span></div>
+                    <div class="fd-header-item"><span class="label">نوع:</span><span class="value">${H.esc(h.factorKindTitle || '-')}</span></div>
+                    <div class="fd-header-item"><span class="label">وضعیت:</span><span class="value">${h.isCash === 1 ? 'نقدی' : 'غیرنقدی'}</span></div>
+                    ${deleteSanadBtn}
+                </div>
 
-            // ═══ مشتری ═══
-            '<div class="factor-party">' +
-            '<h4>👤 اطلاعات طرف حساب</h4>' +
-            '<div class="factor-party-grid">' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">نام:</span>' +
-            '<span class="factor-value">' + H.esc(h.hesabName || '-') + '</span>' +
-            '</div>' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">کد تفصیلی:</span>' +
-            '<span class="factor-value">' + (h.codeTafzil || '-') + '</span>' +
-            '</div>' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">تلفن:</span>' +
-            '<span class="factor-value">' + H.esc(h.phone || '-') + '</span>' +
-            '</div>' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">موبایل:</span>' +
-            '<span class="factor-value">' + H.esc(h.mobile || '-') + '</span>' +
-            '</div>' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">کد اقتصادی:</span>' +
-            '<span class="factor-value">' + H.esc(h.economicCode || '-') + '</span>' +
-            '</div>' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">کد ملی:</span>' +
-            '<span class="factor-value">' + H.esc(h.nationalCode || '-') + '</span>' +
-            '</div>' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">کد پستی:</span>' +
-            '<span class="factor-value">' + H.esc(h.postalCode || '-') + '</span>' +
-            '</div>' +
-            '<div class="factor-field">' +
-            '<span class="factor-label">استان/شهر:</span>' +
-            '<span class="factor-value">' + H.esc(h.stateName || '') + ' - ' + H.esc(h.cityName1 || '') + '</span>' +
-            '</div>' +
-            '<div class="factor-field factor-field-wide">' +
-            '<span class="factor-label">آدرس:</span>' +
-            '<span class="factor-value">' + H.esc(h.address || '-') + '</span>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
+                <!-- اطلاعات طرف حساب -->
+                <div class="fd-section">
+                    <div class="fd-section-title">👤 اطلاعات طرف حساب</div>
+                    <div class="fd-grid-3">
+                        <div class="fd-item"><span class="label">نام:</span><span class="value">${H.esc(h.hesabName || '-')}</span></div>
+                        <div class="fd-item"><span class="label">کد تفصیلی:</span><span class="value num">${h.codeTafzil || '-'}</span></div>
+                        <div class="fd-item"><span class="label">تلفن:</span><span class="value num">${H.esc(h.phone || '-')}</span></div>
+                        <div class="fd-item"><span class="label">موبایل:</span><span class="value num">${H.esc(h.mobile || '-')}</span></div>
+                        <div class="fd-item"><span class="label">کد اقتصادی:</span><span class="value num">${H.esc(h.economicCode || '-')}</span></div>
+                        <div class="fd-item"><span class="label">کد ملی:</span><span class="value num">${H.esc(h.nationalCode || '-')}</span></div>
+                        <div class="fd-item"><span class="label">کد پستی:</span><span class="value num">${H.esc(h.postalCode || '-')}</span></div>
+                        <div class="fd-item"><span class="label">استان/شهر:</span><span class="value">${H.esc(h.stateName || '')} ${h.cityName1 ? '- ' + H.esc(h.cityName1) : ''}</span></div>
+                        <div class="fd-item col-span-3"><span class="label">آدرس:</span><span class="value">${H.esc(h.address || '-')}</span></div>
+                    </div>
+                </div>
 
-            // ═══ شرح ═══
-            (h.descript ?
-                '<div class="factor-descript">' +
-                '<span class="factor-label">شرح:</span> ' +
-                '<span>' + H.esc(h.descript) + '</span>' +
-                '</div>'
-                : '') +
+                <!-- شرح -->
+                ${h.descript ? `
+                <div class="fd-descript-box">
+                    <span class="label">📝 شرح:</span>
+                    <span class="value">${H.esc(h.descript)}</span>
+                </div>` : ''}
 
-            // ═══ Grid اقلام ═══
-            '<h4 style="margin:16px 0 8px;">📋 ردیف‌های کالا (' + items.length + ')</h4>' +
-            '<div class="table-wrapper">' +
-            '<table>' +
-            '<thead><tr>' +
-            '<th style="width:35px;">#</th>' +
-            '<th style="width:70px;">کد کالا</th>' +
-            '<th>نام کالا</th>' +
-            '<th style="width:55px;">واحد</th>' +
-            '<th class="text-left" style="width:70px;">تعداد</th>' +
-            '<th class="text-left" style="width:100px;">قیمت واحد</th>' +
-            '<th class="text-left" style="width:110px;">مبلغ کل</th>' +
-            '<th class="text-center" style="width:60px;">تخفیف %</th>' +
-            '<th class="text-left" style="width:90px;">مبلغ تخفیف</th>' +
-            '<th class="text-center" style="width:60px;">ارزش افزوده %</th>' +
-            '<th class="text-left" style="width:90px;">مبلغ مالیات</th>' +
-            '<th class="text-left" style="width:80px;">حمل</th>' +
-            '<th class="text-left" style="width:110px;">جمع نهایی</th>' +
-            '</tr></thead>' +
-            '<tbody>' +
-            (rows || '<tr><td colspan="13" class="text-center">ردیفی وجود ندارد</td></tr>') +
-            '</tbody>' +
-            '<tfoot>' +
-            '<tr style="background:#EEF2FF; font-weight:700;">' +
-            '<td colspan="4" class="text-center">جمع کل</td>' +
-            '<td class="num text-left">' + H.fmt(detail.totalRows) + ' ردیف</td>' +
-            '<td colspan="3" class="num text-left">تخفیف: ' + H.fmt(detail.totalDiscount) + '</td>' +
-            '<td colspan="2" class="num text-left">مالیات: ' + H.fmt(detail.totalTax) + '</td>' +
-            '<td class="num text-left">حمل: ' + H.fmt(detail.totalTransCost) + '</td>' +
-            '<td class="num text-left">' + H.fmt(detail.totalFinall) + '</td>' +
-            '</tr>' +
-            '</tfoot>' +
-            '</table>' +
-            '</div>' +
+                <!-- جدول اقلام -->
+                <div class="fd-section" style="padding:0; overflow:hidden;">
+                    <div class="fd-section-title" style="padding: 12px 16px 0;">📋 ردیف‌های کالا (${items.length})</div>
+                    <div class="table-wrapper" style="margin-top:10px;">
+                        <table class="fd-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:35px;">#</th>
+                                    <th style="width:80px;">کد کالا</th>
+                                    <th>نام کالا</th>
+                                    <th style="width:60px;">واحد</th>
+                                    <th class="text-left" style="width:70px;">تعداد</th>
+                                    <th class="text-left" style="width:100px;">قیمت واحد</th>
+                                    <th class="text-left" style="width:110px;">مبلغ کل</th>
+                                    <th class="text-center" style="width:60px;">تخفیف %</th>
+                                    <th class="text-left" style="width:90px;">مبلغ تخفیف</th>
+                                    <th class="text-center" style="width:60px;">ارزش افزوده %</th>
+                                    <th class="text-left" style="width:90px;">مبلغ مالیات</th>
+                                    <th class="text-left" style="width:80px;">حمل</th>
+                                    <th class="text-left" style="width:110px;">جمع نهایی</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows || '<tr><td colspan="13" class="text-center">ردیفی وجود ندارد</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                </div>
 
-            // ═══ جمع‌های نهایی ═══
-            '<div class="factor-totals">' +
-            '<div class="factor-total-item">' +
-            '<span class="factor-label">مبلغ کالاها:</span>' +
-            '<span class="factor-value">' + H.fmt(detail.totalCostItem) + '</span>' +
-            '</div>' +
-            '<div class="factor-total-item">' +
-            '<span class="factor-label">جمع تخفیف:</span>' +
-            '<span class="factor-value">' + H.fmt(detail.totalDiscount) + '</span>' +
-            '</div>' +
-            '<div class="factor-total-item">' +
-            '<span class="factor-label">جمع مالیات و عوارض:</span>' +
-            '<span class="factor-value">' + H.fmt(detail.totalTax) + '</span>' +
-            '</div>' +
-            '<div class="factor-total-item">' +
-            '<span class="factor-label">جمع حمل:</span>' +
-            '<span class="factor-value">' + H.fmt(detail.totalTransCost) + '</span>' +
-            '</div>' +
-            '<div class="factor-total-item factor-total-final" style="flex-direction: column; align-items: flex-start;">' +
-            '<div style="display:flex; justify-content:space-between; width:100%;">' +
-            '<span class="factor-label">مبلغ نهایی:</span>' +
-            '<span class="factor-value">' + H.fmt(detail.totalFinall) + '</span>' +
-            '</div>' +
-            // ⭐ نمایش حروف در مودال جزئیات
-            '<div style="font-size: 13px; color: #059669; margin-top: 8px; font-weight: bold; width:100%; text-align:center;">' +
-            H.toPersianWords(detail.totalFinall) +
-            '</div>' +
-            '</div>' +
-            '</div>';
+                <!-- جمع‌ها -->
+                <div class="fd-totals">
+                    <div class="fd-total-row">
+                        <div class="fd-total-item"><span class="label">تعداد ردیف:</span><span class="value">${H.fmt(detail.totalRows)}</span></div>
+                        <div class="fd-total-item"><span class="label">مبلغ کالاها:</span><span class="value num">${H.fmt(detail.totalCostItem)}</span></div>
+                        <div class="fd-total-item"><span class="label">جمع تخفیف:</span><span class="value num">${H.fmt(detail.totalDiscount)}</span></div>
+                        <div class="fd-total-item"><span class="label">جمع مالیات:</span><span class="value num">${H.fmt(detail.totalTax)}</span></div>
+                        <div class="fd-total-item"><span class="label">جمع حمل:</span><span class="value num">${H.fmt(detail.totalTransCost)}</span></div>
+                    </div>
+                    <div class="fd-final-total">
+                        <div class="fd-final-amount">
+                            <span class="label">مبلغ نهایی:</span>
+                            <span class="value num">${H.fmt(detail.totalFinall)} <small>ریال</small></span>
+                        </div>
+                        <div class="fd-words">
+                            ${H.toPersianWords(detail.totalFinall)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
     }
+
     async function deleteSanad(factorId) {
         if (window.App.Permissions && !window.App.Permissions.can(201)) {
             window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
@@ -1199,12 +1119,21 @@ window.App.Features.Factor = (function () {
         const items = detail.items || [];
         const totalFinal = detail.totalFinall || 0;
 
+        // ⭐ استفاده از نام داینامیک سازمان
+        const orgName = window.App.state.user?.orgName || '';
+
+        // اتصال قالب وب به اینجا
+        if (type === 'web-standard') {
+            return buildWebPrintHtml(h, items, detail);
+        }
+
         const cashVal = Number(h.isCash);
         const isCash = (cashVal === 1 || isNaN(cashVal));
         const isNonCash = (cashVal === 2);
 
         let contentHtml = '';
 
+        // ═══ ۱. قالب رسمی استاندارد (دقیقاً مشابه دلفی - افقی) ═══
         if (type === 'official-standard') {
             const minRows = 9;
             const tableRows = items.map((it, i) => `
@@ -1228,7 +1157,7 @@ window.App.Features.Factor = (function () {
                     <div style="text-align: center; font-size: 12px; font-weight: bold; background: #e5e7eb; padding: 2px; border-bottom: 1px solid #000;">مشخصات فروشنده</div>
                     <table style="border-bottom: 1px solid #000;">
                         <tr>
-                            <td style="width: 20%; font-size: 11px; padding: 3px 5px;">نام شخص حقیقی/حقوقی:</td><td style="width: 30%; font-size: 11px; font-weight: bold; padding: 3px 5px;">گروه نرم افزاری آریانا</td>
+                            <td style="width: 20%; font-size: 11px; padding: 3px 5px;">نام شخص حقیقی/حقوقی:</td><td style="width: 30%; font-size: 11px; font-weight: bold; padding: 3px 5px;">${orgName}</td>
                             <td style="width: 20%; font-size: 11px; padding: 3px 5px;">شماره اقتصادی:</td><td style="width: 30%; font-size: 11px; padding: 3px 5px;">-</td>
                         </tr>
                         <tr>
@@ -1300,6 +1229,46 @@ window.App.Features.Factor = (function () {
                 <div style="text-align: left; font-size: 10px; margin-top: 5px;">نسخه اول (خریدار) - نسخه دوم (حسابداری) - نسخه سوم (انبارداری)</div>
             `;
         }
+        // ═══ ۲. رسمی افقی ۱ ═══
+        else if (type === 'normal-horizontal-1') {
+            const minRows = 9;
+            const tableRows = items.map((it, i) => `
+                <tr>
+                    <td class="text-center">${i + 1}</td><td>${it.articleName}</td><td class="num text-center">${H.fmt(it.articleCount)}</td><td class="text-center">${it.articleUnitName}</td>
+                    <td class="num text-center">${it.articleCode}</td><td class="num text-left">${H.fmt(it.cost)}</td><td class="num text-left">${H.fmt(it.costItem)}</td>
+                    <td class="num text-left">${H.fmt(it.discount)}</td><td class="num text-center">${it.perDiscount || 0}%</td><td class="num text-left">${H.fmt(it.finallCost)}</td>
+                </tr>
+            `);
+            for (let i = items.length; i < minRows; i++) {
+                tableRows.push(`<tr style="height: 24px;"><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>`);
+            }
+            contentHtml = `
+                <div style="border: 2px solid #000; padding: 10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 10px;">
+                        <div style="font-size: 20px; font-weight: bold;">صورتحساب فروش کالا</div>
+                        <div><div><b>شماره فاکتور:</b> ${h.noFactor}</div><div><b>تاریخ:</b> ${h.dateIn}</div></div>
+                    </div>
+                    <table style="border: 1px solid #000; margin-bottom: 10px;">
+                        <tr><td style="width:15%; background:#f0f0f0; font-weight:bold; border-left:1px solid #000; padding:5px;">مشخصات فروشنده</td><td style="padding:5px;"><b>نام حقیقی/حقوقی:</b> ${orgName} &nbsp;&nbsp;|&nbsp;&nbsp; <b>شماره اقتصادی:</b> - &nbsp;&nbsp;|&nbsp;&nbsp; <b>شماره ثبت/ملی:</b> -</td></tr>
+                        <tr><td style="background:#f0f0f0; font-weight:bold; border-left:1px solid #000; border-top:1px solid #000; padding:5px;">مشخصات خریدار</td><td style="padding:5px; border-top:1px solid #000;"><b>نام حقیقی/حقوقی:</b> ${h.hesabName || '-'} &nbsp;&nbsp;|&nbsp;&nbsp; <b>شماره اقتصادی:</b> ${h.economicCode || '-'} &nbsp;&nbsp;|&nbsp;&nbsp; <b>شماره ثبت/ملی:</b> ${h.nationalCode || '-'}</td></tr>
+                    </table>
+                    <table class="print-table">
+                        <thead>
+                            <tr>
+                                <th style="width:3%;">ردیف</th><th style="width:25%;">شرح کالا و خدمات</th><th style="width:6%;">مقدار</th><th style="width:6%;">واحد</th><th style="width:8%;">کد کالا</th>
+                                <th style="width:10%;">قیمت واحد (ریال)</th><th style="width:10%;">مبلغ کل (ریال)</th><th style="width:8%;">تخفیف</th><th style="width:6%;">درصد تخفیف</th><th style="width:10%;">قیمت کل (ریال)</th>
+                            </tr>
+                        </thead>
+                        <tbody>${tableRows.join('')}</tbody>
+                        <tfoot><tr style="font-weight:bold;"><td colspan="6" class="text-center">جمع کل:</td><td class="num text-left">${H.fmt(detail.totalCostItem)}</td><td class="num text-left">${H.fmt(detail.totalDiscount)}</td><td></td><td class="num text-left">${H.fmt(totalFinal)}</td></tr></tfoot>
+                    </table>
+                    <div style="border: 1px solid #000; padding: 8px; margin-top: -1px; font-weight: bold;">مبلغ به حروف: ${H.toPersianWords(totalFinal)}</div>
+                    <div style="margin-top: 10px; font-size: 12px;">شرایط و نحوه فروش: نقدی <span style="display:inline-flex; width:14px; height:14px; border:1px solid #000; vertical-align:middle; align-items:center; justify-content:center; margin: 0 5px; font-weight:bold; font-size:14px; line-height:1;">${isCash ? '✓' : ''}</span> غیرنقدی <span style="display:inline-flex; width:14px; height:14px; border:1px solid #000; vertical-align:middle; align-items:center; justify-content:center; margin: 0 5px; font-weight:bold; font-size:14px; line-height:1;">${isNonCash ? '✓' : ''}</span></div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 20px; text-align: center;"><div style="width: 30%;"><b>مهر و امضاء فروشنده</b><br><br><br></div><div style="width: 30%;"><b>مهر و امضاء خریدار</b><br><br><br></div></div>
+                </div>
+            `;
+        }
+        // ═══ ۳. رسمی افقی ۲ ═══
         else if (type === 'normal-horizontal-2') {
             const minRows = 7;
             const tableRows = items.map((it, i) => `
@@ -1315,11 +1284,15 @@ window.App.Features.Factor = (function () {
 
             contentHtml = `
                 <div style="border: 2px solid #000; padding: 10px; background:#fff;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 10px;">
-                        <div style="text-align: left;"><div style="font-size: 14px; font-weight: bold; margin-bottom: 5px;">شماره فاکتور: ${h.noFactor || '-'}</div><div style="font-size: 14px; font-weight: bold;">تاریخ: ${h.dateIn || '-'}</div></div>
-                        <div style="text-align: center; display:flex; align-items:center; gap: 15px;">
-                            <div style="width:60px; height:60px; background:#e2e8f0; border-radius:50%; display:flex; justify-content:center; align-items:center; font-size:24px; font-weight:bold;">آ</div>
-                            <div><div style="font-size: 18px; font-weight: bold;">گروه نرم افزاری آریانا</div><div style="font-size: 16px; font-weight: bold; color: #333;">صورت حساب فروش</div></div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 10px;">
+                        <div style="text-align: left; min-width: 150px;">
+                            <div style="font-size: 14px; font-weight: bold; margin-bottom: 5px;">شماره فاکتور: ${h.noFactor || '-'}</div>
+                            <div style="font-size: 14px; font-weight: bold;">تاریخ: ${h.dateIn || '-'}</div>
+                        </div>
+                        <!-- ⭐ لوگو حذف شد و فقط نام داینامیک سازمان ماند -->
+                        <div style="text-align: center;">
+                            <div style="font-size: 18px; font-weight: bold;">${orgName}</div>
+                            <div style="font-size: 16px; font-weight: bold; color: #333;">صورت حساب فروش</div>
                         </div>
                     </div>
                     <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
@@ -1362,50 +1335,25 @@ window.App.Features.Factor = (function () {
                 </div>
             `;
         }
-        else if (type === 'normal-horizontal-1') {
-            const minRows = 9;
-            const tableRows = items.map((it, i) => `
-                <tr>
-                    <td class="text-center">${i + 1}</td><td>${it.articleName}</td><td class="num text-center">${H.fmt(it.articleCount)}</td><td class="text-center">${it.articleUnitName}</td>
-                    <td class="num text-center">${it.articleCode}</td><td class="num text-left">${H.fmt(it.cost)}</td><td class="num text-left">${H.fmt(it.costItem)}</td>
-                    <td class="num text-left">${H.fmt(it.discount)}</td><td class="num text-center">${it.perDiscount || 0}%</td><td class="num text-left">${H.fmt(it.finallCost)}</td>
-                </tr>
-            `);
-            for (let i = items.length; i < minRows; i++) {
-                tableRows.push(`<tr style="height: 24px;"><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>`);
-            }
-            contentHtml = `
-                <div style="border: 2px solid #000; padding: 10px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 10px;">
-                        <div style="font-size: 20px; font-weight: bold;">صورتحساب فروش کالا</div>
-                        <div><div><b>شماره فاکتور:</b> ${h.noFactor}</div><div><b>تاریخ:</b> ${h.dateIn}</div></div>
-                    </div>
-                    <table style="border: 1px solid #000; margin-bottom: 10px;">
-                        <tr><td style="width:15%; background:#f0f0f0; font-weight:bold; border-left:1px solid #000; padding:5px;">مشخصات فروشنده</td><td style="padding:5px;"><b>نام حقیقی/حقوقی:</b> گروه نرم افزاری آریانا &nbsp;&nbsp;|&nbsp;&nbsp; <b>شماره اقتصادی:</b> - &nbsp;&nbsp;|&nbsp;&nbsp; <b>شماره ثبت/ملی:</b> -</td></tr>
-                        <tr><td style="background:#f0f0f0; font-weight:bold; border-left:1px solid #000; border-top:1px solid #000; padding:5px;">مشخصات خریدار</td><td style="padding:5px; border-top:1px solid #000;"><b>نام حقیقی/حقوقی:</b> ${h.hesabName || '-'} &nbsp;&nbsp;|&nbsp;&nbsp; <b>شماره اقتصادی:</b> ${h.economicCode || '-'} &nbsp;&nbsp;|&nbsp;&nbsp; <b>شماره ثبت/ملی:</b> ${h.nationalCode || '-'}</td></tr>
-                    </table>
-                    <table class="print-table">
-                        <thead>
-                            <tr>
-                                <th style="width:3%;">ردیف</th><th style="width:25%;">شرح کالا و خدمات</th><th style="width:6%;">مقدار</th><th style="width:6%;">واحد</th><th style="width:8%;">کد کالا</th>
-                                <th style="width:10%;">قیمت واحد (ریال)</th><th style="width:10%;">مبلغ کل (ریال)</th><th style="width:8%;">تخفیف</th><th style="width:6%;">درصد تخفیف</th><th style="width:10%;">قیمت کل (ریال)</th>
-                            </tr>
-                        </thead>
-                        <tbody>${tableRows.join('')}</tbody>
-                        <tfoot><tr style="font-weight:bold;"><td colspan="6" class="text-center">جمع کل:</td><td class="num text-left">${H.fmt(detail.totalCostItem)}</td><td class="num text-left">${H.fmt(detail.totalDiscount)}</td><td></td><td class="num text-left">${H.fmt(totalFinal)}</td></tr></tfoot>
-                    </table>
-                    <div style="border: 1px solid #000; padding: 8px; margin-top: -1px; font-weight: bold;">مبلغ به حروف: ${H.toPersianWords(totalFinal)}</div>
-                    <div style="margin-top: 10px; font-size: 12px;">شرایط و نحوه فروش: نقدی <span style="display:inline-flex; width:14px; height:14px; border:1px solid #000; vertical-align:middle; align-items:center; justify-content:center; margin: 0 5px; font-weight:bold; font-size:14px; line-height:1;">${isCash ? '✓' : ''}</span> غیرنقدی <span style="display:inline-flex; width:14px; height:14px; border:1px solid #000; vertical-align:middle; align-items:center; justify-content:center; margin: 0 5px; font-weight:bold; font-size:14px; line-height:1;">${isNonCash ? '✓' : ''}</span></div>
-                    <div style="display: flex; justify-content: space-between; margin-top: 20px; text-align: center;"><div style="width: 30%;"><b>مهر و امضاء فروشنده</b><br><br><br></div><div style="width: 30%;"><b>مهر و امضاء خریدار</b><br><br><br></div></div>
-                </div>
-            `;
-        }
+
+        // ═══ ۴. بقیه قالب‌ها ═══
         else if (type === 'normal-modern') {
             contentHtml = `
-                <div style="background:#f1f5f9; border-radius: 15px 15px 0 0; padding: 20px; display:flex; justify-content:space-between; align-items:center;"><div><div style="font-size: 22px; font-weight: bold; color: #1e293b;">فاکتور فروش کالا</div><div style="color: #64748b; margin-top: 5px;">شماره: ${h.noFactor}</div></div><div class="text-left"><div style="font-size: 16px; font-weight: bold; color: #1e293b;">گروه نرم افزاری آریانا</div><div style="color: #64748b; margin-top: 5px;">تاریخ: ${h.dateIn}</div></div></div>
-                <div style="padding: 15px 0; border-bottom: 2px solid #f1f5f9;"><table style="width:100%;"><tr><td style="width: 15%; color:#64748b;">خریدار:</td><td style="font-weight:bold;">${h.hesabName}</td><td style="width: 15%; color:#64748b;">تلفن:</td><td>${h.phone || h.mobile || '-'}</td></tr></table></div>
-                <table style="margin-top: 15px;"><thead><tr style="border-bottom: 2px solid #1e293b;"><th class="text-center" style="padding:8px; width:5%;">#</th><th class="text-right" style="padding:8px;">شرح</th><th class="text-center" style="padding:8px; width:10%;">مقدار</th><th class="text-left" style="padding:8px; width:15%;">قیمت واحد</th><th class="text-left" style="padding:8px; width:15%;">مبلغ</th></tr></thead><tbody>${items.map((it, i) => `<tr style="border-bottom: 1px solid #e2e8f0;"><td class="text-center" style="padding:8px;">${i + 1}</td><td style="padding:8px;">${it.articleName}</td><td class="text-center" style="padding:8px;">${H.fmt(it.articleCount)}</td><td class="num text-left" style="padding:8px;">${H.fmt(it.cost)}</td><td class="num text-left" style="padding:8px;">${H.fmt(it.finallCost)}</td></tr>`).join('')}</tbody></table>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 20px; border-top: 2px solid #1e293b; padding-top: 10px;"><div style="font-size: 14px; font-weight: bold; color: #1e293b;">مبلغ نهایی: ${H.fmt(totalFinal)} ریال</div><div style="font-size: 12px; color: #64748b;">${H.toPersianWords(totalFinal)}</div></div>
+                <div style="background:#f1f5f9; border-radius: 15px 15px 0 0; padding: 20px; display:flex; justify-content:space-between; align-items:center;">
+                    <div><div style="font-size: 22px; font-weight: bold; color: #1e293b;">فاکتور فروش کالا</div><div style="color: #64748b; margin-top: 5px;">شماره: ${h.noFactor}</div></div>
+                    <div class="text-left"><div style="font-size: 16px; font-weight: bold; color: #1e293b;">${orgName}</div><div style="color: #64748b; margin-top: 5px;">تاریخ: ${h.dateIn}</div></div>
+                </div>
+                <div style="padding: 15px 0; border-bottom: 2px solid #f1f5f9;">
+                    <table style="width:100%;"><tr><td style="width: 15%; color:#64748b;">خریدار:</td><td style="font-weight:bold;">${h.hesabName}</td><td style="width: 15%; color:#64748b;">تلفن:</td><td>${h.phone || h.mobile || '-'}</td></tr></table>
+                </div>
+                <table style="margin-top: 15px;">
+                    <thead><tr style="border-bottom: 2px solid #1e293b;"><th class="text-center" style="padding:8px; width:5%;">#</th><th class="text-right" style="padding:8px;">شرح</th><th class="text-center" style="padding:8px; width:10%;">مقدار</th><th class="text-left" style="padding:8px; width:15%;">قیمت واحد</th><th class="text-left" style="padding:8px; width:15%;">مبلغ</th></tr></thead>
+                    <tbody>${items.map((it, i) => `<tr style="border-bottom: 1px solid #e2e8f0;"><td class="text-center" style="padding:8px;">${i + 1}</td><td style="padding:8px;">${it.articleName}</td><td class="text-center" style="padding:8px;">${H.fmt(it.articleCount)}</td><td class="num text-left" style="padding:8px;">${H.fmt(it.cost)}</td><td class="num text-left" style="padding:8px;">${H.fmt(it.finallCost)}</td></tr>`).join('')}</tbody>
+                </table>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 20px; border-top: 2px solid #1e293b; padding-top: 10px;">
+                    <div style="font-size: 14px; font-weight: bold; color: #1e293b;">مبلغ نهایی: ${H.fmt(totalFinal)} ریال</div>
+                    <div style="font-size: 12px; color: #64748b;">${H.toPersianWords(totalFinal)}</div>
+                </div>
                 <div style="text-align: center; margin-top: 30px; color: #94a3b8; font-size: 12px;">با تشکر از خرید شما</div>
             `;
         }
@@ -1445,7 +1393,6 @@ window.App.Features.Factor = (function () {
 
         return contentHtml;
     }
-
  
   
     // ═══════════════════════════════════════════
