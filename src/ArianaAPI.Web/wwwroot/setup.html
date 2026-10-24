@@ -509,16 +509,19 @@
                 const priorSelect = document.getElementById('priorSazmanSelect');
                 const info = document.getElementById('licenseInfo');
 
-                info.innerHTML = `تعداد سازمان‌های مجاز در لایسنس: ${data.totalAuthorized} | ایجاد شده: ${data.usedCount}`;
+                // ⭐ جدید: نمایش maxOrgs
+                const maxOrgs = data.totalAuthorized || 0;
+                const used = data.usedCount || 0;
+                info.innerHTML = `حداکثر سازمان‌های مجاز: <b>${maxOrgs}</b> | ایجاد شده: <b>${used}</b>`;
+                info.style.color = (used >= maxOrgs) ? '#DC2626' : '#2563EB';
 
                 select.innerHTML = '';
                 priorSelect.innerHTML = '';
 
                 if (data.canCreateNew) {
-                    select.innerHTML += `<option value="0">➕ ایجاد سازمان جدید (ID مجاز بعدی: ${data.nextAvailableId})</option>`;
+                    select.innerHTML += `<option value="0">➕ ایجاد سازمان جدید (ID بعدی: ${data.nextAvailableId})</option>`;
                 } else {
-                    select.innerHTML += `<option value="" disabled>⛔ محدودیت لایسنس: تمام سازمان‌های مجاز ایجاد شده‌اند</option>`;
-                    info.style.color = 'red';
+                    select.innerHTML += `<option value="" disabled>⛔ محدودیت لایسنس: تمام ${maxOrgs} سازمان مجاز ایجاد شده‌اند</option>`;
                 }
 
                 allSazmans.forEach(s => {
@@ -530,7 +533,6 @@
                 App.alert.error(err.message);
             }
         }
-
         async function onSazmanChange() {
             const val = parseInt(document.getElementById('sazmanSelect').value);
             const newFields = document.getElementById('newSazmanFields');

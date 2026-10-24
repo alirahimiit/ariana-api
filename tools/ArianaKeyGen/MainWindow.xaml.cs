@@ -22,7 +22,6 @@ public partial class MainWindow : Window
         Directory.CreateDirectory(KeysDir);
         UpdateKeyStatus();
 
-        // پیش‌فرض مسیر خروجی روی Desktop
         TxtOutputPath.Text = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
             "ariana.lic");
@@ -31,9 +30,6 @@ public partial class MainWindow : Window
             Color.FromRgb(107, 114, 128));
     }
 
-    // ═══════════════════════════════════════════
-    //  به‌روزرسانی وضعیت کلیدها
-    // ═══════════════════════════════════════════
     private void UpdateKeyStatus()
     {
         var hasPriv = File.Exists(PrivateKeyPath);
@@ -56,6 +52,7 @@ public partial class MainWindow : Window
         TxtStatus.Text = message;
         TxtStatus.Foreground = new SolidColorBrush(color);
     }
+
     private void TxtSystemId_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
         if (TxtSystemIdHash == null) return;
@@ -64,6 +61,7 @@ public partial class MainWindow : Window
             ? "(SystemId را وارد کنید)"
             : ComputeSystemIdHash(sysId);
     }
+
     public static string ComputeSystemIdHash(string systemId)
     {
         var normalized = new string(systemId.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
@@ -71,9 +69,7 @@ public partial class MainWindow : Window
         var hash = SHA256.HashData(bytes);
         return "sha256:" + Convert.ToHexString(hash).ToLowerInvariant();
     }
-    // ═══════════════════════════════════════════
-    //  ساخت جفت کلید
-    // ═══════════════════════════════════════════
+
     private void BtnGenerateKeys_Click(object sender, RoutedEventArgs e)
     {
         if (File.Exists(PrivateKeyPath))
@@ -124,9 +120,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // ═══════════════════════════════════════════
-    //  کپی public.key
-    // ═══════════════════════════════════════════
     private void BtnCopyPublicKey_Click(object sender, RoutedEventArgs e)
     {
         if (!File.Exists(PublicKeyPath))
@@ -150,9 +143,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // ═══════════════════════════════════════════
-    //  انتخاب مسیر خروجی
-    // ═══════════════════════════════════════════
     private void BtnBrowse_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new SaveFileDialog
@@ -171,11 +161,10 @@ public partial class MainWindow : Window
     }
 
     // ═══════════════════════════════════════════
-    //  ساخت لایسنس
+    //  ⭐ ساخت لایسنس — با maxOrgs
     // ═══════════════════════════════════════════
     private void BtnCreateLicense_Click(object sender, RoutedEventArgs e)
     {
-        // ─── اعتبارسنجی ───
         if (!File.Exists(PrivateKeyPath))
         {
             MessageBox.Show(
@@ -204,6 +193,7 @@ public partial class MainWindow : Window
             TxtCustomerId.Focus();
             return;
         }
+
         var systemId = TxtSystemId.Text.Trim();
         if (string.IsNullOrWhiteSpace(systemId))
         {
@@ -213,27 +203,15 @@ public partial class MainWindow : Window
             return;
         }
 
-        long[] authorizedOrgs;
-        try
+        // ⭐ چک maxOrgs
+        if (!int.TryParse(TxtMaxOrgs.Text.Trim(), out var maxOrgs) || maxOrgs <= 0)
         {
-            authorizedOrgs = TxtOrgs.Text
-                .Split(new[] { ',', '،', ' ', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => long.Parse(s.Trim()))
-                .ToArray();
-
-            if (authorizedOrgs.Length == 0)
-            {
-                MessageBox.Show("حداقل یک سازمان وارد کن.", "خطا",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                TxtOrgs.Focus();
-                return;
-            }
-        }
-        catch
-        {
-            MessageBox.Show("کدهای سازمان باید عدد باشن (مثل 1,2,5).", "خطا",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            TxtOrgs.Focus();
+            MessageBox.Show(
+                "حداکثر تعداد سازمان مجاز باید یک عدد مثبت باشه (مثلاً 50).",
+                "خطا",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            TxtMaxOrgs.Focus();
             return;
         }
 
@@ -250,11 +228,8 @@ public partial class MainWindow : Window
             return;
         }
 
-
-
         try
         {
-            // ─── ساخت payload ───
             var payload = new LicensePayload
             {
                 Version = 1,
@@ -263,13 +238,12 @@ public partial class MainWindow : Window
                 CustomerId = customerId,
                 IssuedAt = DateTime.Now.ToString("yyyy/MM/dd"),
                 ExpiresAt = expiresAt,
-                AuthorizedOrgs = authorizedOrgs,
+                MaxOrgs = maxOrgs,                    // ⭐ عدد
                 Features = new[] { "web", "api" },
                 Notes = string.IsNullOrWhiteSpace(notes) ? null : notes,
                 SystemId = systemId
             };
 
-            // ─── امضا ───
             var canonicalJson = BuildCanonicalJson(payload);
             var dataBytes = Encoding.UTF8.GetBytes(canonicalJson);
 
@@ -282,7 +256,6 @@ public partial class MainWindow : Window
                 RSASignaturePadding.Pkcs1);
             var sigBase64 = Convert.ToBase64String(sigBytes);
 
-            // ─── فایل نهایی ───
             var licenseFile = new LicenseFile
             {
                 Payload = payload,
@@ -302,7 +275,7 @@ public partial class MainWindow : Window
             MessageBox.Show(
                 "✅ لایسنس با موفقیت ساخته شد!\n\n" +
                 $"👤 مشتری: {customerName} ({customerId})\n" +
-                $"🏢 سازمان‌های مجاز: {string.Join(", ", authorizedOrgs)}\n" +
+                $"🏢 حداکثر سازمان‌های مجاز: {maxOrgs}\n" +
                 $"📅 انقضا: {expiresAt}\n" +
                 $"🔑 SystemId: {systemId}\n" +
                 $"📂 مسیر: {outputPath}\n\n" +
@@ -314,7 +287,7 @@ public partial class MainWindow : Window
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
 
-            SetStatus("✅", $"لایسنس برای «{customerName}» ساخته شد.",
+            SetStatus("✅", $"لایسنس برای «{customerName}» با {maxOrgs} سازمان ساخته شد.",
                 Color.FromRgb(16, 185, 129));
         }
         catch (Exception ex)
@@ -327,12 +300,11 @@ public partial class MainWindow : Window
     }
 
     // ═══════════════════════════════════════════
-    //  Canonical JSON — باید عیناً با Web یکی باشه
+    //  ⭐ Canonical JSON — باید عیناً با Web یکی باشه
     // ═══════════════════════════════════════════
     private static string BuildCanonicalJson(LicensePayload p)
     {
         var featuresJson = "[" + string.Join(",", p.Features.Select(f => $"\"{f}\"")) + "]";
-        var orgsJson = "[" + string.Join(",", p.AuthorizedOrgs) + "]";
         var notesJson = string.IsNullOrEmpty(p.Notes)
             ? "null"
             : "\"" + p.Notes.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
@@ -344,7 +316,7 @@ public partial class MainWindow : Window
                $"\"customerId\":\"{p.CustomerId}\"," +
                $"\"issuedAt\":\"{p.IssuedAt}\"," +
                $"\"expiresAt\":\"{p.ExpiresAt}\"," +
-               $"\"authorizedOrgs\":{orgsJson}," +
+               $"\"maxOrgs\":{p.MaxOrgs}," +
                $"\"features\":{featuresJson}," +
                $"\"notes\":{notesJson}";
 
@@ -353,8 +325,6 @@ public partial class MainWindow : Window
 
         return baseJson + "}";
     }
-
-   
 }
 
 // ═══════════════════════════════════════════
@@ -380,8 +350,9 @@ public class LicensePayload
     [JsonPropertyName("expiresAt")]
     public string ExpiresAt { get; set; } = "";
 
-    [JsonPropertyName("authorizedOrgs")]
-    public long[] AuthorizedOrgs { get; set; } = Array.Empty<long>();
+    // ⭐ جدید: حداکثر تعداد سازمان مجاز
+    [JsonPropertyName("maxOrgs")]
+    public int MaxOrgs { get; set; }
 
     [JsonPropertyName("features")]
     public string[] Features { get; set; } = Array.Empty<string>();

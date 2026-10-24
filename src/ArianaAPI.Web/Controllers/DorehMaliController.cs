@@ -1,5 +1,5 @@
 ﻿using ArianaAPI.Application.DTOs.Sanad;
-using ArianaAPI.Application.Interfaces;   // ⭐ برای ILicenseService
+using ArianaAPI.Application.Interfaces;
 using ArianaAPI.Web.Extensions;
 using Dapper;
 using Microsoft.AspNetCore.Authorization;
@@ -15,7 +15,7 @@ public class DorehMaliController : ControllerBase
 {
     private readonly IConfiguration _config;
     private readonly ILogger<DorehMaliController> _logger;
-    private readonly ILicenseService _license;   // ⭐ جدید
+    private readonly ILicenseService _license;
 
     public DorehMaliController(
         IConfiguration config,
@@ -27,9 +27,6 @@ public class DorehMaliController : ControllerBase
         _license = license;
     }
 
-    /// <summary>
-    /// لیست دوره‌های مالی سازمان‌های مجاز (بر اساس لایسنس)
-    /// </summary>
     [HttpGet("list")]
     public async Task<IActionResult> List(
         [FromQuery] long? orgId,
@@ -45,45 +42,51 @@ public class DorehMaliController : ControllerBase
             });
         }
 
-        var authorizedOrgs = _license.GetAuthorizedOrgs();
-
-        if (authorizedOrgs.Length == 0)
+        var maxOrgs = _license.MaxOrgs;
+        if (maxOrgs <= 0)
         {
-            _logger.LogWarning("⚠️ هیچ سازمان مجازی در لایسنس تعریف نشده");
-            return StatusCode(403, new
-            {
-                error = "هیچ سازمانی در لایسنس شما تعریف نشده است"
-            });
+            _logger.LogWarning("⚠️ maxOrgs صفر — لایسنس هیچ سازمانی مجاز نمی‌دونه");
+            return StatusCode(403, new { error = "لایسنس شما هیچ سازمان مجازی ندارد" });
         }
 
-        // ─── ۲. اگه orgId مشخص شده، فقط همون رو برگردون ───
-        long[] targetOrgs;
-        if (orgId.HasValue)
-        {
-            if (!authorizedOrgs.Contains(orgId.Value))
-            {
-                _logger.LogWarning(
-                    "❌ تلاش برای دسترسی به سازمان غیرمجاز: {OrgId}", orgId.Value);
-                return StatusCode(403, new
-                {
-                    error = "این سازمان در لایسنس شما وجود ندارد"
-                });
-            }
-            targetOrgs = new[] { orgId.Value };
-        }
-        else
-        {
-            // همه سازمان‌های مجاز
-            targetOrgs = authorizedOrgs;
-        }
-
-        // ─── ۳. کوئری ───
         try
         {
             var connStr = BuildPermanentConnectionString();
             await using var conn = new SqlConnection(connStr);
             await conn.OpenAsync(ct);
 
+            // ⭐ گرفتن N سازمان اول (به ترتیب SazmanID)
+            var validOrgs = (await conn.QueryAsync<long>(
+                new CommandDefinition(@"
+                    SELECT TOP (@maxOrgs) SazmanID 
+                    FROM Sazman 
+                    WHERE Report_App = 1 
+                    ORDER BY SazmanID",
+                    new { maxOrgs }, cancellationToken: ct))).ToArray();
+
+            if (validOrgs.Length == 0)
+            {
+                return Ok(new List<DorehMaliListDto>());
+            }
+
+            // ─── تعیین targetOrgs ───
+            long[] targetOrgs;
+            if (orgId.HasValue)
+            {
+                if (!validOrgs.Contains(orgId.Value))
+                {
+                    _logger.LogWarning(
+                        "❌ تلاش برای دسترسی به سازمان غیرمجاز: {OrgId}", orgId.Value);
+                    return StatusCode(403, new { error = "این سازمان در محدوده لایسنس نیست" });
+                }
+                targetOrgs = new[] { orgId.Value };
+            }
+            else
+            {
+                targetOrgs = validOrgs;
+            }
+
+            // ─── کوئری نهایی ───
             const string sql = @"
                 SELECT 
                     DorehMaliID,
@@ -117,7 +120,6 @@ public class DorehMaliController : ControllerBase
         }
     }
 
-    /// <summary>ساخت connection string از بخش Database در appsettings</summary>
     private string BuildPermanentConnectionString()
     {
         var db = _config.GetSection("Database");

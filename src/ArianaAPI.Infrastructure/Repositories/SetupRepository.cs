@@ -49,28 +49,30 @@ public class SetupRepository : ISetupRepository
         }.ConnectionString;
     }
 
-    private List<long> GetAuthorizedOrgsFromLicense()
+    // ⭐ جدید: خواندن maxOrgs از فایل لایسنس
+    private int GetMaxOrgsFromLicense()
     {
         try
         {
             var licPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ariana.lic");
-            if (!File.Exists(licPath)) return new List<long>();
+            if (!File.Exists(licPath)) return 0;
             using var doc = JsonDocument.Parse(File.ReadAllText(licPath));
             if (doc.RootElement.TryGetProperty("payload", out var payload) &&
-                payload.TryGetProperty("authorizedOrgs", out var orgs))
+                payload.TryGetProperty("maxOrgs", out var maxOrgs))
             {
-                return orgs.EnumerateArray().Select(x => x.GetInt64()).ToList();
+                return maxOrgs.GetInt32();
             }
         }
         catch { }
-        return new List<long>();
+        return 0;
     }
 
     public async Task<bool> AuthenticateAsync(string username, string password, CancellationToken ct = default)
     {
         await using var conn = new SqlConnection(_permanentConnectionString);
         var count = await conn.ExecuteScalarAsync<int>(
-            new CommandDefinition("SELECT COUNT(*) FROM Setting WHERE UName = @u AND UP = @p", new { u = username, p = password }, cancellationToken: ct));
+            new CommandDefinition("SELECT COUNT(*) FROM Setting WHERE UName = @u AND UP = @p",
+                new { u = username, p = password }, cancellationToken: ct));
         return count > 0;
     }
 
@@ -78,29 +80,31 @@ public class SetupRepository : ISetupRepository
     {
         await using var conn = new SqlConnection(_permanentConnectionString);
 
-        // دریافت تمام سازمان‌های موجود در دیتابیس
         var dbList = (await conn.QueryAsync<SazmanItemDto>(
-            new CommandDefinition("SELECT SazmanID AS Id, Name, ISNULL(LicenceSazman, '') AS LicenceSazman FROM Sazman", cancellationToken: ct))).ToList();
+            new CommandDefinition(
+                "SELECT SazmanID AS Id, Name, ISNULL(LicenceSazman, '') AS LicenceSazman FROM Sazman ORDER BY SazmanID",
+                cancellationToken: ct))).ToList();
 
-        // خواندن IDهای مجاز از فایل لایسنس
-        var authorizedIds = GetAuthorizedOrgsFromLicense();
+        var maxOrgs = GetMaxOrgsFromLicense();
 
-        // ⭐ فیلتر کردن سازمان‌های دیتابیس: فقط سازمان‌هایی که ID آن‌ها در لایسنس هست نمایش داده شوند
-        var validExistingSazmans = dbList.Where(x => authorizedIds.Contains(x.Id)).ToList();
+        // ⭐ اول N سازمان (به ترتیب SazmanID)
+        var validExistingSazmans = dbList.Take(maxOrgs).ToList();
 
-        // محاسبه IDهایی که در لایسنس هستند ولی هنوز در دیتابیس ساخته نشده‌اند
-        var existingIds = validExistingSazmans.Select(x => x.Id).ToList();
-        var availableIds = authorizedIds.Except(existingIds).ToList();
+        var canCreateNew = dbList.Count < maxOrgs;
+        var nextAvailableId = dbList.Count > 0
+            ? dbList.Max(x => x.Id) + 1
+            : 1L;
 
         return new SetupSazmanListResultDto
         {
-            ExistingSazmans = validExistingSazmans, // ⭐ فقط سازمان‌های مجاز
-            CanCreateNew = availableIds.Any(),
-            NextAvailableId = availableIds.FirstOrDefault(),
-            TotalAuthorized = authorizedIds.Count(),
-            UsedCount = validExistingSazmans.Count // تعداد سازمان‌های مجازِ ساخته‌شده
+            ExistingSazmans = validExistingSazmans,
+            CanCreateNew = canCreateNew,
+            NextAvailableId = nextAvailableId,
+            TotalAuthorized = maxOrgs,          // ⭐ نامش قدیمیه، ولی معنی‌اش maxOrgs هست
+            UsedCount = dbList.Count
         };
     }
+
     public async Task<List<DorehMaliItemDto>> GetDorehMalisAsync(long sazmanId, CancellationToken ct = default)
     {
         await using var conn = new SqlConnection(_permanentConnectionString);
@@ -125,23 +129,28 @@ public class SetupRepository : ISetupRepository
         await using var permConn = new SqlConnection(_permanentConnectionString);
         await permConn.OpenAsync(ct);
 
-        // ⭐ ۱. دریافت تاریخ و ساعت شمسی (فقط یک بار در بالاترین سطح)
         var pc = new System.Globalization.PersianCalendar();
         var now = DateTime.Now;
         var todayPersian = $"{pc.GetYear(now):D4}/{pc.GetMonth(now):D2}/{pc.GetDayOfMonth(now):D2}";
         var currentTime = now.ToString("HH:mm");
 
-        // ⭐ ۲. ثبت سازمان جدید (در صورت نیاز)
+        // ⭐ ۲. ثبت سازمان جدید (در صورت نیاز) — با چک تعداد
         if (finalSazmanId == 0)
         {
-            var authorizedIds = GetAuthorizedOrgsFromLicense();
-            var existingIds = (await permConn.QueryAsync<long>(
-                new CommandDefinition("SELECT SazmanID FROM Sazman", cancellationToken: ct))).ToList();
+            var maxOrgs = GetMaxOrgsFromLicense();
+            if (maxOrgs <= 0)
+                throw new Exception("محدودیت لایسنس: فایل لایسنس معتبر نیست یا maxOrgs تعریف نشده.");
 
-            var availableIds = authorizedIds.Except(existingIds).ToList();
-            if (!availableIds.Any()) throw new Exception("محدودیت لایسنس: تمام سازمان‌های مجاز ایجاد شده‌اند.");
+            var currentCount = await permConn.ExecuteScalarAsync<int>(
+                new CommandDefinition("SELECT COUNT(*) FROM Sazman", cancellationToken: ct));
 
-            finalSazmanId = availableIds.First();
+            if (currentCount >= maxOrgs)
+                throw new Exception(
+                    $"محدودیت لایسنس: حداکثر {maxOrgs} سازمان مجاز است و در حال حاضر {currentCount} سازمان وجود دارد.");
+
+            // ID بعدی = MAX + 1
+            finalSazmanId = await permConn.ExecuteScalarAsync<long>(
+                new CommandDefinition("SELECT ISNULL(MAX(SazmanID), 0) + 1 FROM Sazman", cancellationToken: ct));
 
             await permConn.ExecuteAsync(new CommandDefinition("SET IDENTITY_INSERT Sazman ON", cancellationToken: ct));
             await permConn.ExecuteAsync(new CommandDefinition(@"
@@ -233,7 +242,6 @@ public class SetupRepository : ISetupRepository
             if (File.Exists(tempBak)) File.Delete(tempBak);
         }
 
-        // اجرای آپدیتر روی Permanent (با مدیریت خطا)
         try
         {
             await DatabaseUpdater.RunUpdaterAsync(_permanentConnectionString, isPermanent: true, ct);
@@ -249,7 +257,6 @@ public class SetupRepository : ISetupRepository
             _config["Database:UserId"] ?? "sa",
             _config["Database:Password"] ?? "");
 
-        // اجرای آپدیتر روی دیتابیس دوره جدید (با مدیریت خطا)
         try
         {
             await DatabaseUpdater.RunUpdaterAsync(newDbConnStr, isPermanent: false, ct);
@@ -280,7 +287,7 @@ public class SetupRepository : ISetupRepository
 
         if (dataFile == null || logFile == null) throw new InvalidOperationException("ساختار فایل بک‌آپ نامعتبر است.");
 
-        string defaultDataPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "Database");
+        string defaultDataPath = Path.Combine(AppContext.BaseDirectory, "Data", "Database");
         if (!Directory.Exists(defaultDataPath)) Directory.CreateDirectory(defaultDataPath);
 
         var sql = $@"
@@ -299,16 +306,13 @@ public class SetupRepository : ISetupRepository
         using var tx = conn.BeginTransaction();
         try
         {
-            // ⭐ ۱. غیرفعال کردن موقت Foreign Key ها
             await conn.ExecuteAsync(new CommandDefinition("EXEC sp_MSforeachtable \"ALTER TABLE ? NOCHECK CONSTRAINT all\"", transaction: tx, cancellationToken: ct));
 
-            // ⭐ ۲. محاسبه مانده واقعی کالاها و انتقال به موجودی اولیه (قبل از حذف اسناد و فاکتورها)
             if (req.CopyArticle)
             {
                 await conn.ExecuteAsync(new CommandDefinition(@"
                     UPDATE A
                     SET 
-                        -- محاسبه مانده مقداری (خرید + رسید + برگشت خرید + رسید برگشتی - فروش - حواله - ضایعات)
                         A.AmountFirst = 
                             ISNULL(A.AmountFirst, 0) 
                             + ISNULL((SELECT SUM(ArticleCount) FROM FactorDetail fd INNER JOIN FactorParent fp ON fp.ID = fd.FactorID WHERE fd.ArticleID = A.ID AND fp.FactorKind = 0), 0)
@@ -319,10 +323,8 @@ public class SetupRepository : ISetupRepository
                             - ISNULL((SELECT SUM(Val) FROM Stock_Factor_Mat sfm INNER JOIN Stock_Factor sf ON sf.ID = sfm.StockFacorID WHERE sfm.ArticleID = A.ID AND sf.Kind = 1), 0)
                             - ISNULL((SELECT SUM(Val) FROM Stock_Factor_Mat sfm INNER JOIN Stock_Factor sf ON sf.ID = sfm.StockFacorID WHERE sfm.ArticleID = A.ID AND sf.Kind = 3), 0),
                         
-                        -- محاسبه مانده ریالی (اگر FinalVal1 صفر بود، همان CostFirst قبلی می‌ماند)
                         A.CostFirst = COALESCE(NULLIF(A.FinalVal1, 0), A.CostFirst, 0),
 
-                        -- صفر کردن فیلدهای تراکنشی برای شروع سال جدید
                         A.inAmount1 = 0, A.OutAmount1 = 0, A.BackAmount1 = 0, A.FinalAmount1 = 0,
                         A.inVal1 = 0, A.OutVal1 = 0, A.BackVal1 = 0, A.FinalVal1 = 0
                     FROM ArticleNew A
@@ -330,21 +332,18 @@ public class SetupRepository : ISetupRepository
             }
             else
             {
-                // اگر تیک انتقال کالا زده نشده، کالاها را کاملاً پاک کن
                 await conn.ExecuteAsync(new CommandDefinition("DELETE FROM ArticleNew", transaction: tx, cancellationToken: ct));
                 await conn.ExecuteAsync(new CommandDefinition("DELETE FROM ArticleGroup", transaction: tx, cancellationToken: ct));
                 await conn.ExecuteAsync(new CommandDefinition("DELETE FROM StockType", transaction: tx, cancellationToken: ct));
                 await conn.ExecuteAsync(new CommandDefinition("DELETE FROM ArticleUnit", transaction: tx, cancellationToken: ct));
             }
 
-            // ⭐ ۳. قطع ارتباط چک‌ها با اسناد
             await conn.ExecuteAsync(new CommandDefinition(@"
                 UPDATE CheckPay SET ParentSanadID = NULL, ParentSanadOKID = NULL;
                 UPDATE CheckRecive SET ParentSanadID = NULL, ParentSanadOKID = NULL, UnOkParentSanadID = NULL;
                 UPDATE CheckExpend SET ParentSanadID = NULL;
             ", transaction: tx, cancellationToken: ct));
 
-            // ⭐ ۴. حذف کامل تمام اسناد (هیچ سندی منتقل نمی‌شود)
             await conn.ExecuteAsync(new CommandDefinition(@"
                 DELETE FROM Sanad;
                 DELETE FROM ParentSanad;
@@ -352,7 +351,6 @@ public class SetupRepository : ISetupRepository
                 DELETE FROM RecycleParentSanad;
             ", transaction: tx, cancellationToken: ct));
 
-            // ⭐ ۵. حذف فاکتورها، اسناد موقت و جداول چاپی
             var tablesToClear = new[] {
                 "FactorDetail", "FactorParent", "FactorDetailTemp", "FactorParentTemp",
                 "SanadTemp", "SanadMovaghat", "SanadCopyTemp",
@@ -367,7 +365,6 @@ public class SetupRepository : ISetupRepository
                 await conn.ExecuteAsync(new CommandDefinition($"IF OBJECT_ID('{tbl}') IS NOT NULL DELETE FROM [{tbl}]", transaction: tx, cancellationToken: ct));
             }
 
-            // ⭐ ۶. پاکسازی جداول پایه (طبق تیک‌های کاربر)
             if (!req.CopyHesabs)
             {
                 await conn.ExecuteAsync(new CommandDefinition("DELETE FROM Hesab", transaction: tx, cancellationToken: ct));
@@ -392,7 +389,6 @@ public class SetupRepository : ISetupRepository
             if (!req.CopySetting)
                 await conn.ExecuteAsync(new CommandDefinition("DELETE FROM Setting", transaction: tx, cancellationToken: ct));
 
-            // ⭐ ۷. فعال کردن مجدد Foreign Key ها
             await conn.ExecuteAsync(new CommandDefinition("EXEC sp_MSforeachtable \"ALTER TABLE ? CHECK CONSTRAINT all\"", transaction: tx, cancellationToken: ct));
 
             tx.Commit();

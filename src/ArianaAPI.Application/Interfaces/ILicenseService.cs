@@ -7,9 +7,12 @@ public interface ILicenseService
     /// <summary>وضعیت فعلی لایسنس (کش شده)</summary>
     LicenseStatus GetStatus();
 
-    /// <summary>بررسی می‌کنه آیا این سازمان مجازه</summary>
+    /// <summary>
+    /// در مدل جدید: اگه لایسنس معتبر و maxOrgs > 0 باشه ← هر سازمانی مجازه
+    /// (چک وجود orgId در DB وظیفه‌ی caller هست)
+    /// </summary>
     bool IsOrgAuthorized(long orgId);
 
-    /// <summary>لیست سازمان‌های مجاز</summary>
-    long[] GetAuthorizedOrgs();
+    /// <summary>حداکثر تعداد سازمان مجاز — صفر یعنی لایسنس بی‌اثر</summary>
+    int MaxOrgs { get; }
 }

@@ -85,13 +85,16 @@
                                     </StackPanel>
                                 </Border>
 
-                                <TextBlock Text="کدهای سازمان مجاز * (با کاما جدا کن: 1,2,5)"
-                                           Style="{StaticResource AppLabel}"/>
-								<TextBox x:Name="TxtOrgs"
-                                         Style="{StaticResource AppTextBox}"
-                                         Margin="0,0,0,12"/>
+                                <!-- ═══ این بلاک رو جایگزین کن ═══ -->
+                                <TextBlock Text="حداکثر تعداد سازمان مجاز * (مثلاً 50)" 
+                                     Style="{StaticResource AppLabel}"/>
+                                <TextBox x:Name="TxtMaxOrgs"
+                                     Style="{StaticResource AppTextBox}"
+                                     Margin="0,0,0,12"
+                                     FontFamily="Consolas"
+                                     Text="50"/>
 
-								<Grid>
+                                <Grid>
 									<Grid.ColumnDefinitions>
 										<ColumnDefinition Width="*"/>
 										<ColumnDefinition Width="12"/>

@@ -16,19 +16,15 @@ public class LicenseController : ControllerBase
 {
     private readonly ILicenseService _license;
     private readonly ILicenseRegistryService _registry;
-    private readonly IConfiguration _config;
 
     public LicenseController(
         ILicenseService license,
-        ILicenseRegistryService registry,
-        IConfiguration config)
+        ILicenseRegistryService registry)
     {
         _license = license;
         _registry = registry;
-        _config = config;
     }
 
-    /// <summary>وضعیت لایسنس (بدون نیاز به Login)</summary>
     /// <summary>وضعیت لایسنس</summary>
     [HttpGet("status")]
     [AllowAnonymous]
@@ -41,15 +37,13 @@ public class LicenseController : ControllerBase
             {
                 valid = false,
                 error = status.ErrorMessage,
-                authorizedOrgs = Array.Empty<long>()
+                maxOrgs = 0
             });
         }
 
         var isActivated = await _registry.IsRegisteredAsync(
             LicenseProductCodes.ArianaAPI_Web, ct);
 
-        // ⭐ SystemId = myStrtoSerial(HDDSerial + SyntacticCode)
-        // تو لایسنس، فیلد SystemId در واقع SyntacticCode هست
         var syntacticCode = status.Payload!.SystemId;
         var computedSystemId = SerialGenerator.ComputeSystemId(syntacticCode);
 
@@ -60,14 +54,12 @@ public class LicenseController : ControllerBase
             customerId = status.Payload.CustomerId,
             licenseId = status.Payload.LicenseId,
             expiresAt = status.Payload.ExpiresAt,
-            authorizedOrgs = status.Payload.AuthorizedOrgs,
+            maxOrgs = status.Payload.MaxOrgs,          // ⭐ جدید
             requiresActivation = !isActivated,
-            systemId = !isActivated ? computedSystemId : null   // ⭐ محاسبه‌شده
+            systemId = !isActivated ? computedSystemId : null
         });
     }
 
-
-    /// <summary>فعال‌سازی با سریال</summary>
     /// <summary>فعال‌سازی</summary>
     [HttpPost("activate")]
     [AllowAnonymous]
@@ -82,11 +74,9 @@ public class LicenseController : ControllerBase
         if (!status.IsValid || status.Payload is null)
             return BadRequest(new { error = "لایسنس معتبر نیست" });
 
-        // ⭐ محاسبه SystemId
         var syntacticCode = status.Payload.SystemId;
         var computedSystemId = SerialGenerator.ComputeSystemId(syntacticCode);
 
-        // ⭐ محاسبه سریال مورد انتظار
         var expected = SerialGenerator.ComputeWebSerial(computedSystemId, "1");
 
         if (!string.Equals(expected.Trim(), request.Serial.Trim(),
@@ -97,7 +87,7 @@ public class LicenseController : ControllerBase
 
         await _registry.RegisterAsync(
             LicenseProductCodes.ArianaAPI_Web,
-            computedSystemId,           // ⭐ SystemId محاسبه‌شده
+            computedSystemId,
             request.Serial.Trim(),
             ct);
 

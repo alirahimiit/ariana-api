@@ -32,23 +32,21 @@ window.App.Auth = (function () {
             try {
                 const data = await window.App.Http.api('/api/license/status');
 
-                // ⭐ Backend فیلد isValid می‌فرسته
                 const isValid = data && (data.isValid === true || data.valid === true);
 
                 if (el) {
-                    // ⭐ اگه نیاز به activation
                     if (isValid && data.requiresActivation === true) {
                         window.App.Auth._licenseData = { valid: true, raw: data };
                         showActivation(data.systemId);
                         return data;
                     }
                     if (isValid) {
-                        const orgCount = (data.authorizedOrgs || []).length;
+                        const maxOrgs = data.maxOrgs || 0;              // ⭐ جدید
                         const expires = data.expiresAt || '-';
                         el.className = 'license-status license-valid';
-                        el.textContent = ' لایسنس معتبر | ' +
-                            'تعداد سازمان‌های مجاز: ' + orgCount +
-                            ' | انقضا: ' + expires;   
+                        el.textContent = '✅ لایسنس معتبر | ' +
+                            'حداکثر سازمان‌های مجاز: ' + maxOrgs +
+                            ' | انقضا: ' + expires;
                     } else {
                         el.className = 'license-status license-invalid';
                         const msg = data?.errorMessage || data?.error || 'لطفاً با پشتیبانی تماس بگیرید';
@@ -56,19 +54,12 @@ window.App.Auth = (function () {
                     }
                 }
 
-                // ⭐ ذخیره برای استفاده در handleLogin
                 window.App.Auth._licenseData = {
                     valid: isValid,
                     raw: data
                 };
 
                 return data;
-                // ⭐ اگه نیاز به activation
-                if (data && data.valid === true && data.requiresActivation === true) {
-                    showActivation(data.systemId);
-                    window.App.Auth._licenseData = { valid: true, raw: data };
-                    return data;
-                }
 
             } catch (err) {
                 if (attempt === 2) {
@@ -83,7 +74,6 @@ window.App.Auth = (function () {
             }
         }
     }
-
     // ═══════════════════════════════════════════
     //  LOOKUPS
     // ═══════════════════════════════════════════

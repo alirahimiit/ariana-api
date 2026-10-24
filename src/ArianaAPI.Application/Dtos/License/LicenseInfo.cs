@@ -22,8 +22,9 @@ public class LicensePayload
     [JsonPropertyName("expiresAt")]
     public string ExpiresAt { get; set; } = string.Empty;
 
-    [JsonPropertyName("authorizedOrgs")]
-    public long[] AuthorizedOrgs { get; set; } = Array.Empty<long>();
+    // ⭐ جدید: حداکثر تعداد سازمان مجاز (نه لیست ID)
+    [JsonPropertyName("maxOrgs")]
+    public int MaxOrgs { get; set; }
 
     [JsonPropertyName("features")]
     public string[] Features { get; set; } = Array.Empty<string>();
@@ -33,8 +34,6 @@ public class LicensePayload
 
     [JsonPropertyName("systemId")]
     public string SystemId { get; set; } = string.Empty;
-
-   
 }
 
 public class LicenseFile

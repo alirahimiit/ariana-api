@@ -23,12 +23,11 @@ public class LookupRepository : ILookupRepository
     }
 
     // ═══════════════════════════════════════════
-    //  لیست سازمان‌ها (با فیلتر لایسنس)
+    //  ⭐ جدید: لیست سازمان‌ها با محدودیت TOP
     // ═══════════════════════════════════════════
     public async Task<IEnumerable<OrganizationLookupDto>> GetOrganizationsAsync(
         CancellationToken ct = default)
     {
-        // ─── چک لایسنس ───
         var status = _license.GetStatus();
         if (!status.IsValid)
         {
@@ -36,30 +35,26 @@ public class LookupRepository : ILookupRepository
             return Enumerable.Empty<OrganizationLookupDto>();
         }
 
-        var authorizedOrgs = _license.GetAuthorizedOrgs();
-        if (authorizedOrgs.Length == 0)
+        var maxOrgs = _license.MaxOrgs;
+        if (maxOrgs <= 0)
         {
-            _logger.LogWarning("⚠️ هیچ سازمان مجازی توی لایسنس تعریف نشده");
+            _logger.LogWarning("⚠️ لایسنس هیچ سازمان مجازی ندارد (maxOrgs={Max})", maxOrgs);
             return Enumerable.Empty<OrganizationLookupDto>();
         }
 
         const string sql = @"
-            SELECT 
+            SELECT TOP (@maxOrgs)
                 SazmanID AS Code,
                 Name     AS Name
             FROM Sazman
             WHERE Report_App = 1
-              AND SazmanID IN @authorizedOrgs
             ORDER BY SazmanID";
 
         await using var conn = _factory.CreatePermanentConnection();
         return await conn.QueryAsync<OrganizationLookupDto>(
-            new CommandDefinition(sql, new { authorizedOrgs }, cancellationToken: ct));
+            new CommandDefinition(sql, new { maxOrgs }, cancellationToken: ct));
     }
 
-    // ═══════════════════════════════════════════
-    //  لیست دوره‌های مالی یک سازمان
-    // ═══════════════════════════════════════════
     public async Task<IEnumerable<FiscalYearLookupDto>> GetFiscalYearsAsync(
         long orgId, CancellationToken ct = default)
     {
@@ -79,29 +74,21 @@ public class LookupRepository : ILookupRepository
             new CommandDefinition(sql, new { orgId }, cancellationToken: ct));
     }
 
-    // ═══════════════════════════════════════════
-    //  نام سازمان
-    // ═══════════════════════════════════════════
     public async Task<string?> GetOrganizationNameAsync(
         long orgId, CancellationToken ct = default)
     {
         const string sql = "SELECT Name FROM Sazman WHERE SazmanID = @orgId";
-
         await using var conn = _factory.CreatePermanentConnection();
         return await conn.QueryFirstOrDefaultAsync<string>(
             new CommandDefinition(sql, new { orgId }, cancellationToken: ct));
     }
 
-    // ═══════════════════════════════════════════
-    //  نام دوره مالی
-    // ═══════════════════════════════════════════
     public async Task<string?> GetFiscalYearNameAsync(
         long orgId, long fyId, CancellationToken ct = default)
     {
         const string sql = @"
             SELECT Name FROM DorehMali 
             WHERE SazmanCode = @orgId AND DorehMaliID = @fyId";
-
         await using var conn = _factory.CreatePermanentConnection();
         return await conn.QueryFirstOrDefaultAsync<string>(
             new CommandDefinition(sql, new { orgId, fyId }, cancellationToken: ct));
