@@ -72,6 +72,9 @@ public static class DependencyInjection
         services.AddScoped<IConstHesabRepository, ConstHesabRepository>();
         services.AddScoped<ITreasurySanadService, TreasurySanadService>();
         services.AddScoped<IResidRepository, ResidRepository>();
+        // ═══ ماژول انبارگردانی ═══
+        services.AddScoped<IInventoryRepository, InventoryRepository>();
+        services.AddScoped<IInventorySanadService, InventorySanadService>();
 
         // ═══ چک‌ها (Pay + Receive) ═══
         services.AddScoped<IChequeSanadService, ChequeSanadService>();

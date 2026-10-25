@@ -847,6 +847,11 @@ window.App = Object.assign(window.App || {}, {
             'asset-goods': 'ثبت کالاهای اموالی',
             'asset-goods-transfer': 'انتقالی اموالی',
             'stock-count': 'انبار گردانی کالا',
+            'InventoryStage': 'تعریف مراحل انبارگردانی',
+            'InventoryTagList': 'لیست تگ‌های انبارگردانی',
+            'InventoryTagCreate': 'ثبت تگ جدید',
+            'InventoryTagCount': 'شمارش انبارگردانی',
+            'InventoryTagPrint': 'چاپ اطلاعات انبارگردانی',
             // ⭐ منوی دریافت/پرداخت
             'receive-cash': 'دریافت نقدی',
             'receive-cheque': 'دریافت چکی',
@@ -910,6 +915,15 @@ window.App = Object.assign(window.App || {}, {
             case 'stock-receipt': window.App.renderStockReceipt(); break;
             case 'stock-transfer': window.App.renderStockTransfer(); break;
             case 'stock-return-receipt': window.App.renderStockReturnReceipt(); break;
+            // ═══ ماژول انبارگردانی ═══
+            case 'stock-count': window.App.renderStockCount(); break;
+            case 'InventoryStage': window.App.Features.InventoryStages.render(); break;
+            case 'InventoryTagList': window.App.Features.InventoryTags.render(); break;
+            case 'InventoryTagCreate': window.App.Features.InventoryTagCreate.render(); break;
+            case 'InventoryTagCount': window.App.Features.InventoryTags.render(); break; 
+            case 'InventoryTagPrint': window.App.renderStockCount(); break;
+            case 'InventoryTagPrint': window.App.Features.InventoryReports.render(); break;
+
             case 'article': window.App.Features.Article.render(); break;
             case 'hesab': window.App.Features.Hesab.render(); break;
             case 'tafzili': window.App.Features.Tafzili.render(); break;

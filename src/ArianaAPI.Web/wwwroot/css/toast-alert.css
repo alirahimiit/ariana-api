@@ -2,6 +2,15 @@
    Toast Notifications — Modern
    ═══════════════════════════════════════════════════ */
 
+/* ═══ اصلاح Z-Index برای نمایش روی مودال‌ها ═══ */
+#toastContainer,
+.toast-container,
+#toast,
+.toast-wrapper,
+.toast {
+    z-index: 999999 !important;
+}
+
 .toast-container {
     position: fixed;
     top: 20px;

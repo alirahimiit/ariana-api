@@ -17,6 +17,7 @@ public class ArticleRequestDto
     public int PageSize { get; set; } = 50;
     public string? SortBy { get; set; }
     public string? SortDir { get; set; }
+
 }
 
 // ═══════════════════════════════════════════
