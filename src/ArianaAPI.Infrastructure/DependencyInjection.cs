@@ -91,6 +91,10 @@ public static class DependencyInjection
         services.AddScoped<ISanadOpeningService, SanadOpeningService>();
         services.AddScoped<ISanadClosingService, SanadClosingService>();
         services.AddScoped<ISanadMovaghatService, SanadMovaghatService>();
+
+        
+        services.AddHttpContextAccessor();
+        services.AddScoped<IBackupService, BackupService>();
         // ⭐  راه‌اندازی اولیه
         services.AddScoped<ISetupRepository, SetupRepository>();
 

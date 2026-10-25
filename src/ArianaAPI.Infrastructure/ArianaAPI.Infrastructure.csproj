@@ -5,6 +5,10 @@
     <ProjectReference Include="..\ArianaAPI.Application\ArianaAPI.Application.csproj" />
   </ItemGroup>
 
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>	
+
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />

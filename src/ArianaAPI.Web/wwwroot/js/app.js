@@ -832,6 +832,7 @@ window.App = Object.assign(window.App || {}, {
             article: 'کالاها',
             sharh: 'شرح‌ها',
             kind: 'انواع سند',
+            backup: 'پشتیبان‌گیری',
 
             'taraz-6-sotooni': 'تراز آزمایشی ۶ ستونی',            
             // ⭐ منوی ورود/خروج کالا
@@ -882,6 +883,8 @@ window.App = Object.assign(window.App || {}, {
             'sanad-renumber': 'مرتب‌ساز اطلاعات',
             // * مودیان
             'moadian': '🏛️ سامانه مودیان'
+            
+
 
         };
         document.getElementById('pageTitle').textContent = titles[page] || page;
@@ -942,7 +945,10 @@ window.App = Object.assign(window.App || {}, {
             case 'bank': window.App.Features.Bank.render(); break;
             case 'bank-acc': window.App.Features.BankAcc.render(); break;
             case 'sanad-renumber': window.App.Features.SanadRenumber.render(); break;
+            case 'backup': window.App.Features.Backup.render(); break;
             case 'moadian': window.App.Features.Moadian.render(); break;
+
+ 
             // ⭐ صفحات در حال توسعه — placeholder نمایش می‌ده
             default:
                 window.App.renderComingSoon(page, titles[page] || page);
