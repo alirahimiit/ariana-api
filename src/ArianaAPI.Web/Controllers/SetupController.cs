@@ -112,6 +112,23 @@ public class SetupController : ControllerBase
     public async Task<IActionResult> UpdateSazman(long id, [FromBody] SazmanEditDto dto, CancellationToken ct)
     {
         await using var conn = new SqlConnection(GetPermanentConnectionString());
+
+        // ⭐ ۱. خواندن نام فعلی سازمان از دیتابیس قبل از تغییر
+        var currentName = await conn.ExecuteScalarAsync<string>(
+            "SELECT Name FROM Sazman WHERE SazmanID = @id",
+            new { id });
+
+        if (currentName == null)
+            return NotFound(new { error = "سازمان یافت نشد" });
+
+        // ⭐ ۲. منطق قفل کردن نام سازمان
+        // اگر نام فعلی شامل کلمه "تست" نبود، نام جدیدِ ارسالی از سمت کاربر را نادیده بگیر
+        if (!currentName.Contains("تست"))
+        {
+            dto.Name = currentName; // بازگرداندن نام قبلی
+        }
+
+        // ۳. اجرای آپدیت در دیتابیس
         var sql = @"
             UPDATE Sazman SET 
                 Name = @Name, 

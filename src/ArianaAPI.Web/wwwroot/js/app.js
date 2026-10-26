@@ -585,7 +585,9 @@ window.App = Object.assign(window.App || {}, {
                 <div id="orgLoading" style="text-align:center; padding:20px; color:#64748B;">در حال بارگذاری...</div>
                 <div id="orgForm" style="display:none;">
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
-                        <div class="form-group"><label>نام سازمان</label><input type="text" id="editOrgName" class="form-control"></div>
+                       <div class="form-group"><label>نام سازمان</label><input type="text" id="editOrgName" class="form-control">
+                            <p class="form-hint" id="editOrgNameHint" style="display:none; margin-top:4px; font-size:11px; color:#DC2626;">
+                                ⚠️ نام سازمان جزو کلید لایسنس برنامه می‌باشد و قابل تغییر نیست.</p></div>
                         <div class="form-group"><label>کد لایسنس</label><input type="text" id="editOrgLicence" class="form-control"></div>
                         <div class="form-group"><label>شناسه ملی</label><input type="text" id="editOrgNationalCode" class="form-control" dir="ltr"></div>
                         <div class="form-group"><label>شماره ثبت</label><input type="text" id="editOrgRegNo" class="form-control" dir="ltr"></div>
@@ -682,7 +684,24 @@ window.App = Object.assign(window.App || {}, {
 
             try {
                 const res = await window.App.Http.api(`/api/setup/sazman/${orgId}`);
-                document.getElementById('editOrgName').value = res.name || '';
+
+                // ⭐ منطق قفل کردن نام سازمان
+                const nameInput = document.getElementById('editOrgName');
+                const nameHint = document.getElementById('editOrgNameHint');
+                nameInput.value = res.name || '';
+                if (res.name && res.name.includes('تست')) {
+                    nameInput.readOnly = false;
+                    nameInput.style.backgroundColor = '#fff';
+                    nameInput.style.cursor = 'text';
+                    nameInput.style.borderColor = '#CBD5E1';
+                    nameHint.style.display = 'none';
+                } else {
+                    nameInput.readOnly = true;
+                    nameInput.style.backgroundColor = '#F1F5F9'; // پس‌زمینه خاکستری برای نشان دادن قفل بودن
+                    nameInput.style.cursor = 'not-allowed';
+                    nameInput.style.borderColor = '#E2E8F0';
+                    nameHint.style.display = 'block'; // نمایش پیام هشدار
+                }
                 document.getElementById('editOrgLicence').value = res.licenceSazman || '';
                 document.getElementById('editOrgNationalCode').value = res.nationalCode || '';
                 document.getElementById('editOrgRegNo').value = res.regNo || '';
