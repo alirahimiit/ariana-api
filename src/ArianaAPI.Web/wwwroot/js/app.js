@@ -901,10 +901,8 @@ window.App = Object.assign(window.App || {}, {
             'bank-acc': 'حساب‌های بانکی',
             'sanad-renumber': 'مرتب‌ساز اطلاعات',
             // * مودیان
-            'moadian': '🏛️ سامانه مودیان'
-            
-
-
+            'moadian': '🏛️ سامانه مودیان',
+            'user-management': 'مدیریت کاربران و سطوح دسترسی' 
         };
         document.getElementById('pageTitle').textContent = titles[page] || page;
 
@@ -966,7 +964,7 @@ window.App = Object.assign(window.App || {}, {
             case 'sanad-renumber': window.App.Features.SanadRenumber.render(); break;
             case 'backup': window.App.Features.Backup.render(); break;
             case 'moadian': window.App.Features.Moadian.render(); break;
-
+            case 'user-management': window.App.Features.UserManagement.render(); break;
  
             // ⭐ صفحات در حال توسعه — placeholder نمایش می‌ده
             default:

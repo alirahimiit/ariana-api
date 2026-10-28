@@ -30,7 +30,7 @@ public class PermissionController : ControllerBase
 
     // ═══ منوهای رجیستری (برای همه) ═══
     [HttpGet("menus")]
-    [AllowAnonymous] // منوها حساس نیستن
+    [AllowAnonymous]
     public async Task<ActionResult<List<MenuRegistryItemDto>>> GetMenus(CancellationToken ct)
         => Ok(await _menus.GetActiveMenusAsync(ct));
 
@@ -82,6 +82,28 @@ public class PermissionController : ControllerBase
         var (orgId, fyId) = GetOrgFy();
         var code = await _perms.SaveUserGroupAsync(orgId, fyId, dto, ct);
         return Ok(new { userGroupCode = code });
+    }
+
+    // ═══ حذف گروه + کاربرانش (cascade — جلسه ۶۱) ═══
+    [HttpDelete("groups/{code:long}")]
+    public async Task<IActionResult> DeleteGroup(long code, CancellationToken ct)
+    {
+        var (orgId, fyId) = GetOrgFy();
+
+        // ⭐ ادمین نمی‌تواند گروه خودش را حذف کند
+        var currentGroupCode = long.Parse(User.FindFirst("userGroupCode")?.Value ?? "0");
+        if (currentGroupCode == code)
+        {
+            return BadRequest(new
+            {
+                error = "شما نمی‌توانید گروه کاربری خودتان را حذف کنید"
+            });
+        }
+
+        var ok = await _perms.DeleteUserGroupAsync(orgId, fyId, code, ct);
+        return ok
+            ? NoContent()
+            : NotFound(new { error = "گروه کاربری یافت نشد" });
     }
 
     // ═══ لیست عملیات‌ها ═══

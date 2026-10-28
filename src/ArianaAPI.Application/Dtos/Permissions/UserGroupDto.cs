@@ -18,4 +18,7 @@ public class UserGroupDto
 
     [JsonPropertyName("enVi")]
     public bool EnVi { get; set; }
+
+    [JsonPropertyName("userCount")]
+    public int UserCount { get; set; }
 }

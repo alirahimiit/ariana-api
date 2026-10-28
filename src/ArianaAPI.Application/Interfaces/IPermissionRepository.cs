@@ -23,4 +23,7 @@ public interface IPermissionRepository
 
     Task<long> SaveUserGroupAsync(
         long orgId, long fyId, UserGroupDto dto, CancellationToken ct = default);
+
+    Task<bool> DeleteUserGroupAsync(
+    long orgId, long fyId, long userGroupCode, CancellationToken ct = default);
 }
