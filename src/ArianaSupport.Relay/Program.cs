@@ -198,7 +198,7 @@ app.MapPost("/api/support/send", async (SupportSendRequest req) =>
             IssuedAt = "1404/01/01",
             ExpiresAt = "1405/12/29",
             SystemId = "DEV-0000-0000",
-            AuthorizedOrgs = new long[] { 1 },
+            MaxOrgs = 50,
             Features = new[] { "web", "api" }
         };
     }
@@ -252,7 +252,7 @@ app.MapPost("/api/support/poll", async (SupportPollRequest req) =>
             IssuedAt = "1404/01/01",
             ExpiresAt = "1405/12/29",
             SystemId = "DEV-0000-0000",
-            AuthorizedOrgs = new long[] { 1 },
+            MaxOrgs = 50,
             Features = new[] { "web", "api" }
         };
     }
@@ -331,7 +331,6 @@ public static class LicenseVerifier
     private static string BuildCanonicalJson(LicensePayload p)
     {
         var featuresJson = "[" + string.Join(",", p.Features.Select(f => $"\"{f}\"")) + "]";
-        var orgsJson = "[" + string.Join(",", p.AuthorizedOrgs) + "]";
         var notesJson = p.Notes is null ? "null" : $"\"{p.Notes.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
 
         var baseJson = $"{{\"version\":{p.Version}," +
@@ -340,7 +339,7 @@ public static class LicenseVerifier
                        $"\"customerId\":\"{p.CustomerId}\"," +
                        $"\"issuedAt\":\"{p.IssuedAt}\"," +
                        $"\"expiresAt\":\"{p.ExpiresAt}\"," +
-                       $"\"authorizedOrgs\":{orgsJson}," +
+                       $"\"maxOrgs\":{p.MaxOrgs}," +               // ⭐ این خط تغییر کرد
                        $"\"features\":{featuresJson}," +
                        $"\"notes\":{notesJson}";
 
@@ -393,7 +392,7 @@ public class LicensePayload
     public string CustomerId { get; set; } = "";
     public string IssuedAt { get; set; } = "";
     public string ExpiresAt { get; set; } = "";
-    public long[] AuthorizedOrgs { get; set; } = Array.Empty<long>();
+    public int MaxOrgs { get; set; } = 0; 
     public string[] Features { get; set; } = Array.Empty<string>();
     public string? Notes { get; set; }
     public string SystemId { get; set; } = "";
