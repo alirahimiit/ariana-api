@@ -76,7 +76,7 @@ public class PermissionController : ControllerBase
 
     // ═══ ذخیره گروه (Create/Update) ═══
     [HttpPost("groups")]
-    public async Task<ActionResult<long>> SaveGroup(
+    public async Task<IActionResult> SaveGroup( // 👈 اینجا از IActionResult استفاده شد
         [FromBody] UserGroupDto dto, CancellationToken ct)
     {
         var (orgId, fyId) = GetOrgFy();

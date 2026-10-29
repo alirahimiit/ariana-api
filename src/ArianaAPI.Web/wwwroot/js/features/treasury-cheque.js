@@ -1311,9 +1311,9 @@ window.App.Features.TreasuryCheque = (function () {
             }
         }
 
-        const qCol = gi('tqfOkPayableCol');
-        const qMoein = gi('tqfOkPayableMoein');
-        const qTafzil = gi('tqfOkPayableTafzil');
+        const qCol = parseInt(gi('tqfOkPayableCol')) || 0;
+        const qMoein = parseInt(gi('tqfOkPayableMoein')) || 0;
+        const qTafzil = parseInt(gi('tqfOkPayableTafzil')) || 0;
 
         const payload = {
             id: data.id,

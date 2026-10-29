@@ -86,7 +86,7 @@ public class BackupController : ControllerBase
     [HttpPost("verify")]
     [RequestSizeLimit(524_288_000)]          // 500 MB
     [RequestFormLimits(MultipartBodyLengthLimit = 524_288_000)]
-    public async Task<IActionResult> Verify([FromForm] IFormFile? file, CancellationToken ct)
+    public async Task<IActionResult> Verify(IFormFile? file, CancellationToken ct)
     {
         var (savedPath, validationError) = await SaveUploadedFileAsync(file, ct);
         if (savedPath == null)
@@ -110,7 +110,7 @@ public class BackupController : ControllerBase
     [HttpPost("restore")]
     [RequestSizeLimit(524_288_000)]
     [RequestFormLimits(MultipartBodyLengthLimit = 524_288_000)]
-    public async Task<IActionResult> Restore([FromForm] IFormFile? file, CancellationToken ct)
+    public async Task<IActionResult> Restore(IFormFile? file, CancellationToken ct)
     {
         var (savedPath, validationError) = await SaveUploadedFileAsync(file, ct);
         if (savedPath == null)

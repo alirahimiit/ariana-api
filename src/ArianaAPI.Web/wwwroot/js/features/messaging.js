@@ -1,5 +1,5 @@
 ﻿/* ═══════════════════════════════════════════════════
-   Ariana - Support Chat (Relay Web) — Per-User Isolation
+   Ariana - Support Chat (Relay Web) — Bulletproof
    ═══════════════════════════════════════════════════ */
 
 window.App = window.App || {};
@@ -14,23 +14,14 @@ window.App.Features.Messaging = {
     _popupOpen: false,
     _escHandler: null,
 
-    // ═══════════════════════════════════════════
-    //  SESSION MANAGEMENT (Per User)
-    // ═══════════════════════════════════════════
     _getSessionKey() {
-        const u = window.App.state?.user || {};
-        const orgId = u.orgId || 0;
-        const fyId = u.fyId || 0;
-        const userId = u.userId || 0;
-        return `ariana_support_session_${orgId}_${fyId}_${userId}`;
+        const u = window.App?.state?.user || {};
+        return `ariana_support_session_${u.orgId || 0}_${u.fyId || 0}_${u.id || u.userId || 0}`;
     },
 
     _getReadKey() {
-        const u = window.App.state?.user || {};
-        const orgId = u.orgId || 0;
-        const fyId = u.fyId || 0;
-        const userId = u.userId || 0;
-        return `ariana_support_last_read_${orgId}_${fyId}_${userId}`;
+        const u = window.App?.state?.user || {};
+        return `ariana_support_last_read_${u.orgId || 0}_${u.fyId || 0}_${u.id || u.userId || 0}`;
     },
 
     _getSessionId() {
@@ -43,19 +34,18 @@ window.App.Features.Messaging = {
         return sid;
     },
 
-    _getUserId() {
-        const u = window.App.state?.user || {};
-        return u.userId || null;
+    _getUserInfo() {
+        const u = window.App?.state?.user || {};
+        return {
+            userId: u.id || u.userId || null,
+            userName: u.fullName || u.name || u.username || null,
+            orgId: u.orgId || null,
+            fyId: u.fyId || null,
+            orgName: u.orgName || null,
+            fyName: u.fyName || null
+        };
     },
 
-    _getUserName() {
-        const u = window.App.state?.user || {};
-        return u.fullName || u.username || null;
-    },
-
-    // ═══════════════════════════════════════════
-    //  FAB
-    // ═══════════════════════════════════════════
     initFab() {
         document.getElementById('msgFab')?.remove();
         document.getElementById('msgPopupOverlay')?.remove();
@@ -73,7 +63,6 @@ window.App.Features.Messaging = {
         document.body.appendChild(fab);
 
         fab.addEventListener('click', () => this.openPopup());
-
         this._startFabPolling();
     },
 
@@ -86,7 +75,7 @@ window.App.Features.Messaging = {
                 return;
             }
             this._updateFabBadge();
-        }, 10000);
+        }, 15000);
     },
 
     _stopFabPolling() {
@@ -102,7 +91,7 @@ window.App.Features.Messaging = {
             const lastRead = parseInt(localStorage.getItem(this._getReadKey()) || '0');
 
             const r = await this._pollApi(sessionId, 0);
-            const items = r.items || [];
+            const items = r?.items || [];
             const unread = items.filter(m => m.direction === 2 && m.id > lastRead).length;
 
             const badge = document.getElementById('msgFabBadge');
@@ -117,9 +106,6 @@ window.App.Features.Messaging = {
         } catch { /* silent */ }
     },
 
-    // ═══════════════════════════════════════════
-    //  POPUP
-    // ═══════════════════════════════════════════
     openPopup() {
         if (this._popupOpen) return;
 
@@ -171,7 +157,6 @@ window.App.Features.Messaging = {
         this._bindEvents();
         this._loadMessages();
         this._startPolling();
-
         setTimeout(() => this._markRead(), 1500);
     },
 
@@ -190,7 +175,6 @@ window.App.Features.Messaging = {
         }
 
         this._markRead();
-
         setTimeout(() => {
             overlay.remove();
             this._updateFabBadge();
@@ -205,9 +189,6 @@ window.App.Features.Messaging = {
         }
     },
 
-    // ═══════════════════════════════════════════
-    //  EVENTS
-    // ═══════════════════════════════════════════
     _bindEvents() {
         const self = this;
         const input = document.getElementById('msgInput');
@@ -229,40 +210,41 @@ window.App.Features.Messaging = {
         setTimeout(() => input?.focus(), 100);
     },
 
-    // ═══════════════════════════════════════════
-    //  API
-    // ═══════════════════════════════════════════
-    async _sendApi(sessionId, userId, userName, message) {
-        const r = await fetch('/api/local-support/send', {
+    async _sendApi(sessionId, userInfo, message) {
+        if (!window.App?.Http?.api) throw new Error('Http not ready');
+        return await window.App.Http.api('/api/local-support/send', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId, userId, userName, message })
+            body: JSON.stringify({
+                sessionId: sessionId,
+                userId: userInfo.userId,
+                userName: userInfo.userName,
+                orgId: userInfo.orgId,
+                fyId: userInfo.fyId,
+                orgName: userInfo.orgName,
+                fyName: userInfo.fyName,
+                message: message
+            })
         });
-        if (!r.ok) {
-            const err = await r.json().catch(() => ({ message: 'خطا' }));
-            throw new Error(err.message || 'خطا');
-        }
-        return await r.json();
     },
 
     async _pollApi(sessionId, sinceId) {
-        const r = await fetch('/api/local-support/poll', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId, sinceId })
-        });
-        if (!r.ok) return { items: [] };
-        return await r.json();
+        try {
+            if (!window.App?.Http?.api) return { items: [] };
+            return await window.App.Http.api('/api/local-support/poll', {
+                method: 'POST',
+                body: JSON.stringify({ sessionId, sinceId }),
+                silent: true
+            });
+        } catch {
+            return { items: [] }; // ⭐ در صورت هرگونه خطا، هیچ چیزی برنمی‌گرداند تا برنامه کرش نکند
+        }
     },
 
-    // ═══════════════════════════════════════════
-    //  MESSAGES
-    // ═══════════════════════════════════════════
     async _loadMessages() {
         try {
             const sessionId = this._getSessionId();
             const r = await this._pollApi(sessionId, 0);
-            const items = r.items || [];
+            const items = r?.items || [];
 
             const json = JSON.stringify(items);
             if (json !== this._lastMessagesJson) {
@@ -272,9 +254,7 @@ window.App.Features.Messaging = {
                     this._lastMsgId = items[items.length - 1].id;
                 }
             }
-        } catch (err) {
-            console.error('loadMessages error', err);
-        }
+        } catch { /* silent */ }
     },
 
     _renderMessages(items) {
@@ -306,9 +286,6 @@ window.App.Features.Messaging = {
         box.scrollTop = box.scrollHeight;
     },
 
-    // ═══════════════════════════════════════════
-    //  SEND
-    // ═══════════════════════════════════════════
     async _sendMessage() {
         const input = document.getElementById('msgInput');
         const sendBtn = document.getElementById('msgSendBtn');
@@ -318,8 +295,7 @@ window.App.Features.Messaging = {
         if (!text) return;
 
         const sessionId = this._getSessionId();
-        const userId = this._getUserId();
-        const userName = this._getUserName();
+        const userInfo = this._getUserInfo();
 
         sendBtn.disabled = true;
         input.disabled = true;
@@ -327,13 +303,13 @@ window.App.Features.Messaging = {
         sendBtn.textContent = '⏳';
 
         try {
-            await this._sendApi(sessionId, userId, userName, text);
+            await this._sendApi(sessionId, userInfo, text);
             input.value = '';
             input.style.height = 'auto';
             this._lastMessagesJson = '';
             await this._loadMessages();
         } catch (err) {
-            window.App.toast?.(err.message || 'خطا در ارسال پیام', 'error');
+            window.App.toast?.('خطا در ارتباط با پشتیبانی', 'error');
         } finally {
             sendBtn.disabled = false;
             sendBtn.textContent = orig;
@@ -342,9 +318,6 @@ window.App.Features.Messaging = {
         }
     },
 
-    // ═══════════════════════════════════════════
-    //  POLLING
-    // ═══════════════════════════════════════════
     _startPolling() {
         this._stopPolling();
         this._pollTimer = setInterval(() => {
@@ -353,7 +326,7 @@ window.App.Features.Messaging = {
                 return;
             }
             this._loadMessages();
-        }, 4000);
+        }, 5000);
     },
 
     _stopPolling() {
@@ -363,9 +336,6 @@ window.App.Features.Messaging = {
         }
     },
 
-    // ═══════════════════════════════════════════
-    //  HELPERS
-    // ═══════════════════════════════════════════
     _formatTime(dateStr) {
         try {
             const d = new Date(dateStr);
