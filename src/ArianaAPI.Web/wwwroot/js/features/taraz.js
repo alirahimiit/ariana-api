@@ -821,13 +821,15 @@ window.App.Features.Taraz = (function() {
         if (codeTafzili2) codeParts.push(`تفصیلی ۲ ${codeTafzili2}`);
 
         // ⭐ بستن Overlay قبلی اگر باز است
-        document.getElementById('tarazLedgerOverlay')?.remove();
-
-        // ⭐ ساخت Overlay مستقل
+        // ⭐ ساخت Overlay مستقل (با استایل‌دهی مستقیم برای جلوگیری از تداخل)
         const overlay = document.createElement('div');
         overlay.id = 'tarazLedgerOverlay';
-        overlay.className = 'hp-overlay';
-        overlay.style.zIndex = '11000';
+        overlay.style.position = 'fixed';
+        overlay.style.inset = '0';
+        overlay.style.background = 'rgba(15, 23, 42, 0.7)';
+        overlay.style.backdropFilter = 'blur(4px)';
+        overlay.style.WebkitBackdropFilter = 'blur(4px)';
+        overlay.style.zIndex = '10500'; // ⭐ لایه پایین‌تر از مودال‌های استاندارد (12000)
         overlay.style.display = 'flex';
         overlay.style.alignItems = 'center';
         overlay.style.justifyContent = 'center';
@@ -899,7 +901,8 @@ window.App.Features.Taraz = (function() {
             const mandehColor = running >= 0 ? '#059669' : '#DC2626';
 
             const editParam = `{ isFromExternal: true, fromExternal: true, highlightRowId: ${it.sanadId} }`;
-            const clickAction = `const m=document.getElementById('modal'); if(m) m.style.zIndex='12000'; App.Features.Sanad.showDetail(${it.parentSanadId}, ${editParam})`;
+            // ⭐ تنظیم z-index مودال جزئیات به 13000 تا روی فرم اسناد حساب (10500) قرار بگیرد
+            const clickAction = `const m=document.getElementById('modal') || document.querySelector('.modal-overlay'); if(m) m.style.zIndex='13000'; App.Features.Sanad.showDetail(${it.parentSanadId}, ${editParam})`;
 
             return `
                 <tr class="clickable-row"

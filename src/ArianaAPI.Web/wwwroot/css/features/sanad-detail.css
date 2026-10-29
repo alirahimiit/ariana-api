@@ -992,31 +992,7 @@ tr.row-selected {
     gap: 8px;
     align-items: flex-end;
 }
-/* ⭐ دکمه راهنمای کلیدها (آیکن کوچک در header) */
-.sf-help-btn {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: #EEF2FF;
-    border: 1px solid #C7D2FE;
-    color: #4F46E5;
-    cursor: pointer;
-    font-size: 15px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all .15s;
-    z-index: 10;
-}
 
-    .sf-help-btn:hover {
-        background: #4F46E5;
-        color: #fff;
-        transform: scale(1.08);
-    }
 
 /* ⭐ چیدمان compact برای header */
 .sanad-form-header {
@@ -1079,12 +1055,7 @@ tr.row-selected {
     margin-bottom: 4px;
 }
 
-/* ⭐ Help modal */
-.sf-help-modal {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
+
 
 .sf-hm-section {
     background: #F9FAFB;
@@ -1129,15 +1100,6 @@ tr.row-selected {
     }
 }
 
-/* ⭐ پنل راهنما به‌صورت inline (نه modal) */
-.sf-help-inline {
-    margin: 8px 0;
-    padding: 12px 14px;
-    background: linear-gradient(135deg, #EEF2FF, #F5F3FF);
-    border: 1px solid #C7D2FE;
-    border-radius: 10px;
-    animation: sfHelpSlideDown .2s ease-out;
-}
 
 @keyframes sfHelpSlideDown {
     from {
@@ -1883,4 +1845,540 @@ tr.row-selected {
     100% {
         box-shadow: 0 0 0 0 rgba(234, 179, 8, 0);
     }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   ROW EDITOR OVERLAY — ⭐ NEW
+   کلاس‌های sf-re-* — پیشوند مستقل (بدون تداخل با sf-* موجود)
+   ═══════════════════════════════════════════════════════════════ */
+
+.sf-re-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 10500; /* زیر HesabPicker (11000)، بالای مودال اصلی */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: sfReOverlayIn 0.16s ease-out;
+}
+
+@keyframes sfReOverlayIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.sf-re-box {
+    background: #fff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 1080px;
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 70px rgba(0,0,0,0.4);
+    animation: sfReBoxIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    direction: rtl;
+    font-family: 'Vazirmatn', Tahoma, sans-serif;
+}
+
+@keyframes sfReBoxIn {
+    from {
+        transform: scale(0.96) translateY(-8px);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+
+.sf-re-header {
+    padding: 14px 20px;
+    background: linear-gradient(135deg, #4F46E5, #7C3AED);
+    color: #fff;
+    border-radius: 14px 14px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.sf-re-close {
+    background: rgba(255,255,255,0.18);
+    border: 0;
+    color: #fff;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+
+    .sf-re-close:hover {
+        background: rgba(255,255,255,0.35);
+    }
+
+.sf-re-body {
+    padding: 18px 20px 14px;
+    overflow-y: auto;
+    flex: 1;
+    background: #FAFBFC;
+}
+
+.sf-re-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+    align-items: flex-start;
+}
+
+.sf-re-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 100px;
+    flex: 1 1 130px;
+}
+
+    .sf-re-field.sf-re-money {
+        flex: 1 1 120px;
+        max-width: 180px;
+    }
+
+    .sf-re-field.sf-re-meghdar {
+        flex: 0 0 100px;
+        max-width: 110px;
+    }
+
+    .sf-re-field.sf-re-sharh {
+        flex: 3 1 220px;
+        min-width: 180px;
+    }
+
+    .sf-re-field.sf-re-dodate {
+        flex: 0 0 110px;
+    }
+
+    .sf-re-field.sf-re-dook {
+        flex: 0 0 90px;
+    }
+
+    .sf-re-field label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #6B7280;
+        padding-right: 2px;
+    }
+
+.sf-re-req {
+    color: #DC2626;
+    margin-right: 2px;
+}
+
+.sf-re-field input[type="text"],
+.sf-re-field select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1.5px solid #D1D5DB;
+    border-radius: 7px;
+    font-family: inherit;
+    font-size: 13px;
+    background: #fff;
+    transition: border-color 0.12s, box-shadow 0.12s;
+    box-sizing: border-box;
+    height: 36px;
+}
+
+    .sf-re-field input[type="text"]:focus {
+        outline: none;
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+    }
+
+.sf-re-field input[readonly] {
+    background: #F9FAFB;
+    cursor: pointer;
+}
+
+.sf-re-input-with-btn {
+    display: flex;
+    gap: 4px;
+    align-items: stretch;
+}
+
+    .sf-re-input-with-btn input {
+        flex: 1;
+        min-width: 0;
+    }
+
+.sf-re-pick-btn {
+    background: #EEF2FF;
+    border: 1.5px solid #C7D2FE;
+    color: #4F46E5;
+    padding: 0 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.12s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+}
+
+    .sf-re-pick-btn:hover {
+        background: #C7D2FE;
+        border-color: #818CF8;
+    }
+
+.sf-re-name {
+    font-size: 11px;
+    color: #059669;
+    font-weight: 500;
+    min-height: 14px;
+    padding-right: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sf-re-dook-lbl {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1.5px solid #D1D5DB;
+    border-radius: 7px;
+    cursor: pointer;
+    background: #fff;
+    transition: all 0.12s;
+    font-size: 12px;
+    height: 36px;
+    box-sizing: border-box;
+}
+
+    .sf-re-dook-lbl:hover {
+        border-color: #C7D2FE;
+        background: #F9FAFB;
+    }
+
+    .sf-re-dook-lbl input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: #4F46E5;
+        cursor: pointer;
+    }
+
+.sf-re-hint {
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: #F3F4F6;
+    border-radius: 8px;
+    font-size: 11px;
+    color: #6B7280;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+    .sf-re-hint kbd {
+        background: #fff;
+        border: 1px solid #D1D5DB;
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 1px 6px;
+        font-family: 'Consolas', monospace;
+        font-size: 10px;
+        color: #374151;
+    }
+
+.sf-re-footer {
+    padding: 14px 20px;
+    border-top: 1px solid #E5E7EB;
+    background: #fff;
+    border-radius: 0 0 14px 14px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-start;
+}
+
+/* دکمه‌ی «ویرایش در فرم» در ابزار ردیف — رنگ سبز متمایز از ✏️ معمولی */
+.sf-row-tool.sf-row-overlay-btn {
+    color: #059669;
+}
+
+    .sf-row-tool.sf-row-overlay-btn:hover {
+        background: #059669;
+        color: #fff;
+        border-color: #059669;
+    }
+
+/* موبایل */
+@media (max-width: 768px) {
+    .sf-re-overlay {
+        padding: 8px;
+    }
+
+    .sf-re-box {
+        max-height: 96vh;
+        border-radius: 10px;
+    }
+
+    .sf-re-header {
+        padding: 12px 16px;
+        font-size: 14px;
+    }
+
+    .sf-re-body {
+        padding: 14px;
+    }
+
+    .sf-re-footer {
+        padding: 12px 14px;
+    }
+
+    .sf-re-field {
+        flex: 1 1 100% !important;
+        max-width: none !important;
+    }
+
+        .sf-re-field.sf-re-money {
+            flex: 1 1 48% !important;
+        }
+
+        .sf-re-field.sf-re-dodate {
+            flex: 1 1 48% !important;
+        }
+
+        .sf-re-field.sf-re-meghdar {
+            flex: 1 1 48% !important;
+            max-width: none !important;
+        }
+}
+
+/* ═══════════════════════════════════════════════════
+   Summary Table (Grid) — جایگزین فرم inline
+   ═══════════════════════════════════════════════════ */
+.sf-summary-wrap {
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    overflow: auto;
+    max-height: 45vh;
+    background: #fff;
+    margin-bottom: 12px;
+}
+
+.sf-summary-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+}
+
+    .sf-summary-table thead th {
+        position: sticky;
+        top: 0;
+        background: #F3F4F6;
+        color: #374151;
+        font-weight: 700;
+        font-size: 12px;
+        padding: 10px 8px;
+        border-bottom: 2px solid #E5E7EB;
+        text-align: right;
+        z-index: 2;
+    }
+
+    .sf-summary-table tbody tr {
+        cursor: pointer;
+        transition: background 0.12s;
+        border-bottom: 1px solid #F3F4F6;
+    }
+
+        .sf-summary-table tbody tr:hover {
+            background: #F9FAFB;
+        }
+
+    .sf-summary-table td {
+        padding: 8px;
+        vertical-align: middle;
+    }
+
+/* حالت‌های ردیف */
+.sf-tr-selected {
+    background: #EEF2FF !important;
+}
+
+.sf-tr-tik {
+    background: #FEF3C7 !important;
+    border-right: 3px solid #F59E0B;
+}
+
+.sf-tr-err {
+    background: #FEF2F2;
+}
+
+.sf-tr-highlight {
+    animation: sfPulseHighlight 1.5s ease-in-out infinite;
+    border-right: 3px solid #3B82F6;
+}
+
+@keyframes sfPulseHighlight {
+    0%, 100% {
+        background-color: #EFF6FF;
+    }
+
+    50% {
+        background-color: #DBEAFE;
+    }
+}
+
+/* ستون‌های خاص */
+.sf-td-check {
+    text-align: center;
+    width: 36px;
+}
+
+    .sf-td-check input {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: #4F46E5;
+    }
+
+.sf-td-num {
+    text-align: center;
+    color: #6B7280;
+    font-weight: 600;
+    width: 40px;
+}
+
+.sf-td-code {
+    direction: ltr;
+    text-align: right;
+}
+
+    .sf-td-code strong {
+        color: #4F46E5;
+        font-family: monospace;
+        font-size: 13px;
+    }
+
+.sf-code-name-txt {
+    color: #4B5563;
+    font-size: 12px;
+    margin-right: 6px;
+}
+
+.sf-td-sharh {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #4B5563;
+}
+
+/* ═══════════════════════════════════════════════════
+   استایل جدید و زیبا برای ستون‌های مبلغ (بدهکار/بستانکار)
+   ═══════════════════════════════════════════════════ */
+.sf-td-money {
+    text-align: left;
+    direction: ltr; /* برای اینکه کاماها (,) در جای درست خود قرار بگیرند */
+    font-family: 'Vazirmatn', Tahoma, sans-serif; /* فونت اصلی برنامه (نه فونت انگلیسی) */
+    font-weight: 700; /* کمی ضخیم‌تر برای خوانایی بهتر */
+    font-size: 13.5px;
+    color: #1F2937; /* رنگ تیره‌تر و خواناتر */
+    font-variant-numeric: tabular-nums; /* ⭐ جادو: باعث می‌شود همه اعداد دقیقاً زیر هم تراز شوند */
+    letter-spacing: 0.5px; /* فاصله خیلی کم بین حروف برای خوانایی */
+    white-space: nowrap;
+    padding-left: 15px !important; /* فاصله از لبه چپ */
+}
+
+/* دکمه‌های عملیات */
+.sf-td-actions {
+    text-align: center;
+    white-space: nowrap;
+    width: 180px;
+}
+
+.sf-act-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 3px 6px;
+    font-size: 13px;
+    color: #6B7280;
+    transition: all 0.12s;
+}
+
+    .sf-act-btn:hover {
+        background: #EEF2FF;
+        color: #4F46E5;
+        border-color: #C7D2FE;
+    }
+
+    .sf-act-btn.sf-act-del:hover {
+        background: #FEE2E2;
+        color: #DC2626;
+        border-color: #FECACA;
+    }
+
+    .sf-act-btn.sf-act-tik-active {
+        color: #D97706;
+        font-weight: bold;
+    }
+
+/* حالت خالی */
+.sf-summary-empty {
+    text-align: center;
+    padding: 40px;
+    color: #9CA3AF;
+    background: #F9FAFB;
+    border: 2px dashed #E5E7EB;
+    border-radius: 8px;
+}
+/* ═══════════════════════════════════════════════════════════════
+   FIX Z-INDEX — لایه‌بندی صحیح فرم‌ها روی صفحاتی مثل تراز و دفتر
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ۱. تمام مودال‌های استاندارد (مثل جزئیات سند، ویرایش سند، فاکتور و...) */
+.modal-overlay {
+    z-index: 12000 !important; /* بالاتر از لایه تراز و دفتر */
+}
+
+.modal-box {
+    z-index: 12001 !important;
+}
+
+/* ۲. فرم ویرایش ردیف (که داخل مودال باز می‌شود) */
+.sf-re-overlay {
+    z-index: 16000 !important;
+}
+
+/* ۳. پیکر حساب (HesabPicker) — همیشه باید بالاتر از همه چیز باشد */
+.hp-overlay {
+    z-index: 20000 !important;
+}
+
+/* ۴. دیالوگ تایید خروج (بالاترین لایه) */
+.sf-confirm-overlay {
+    z-index: 99999 !important;
 }

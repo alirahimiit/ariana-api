@@ -852,7 +852,7 @@ window.App = Object.assign(window.App || {}, {
             sharh: 'شرح‌ها',
             kind: 'انواع سند',
             backup: 'پشتیبان‌گیری',
-
+            'sanad-control': 'کنترل و بررسی اسناد', 
             'taraz-6-sotooni': 'تراز آزمایشی ۶ ستونی',            
             // ⭐ منوی ورود/خروج کالا
             'factor-buy': 'فاکتور خرید',
@@ -909,6 +909,7 @@ window.App = Object.assign(window.App || {}, {
         switch (page) {
             case 'dashboard': window.App.Features.Dashboard.render(); break;
             case 'sanad': window.App.Features.Sanad.render(); break;
+            case 'sanad-control': window.App.Features.SanadControl.render(); break; 
             case 'taraz': window.App.Features.Taraz.render(); break;
             case 'taraz-6-sotooni': window.App.Features.TarazSheshSotooni.render(); break;
             case 'ledger': window.App.Features.Ledger.render(); break;

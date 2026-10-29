@@ -49,6 +49,7 @@ id_rsa
 id_rsa.pub
 apkKey.txt
 prod-keys.txt
+*.zip
 
 
 # ═══════════════════════════════════════════

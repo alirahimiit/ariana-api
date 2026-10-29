@@ -1,6 +1,6 @@
 ﻿/* ═══════════════════════════════════════════════════
    Feature / SanadForm — فرم ثبت/ویرایش سند
-   نسخه 2.1 — با رفع چیدمان + کلیدهای میان‌بر
+   نسخه 3.0 — Summary Grid + Row Editor Overlay
    ═══════════════════════════════════════════════════ */
 
 window.App = window.App || {};
@@ -11,120 +11,83 @@ window.App.Features.SanadForm = (function () {
 
     const H = window.App.Helpers;
 
-    // ⭐ Clipboard در سطح App — بین اسناد و صفحات حفظ می‌شه
     function getClipboard() {
         if (!window.App.state) window.App.state = {};
-        if (!window.App.state.sanadClipboard) {
-            window.App.state.sanadClipboard = [];
-        }
+        if (!window.App.state.sanadClipboard) window.App.state.sanadClipboard = [];
         return window.App.state.sanadClipboard;
     }
-
     function setClipboard(items) {
         if (!window.App.state) window.App.state = {};
         window.App.state.sanadClipboard = items;
     }
-    // ⭐ Helper امن برای Toast
-    function _toast(message, type = 'info') {
-        try {
-            if (window.App && typeof window.App.toast === 'function') {
-                window.App.toast(message, type);
-                return;
-            }
-        } catch (e) {
-            console.error('[Toast Error]', e, message);
-        }
-        console.log('[' + type.toUpperCase() + ']', message);
+
+    function _toast(msg, type = 'info') {
+        try { if (window.App.toast) return window.App.toast(msg, type); } catch (e) { }
+        console.log('[' + type.toUpperCase() + ']', msg);
     }
 
-    // ⭐⭐ Fallback هوشمند برای confirm
-    async function _askConfirm(message, options) {
-        try {
-            if (window.App && typeof window.App.confirm === 'function') {
-                return await window.App.confirm(message, options);
-            }
-        } catch (err) {
-            console.warn('[Confirm] UI جدید خطا داد، از native استفاده می‌شود:', err);
-        }
-        // Fallback به native
-        return window.confirm(message);
+    async function _askConfirm(msg, options) {
+        try { if (window.App.confirm) return await window.App.confirm(msg, options); } catch (err) { }
+        return window.confirm(msg);
     }
 
     let _state = {
         isEdit: false,
         parentSanadId: null,
         items: [],
-        focusedIdx: 0,
+        focusedIdx: -1,
         dirty: false,
-        selectedRows: new Set()
+        selectedRows: new Set(),
+        rowEditor: null,
+        highlightRowId: null,
+        originalVazeit: undefined
     };
-    let _cache = { cols: [], moeins: [], tafzils: [], loaded: false };
-    // ⭐ کش شرح‌ها (datalist شرح سند و شرح ردیف)
-    let _sharhCache = { parents: null, rows: null };
-    
 
-    // ═══ UTILS ═══
+    let _cache = { cols: [], moeins: [], tafzils: [], loaded: false };
+    let _sharhCache = { parents: null, rows: null };
+
     function today() {
         try {
-            const fmt = new Intl.DateTimeFormat('en-u-ca-persian-nu-latn', {
-                year: 'numeric', month: '2-digit', day: '2-digit'
-            });
+            const fmt = new Intl.DateTimeFormat('en-u-ca-persian-nu-latn', { year: 'numeric', month: '2-digit', day: '2-digit' });
             const p = fmt.formatToParts(new Date());
-            const y = p.find(x => x.type === 'year').value;
-            const m = p.find(x => x.type === 'month').value;
-            const d = p.find(x => x.type === 'day').value;
-            return `${y}/${m}/${d}`;
+            return `${p.find(x => x.type === 'year').value}/${p.find(x => x.type === 'month').value}/${p.find(x => x.type === 'day').value}`;
         } catch { return ''; }
     }
 
     function emptyRow() {
         return {
-            codeCol: 0, codeMoein: 0, codeTafzil: 0, codeTafzili2: 0,
+            sanadId: 0, codeCol: 0, codeMoein: 0, codeTafzil: 0, codeTafzili2: 0,
             tafzili2Id: 0, codeSharh: 0, otherSharh: '', mabBed: 0, mabBes: 0, meghdar: 0,
-            tikRow: 0,
-            doDate: '', doOK: false    // ⭐ جدید
+            tikRow: 0, doDate: '', doOK: false,
+            colName: '', moeinName: '', tafzilName: '', tafzil2Name: ''
         };
     }
 
     function normalizeDigits(s) {
-        return String(s)
-            .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
-            .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+        return String(s).replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
     }
 
     function parseNum(v) {
         if (v === null || v === undefined || v === '') return 0;
-        let s = normalizeDigits(v);
-        s = s.replace(/[٫،]/g, '.');
-        s = s.replace(/[٬,]/g, '');
-        s = s.replace(/[^\d.\-]/g, '');
+        let s = normalizeDigits(v).replace(/[٫،]/g, '.').replace(/[٬,]/g, '').replace(/[^\d.\-]/g, '');
         const n = parseFloat(s);
         return isNaN(n) ? 0 : n;
     }
 
-    // ⭐ فرمت مبلغ — با نرمال‌سازی ارقام فارسی (رفع باگ تایپ)
     function applyMoneyFormat(input) {
         const oldVal = input.value;
         if (!oldVal) return;
-
-        // نرمال‌سازی ارقام فارسی/عربی → لاتین (طول کاراکتر حفظ می‌شه)
         const normalized = normalizeDigits(oldVal);
-
         const cursorPos = input.selectionStart;
         const beforeCursor = normalized.substring(0, cursorPos);
         const digitsBefore = (beforeCursor.match(/\d/g) || []).length;
-
         const digits = normalized.replace(/\D/g, '');
         if (!digits) { input.value = ''; return; }
-
         const num = parseInt(digits, 10);
         const formatted = num.toLocaleString('en-US');
-
         if (input.value === formatted) return;
         input.value = formatted;
-
         if (digitsBefore === 0) { input.setSelectionRange(0, 0); return; }
-
         let digitCount = 0, newPos = formatted.length;
         for (let i = 0; i < formatted.length; i++) {
             if (/\d/.test(formatted[i])) {
@@ -137,29 +100,25 @@ window.App.Features.SanadForm = (function () {
 
     function cloneItem(it) { return JSON.parse(JSON.stringify(it)); }
 
-    // ═══ LOOKUPS ═══
     async function ensureLookups() {
         if (_cache.loaded) return;
         try {
-            const [tree, tafResp] = await Promise.all([
+            const [tree, tafResp, taf2Resp] = await Promise.all([
                 window.App.Http.api('/api/hesab/tree'),
-                window.App.Http.api('/api/tafzili/list', {
-                    method: 'POST',
-                    body: JSON.stringify({ page: 1, pageSize: 100000, mandehFilter: 'all' })
-                }).catch(() => ({ items: [] }))
+                window.App.Http.api('/api/tafzili/list', { method: 'POST', body: JSON.stringify({ page: 1, pageSize: 100000, mandehFilter: 'all' }) }).catch(() => ({ items: [] })),
+                window.App.Http.api('/api/tafzili2/list', { method: 'POST', body: JSON.stringify({ page: 1, pageSize: 100000 }) }).catch(() => ({ items: [] }))
             ]);
             _cache.cols = (tree || []).filter(x => x.level === 'col').sort((a, b) => a.codeCol - b.codeCol);
             _cache.moeins = (tree || []).filter(x => x.level === 'moein').sort((a, b) => a.codeMoein - b.codeMoein);
             _cache.tafzils = (tafResp?.items || []).map(t => ({ code: parseInt(t.codeTafzil), name: t.name }));
+            const t2 = taf2Resp?.items || taf2Resp || [];
+            _cache.tafzils2 = t2.map(t => ({ code: parseInt(t.code || t.Code || 0), name: t.name || t.Name || '' }));
             _cache.loaded = true;
         } catch (err) { console.error('Lookup load failed:', err); }
     }
 
-    // ═══ SHARH DATALISTS (شرح سند + شرح ردیف) ═══
     async function ensureSharhLists() {
-        if (_sharhCache.parents !== null && _sharhCache.rows !== null) {
-            return _sharhCache;
-        }
+        if (_sharhCache.parents !== null && _sharhCache.rows !== null) return _sharhCache;
         try {
             const [parents, rows] = await Promise.all([
                 window.App.Http.api('/api/sanad/distinct-parent-sharh', { silent: true }).catch(() => []),
@@ -168,134 +127,74 @@ window.App.Features.SanadForm = (function () {
             _sharhCache.parents = Array.isArray(parents) ? parents : [];
             _sharhCache.rows = Array.isArray(rows) ? rows : [];
         } catch (e) {
-            console.warn('[Sharh list load]', e);
             _sharhCache.parents = _sharhCache.parents || [];
             _sharhCache.rows = _sharhCache.rows || [];
         }
         return _sharhCache;
     }
 
-    function populateSharhDatalists() {
-        if (_sharhCache.parents === null && _sharhCache.rows === null) return;
-        fillDatalist('sfParentSharhList', _sharhCache.parents || []);
-        fillDatalist('sfRowSharhList', _sharhCache.rows || []);
-    }
-
     function fillDatalist(id, items) {
         const el = document.getElementById(id);
         if (!el) return;
-        // ⭐ محدود کردن به ۵۰۰ آیتم برای جلوگیری از فریز شدن مرورگر
-        el.innerHTML = (items || [])
-            .slice(0, 500)
-            .map(x => {
-                const s = String(x ?? '').trim();
-                if (!s) return '';
-                return `<option value="${H.esc(s)}"></option>`;
-            })
-            .join('');
-    }
-
-    function moeinsOfCol(codeCol) {
-        return _cache.moeins.filter(m => m.codeCol === codeCol);
+        el.innerHTML = (items || []).slice(0, 500).map(x => {
+            const s = String(x ?? '').trim();
+            return s ? `<option value="${H.esc(s)}"></option>` : '';
+        }).join('');
     }
 
     function findTafzilName(code) {
         if (!code) return '';
-        const list = _cache.tafzils || [];
-        const t = list.find(x => x.code === parseInt(code));
-        return t ? t.name : '';
+        return (_cache.tafzils?.find(x => x.code === parseInt(code)) || {}).name || '';
     }
     function findTafzili2Name(code) {
         if (!code) return '';
-        const list = _cache.tafzils2 || [];
-        const t = list.find(x => x.code === parseInt(code));
-        return t ? t.name : '';
+        return (_cache.tafzils2?.find(x => x.code === parseInt(code)) || {}).name || '';
     }
 
-    async function ensureTafzili2Lookup() {
-        if (_cache.tafzils2 !== undefined) return _cache.tafzils2;
-        try {
-            const resp = await window.App.Http.api('/api/tafzili2/list', {
-                method: 'POST',
-                body: JSON.stringify({ page: 1, pageSize: 100000 })
-            });
-            _cache.tafzils2 = (resp?.items || resp || []).map(t => ({
-                code: parseInt(t.code || t.Code || 0),
-                name: t.name || t.Name || ''
-            }));
-        } catch {
-            _cache.tafzils2 = [];
-        }
-        return _cache.tafzils2;
+    function enrichItemNames(it) {
+        it.colName = (_cache.cols.find(c => c.codeCol === it.codeCol) || {}).name || '';
+        it.moeinName = (_cache.moeins.find(m => m.codeCol === it.codeCol && m.codeMoein === it.codeMoein) || {}).name || '';
+        it.tafzilName = findTafzilName(it.codeTafzil);
+        it.tafzil2Name = findTafzili2Name(it.codeTafzili2);
+        return it;
     }
 
-    // ═══ OPEN ═══
+    // ═══ OPEN CREATE ═══
     async function openCreate() {
         if (window.App.Permissions && !window.App.Permissions.can(101)) {
-            window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
-            return;
+            _toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error'); return;
         }
-        
-        _state = {
-            isEdit: false,
-            parentSanadId: null,
-            items: [emptyRow()],
-            focusedIdx: 0,
-            dirty: false,
-            selectedRows: new Set()
-        };
-        // ⭐ _clipboard رو دست نزن — بین اسناد حفظ می‌شه
+        _state = { isEdit: false, parentSanadId: null, items: [], focusedIdx: -1, dirty: false, selectedRows: new Set(), rowEditor: null, highlightRowId: null };
+
         await ensureLookups();
+        ensureSharhLists().then(() => fillDatalist('sfParentSharhList', _sharhCache.parents || [])).catch(() => { });
 
-        // ⭐ شروع بارگذاری شرح‌ها — fire-and-forget (منتظر نمونه)
-        ensureSharhLists().then(populateSharhDatalists).catch(() => { });
-
-        const body = buildFormHtml({
-            noSanad: '', dateIn: today(), otherParentSharh: '', vazeit: 0, kindSanad: 0
-        });
+        const body = buildFormHtml({ noSanad: '', dateIn: today(), otherParentSharh: '', vazeit: 0, kindSanad: 0 });
         window.App.openModal('➕ سند جدید', body);
         document.querySelector('.modal-box')?.classList.add('wide-modal');
         bindEvents();
-        renderRows();
-        focusRow(0, 'bed');
+        renderSummary();
 
-        // ⭐ اگه cache از قبل لود شده بود، همین الان پر کن
-        populateSharhDatalists();
+        // باز کردن خودکار فرم برای اولین ردیف
+        setTimeout(() => openRowEditor('create', -1), 200);
     }
 
+    // ═══ OPEN EDIT ═══
     async function openEdit(id, options = {}) {
         if (window.App.Permissions && !window.App.Permissions.can(102)) {
-            window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
-            return;
+            _toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error'); return;
         }
         try {
             const vRes = await window.App.Http.api(`/api/sanad/${id}/vazeit`);
             const currentVazeit = vRes?.vazeit ?? 0;
-
-            // ⭐ چک دسترسی بر اساس وضعیت سند
             const P = window.App.Permissions;
             if (P) {
-                let canEdit = false;
-                let needPerm = '';
-
-                if (currentVazeit === 2) {
-                    canEdit = P.can(103);
-                    needPerm = '۱۰۳ (تغییر سندهای تأیید شده)';
-                } else if (currentVazeit === 1) {
-                    canEdit = P.can(104) || P.can(105);
-                    needPerm = '۱۰۴ (تغییر سندهای تأیید موقت شده)';
-                } else {
-                    canEdit = P.can(102);
-                    needPerm = '۱۰۲ (تغییر سند)';
-                }
-
+                let canEdit = false, needPerm = '';
+                if (currentVazeit === 2) { canEdit = P.can(103); needPerm = '۱۰۳'; }
+                else if (currentVazeit === 1) { canEdit = P.can(104) || P.can(105); needPerm = '۱۰۴'; }
+                else { canEdit = P.can(102); needPerm = '۱۰۲'; }
                 if (!canEdit) {
-                    const labels = { 0: 'پیش‌نویس', 1: 'رسیدگی', 2: 'قطعی' };
-                    window.App.toast(
-                        `برای ویرایش سند «${labels[currentVazeit] || ''}» به دسترسی ${needPerm} نیاز دارید`,
-                        'error'
-                    );
-                    return;
+                    _toast(`برای ویرایش سند «${['پیش‌نویس', 'رسیدگی', 'قطعی'][currentVazeit]}» به دسترسی ${needPerm} نیاز دارید`, 'error'); return;
                 }
             }
 
@@ -304,106 +203,66 @@ window.App.Features.SanadForm = (function () {
                 window.App.Http.api(`/api/sanad/${id}`),
                 window.App.Http.api(`/api/sanad/${id}/items`)
             ]);
+            ensureSharhLists().then(() => fillDatalist('sfParentSharhList', _sharhCache.parents || [])).catch(() => { });
 
-            ensureSharhLists().then(populateSharhDatalists).catch(() => { });
+            const mapped = (items || []).map(it => enrichItemNames({
+                sanadId: it.sanadID || it.sanadId || it.SanadID || 0,
+                codeCol: it.code_Col || 0, codeMoein: it.code_Moein || 0, codeTafzil: it.code_Tafzil || 0, codeTafzili2: it.code_Tafzili2 || 0,
+                tafzili2Id: it.tafzili2ID || 0, codeSharh: it.code_Sharh || 0, otherSharh: it.otherSharh || '',
+                mabBed: it.mabBed || 0, mabBes: it.mabBes || 0, meghdar: Math.abs(it.meghdar || 0),
+                tikRow: it.tikRow || it.TikRow || 0, doDate: it.doDate || '', doOK: it.doOK === true || it.doOk === true
+            }));
 
             _state = {
-                isEdit: true,
-                parentSanadId: id,
-                focusedIdx: 0,
-                dirty: false,
-                selectedRows: new Set(),
-                originalVazeit: currentVazeit,
-                highlightRowId: options.highlightRowId || null, // ⭐ شناسه ردیف مورد نظر
-                scrolledToHighlight: false, // ⭐ فلگ برای اینکه فقط یکبار اسکرول شود
-                items: (items || []).map(it => ({
-                    sanadId: it.sanadID || it.sanadId || it.SanadID || it.ID || it.id,
-                    codeCol: it.code_Col || 0,
-                    codeMoein: it.code_Moein || 0,
-                    codeTafzil: it.code_Tafzil || 0,
-                    codeTafzili2: it.code_Tafzili2 || 0,
-                    tafzili2Id: it.tafzili2ID || 0,
-                    codeSharh: it.code_Sharh || 0,
-                    otherSharh: it.otherSharh || '',
-                    mabBed: it.mabBed || 0,
-                    mabBes: it.mabBes || 0,
-                    meghdar: Math.abs(it.meghdar || 0),
-                    tikRow: it.tikRow || it.TikRow || 0,
-                    doDate: it.doDate || '',
-                    doOK: it.doOK === true || it.doOk === true
-                }))
+                isEdit: true, parentSanadId: id, originalVazeit: currentVazeit,
+                items: mapped, focusedIdx: -1, dirty: false, selectedRows: new Set(),
+                highlightRowId: options.highlightRowId || null, rowEditor: null
             };
 
-            if (_state.items.length === 0) _state.items = [emptyRow()];
-
             const body = buildFormHtml({
-                noSanad: detail?.noSanad || '',
-                dateIn: detail?.dateIn || '',
-                otherParentSharh: detail?.otherParentSharh || '',
-                vazeit: detail?.vazeit || 0,
-                kindSanad: detail?.kindSanad || 0
+                noSanad: detail?.noSanad || '', dateIn: detail?.dateIn || '', otherParentSharh: detail?.otherParentSharh || '',
+                vazeit: detail?.vazeit || 0, kindSanad: detail?.kindSanad || 0
             });
-
             window.App.openModal('✏️ ویرایش سند شماره ' + (detail?.noSanad || ''), body);
             document.querySelector('.modal-box')?.classList.add('wide-modal');
             bindEvents();
-            renderRows();
-            populateSharhDatalists();
+            renderSummary();
 
-            // ⭐ اگر ردیف خاصی برای اسکرول وجود ندارد، ردیف اول را فوکوس کن
-            if (!_state.highlightRowId) {
-                focusRow(0, 'bed');
+            // هایلایت ردیف ارجاعی (از دفاتر)
+            if (_state.highlightRowId) {
+                setTimeout(() => {
+                    const tr = document.querySelector(`.sf-summary-table tr[data-sanad-id="${_state.highlightRowId}"]`);
+                    if (tr) {
+                        tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        tr.classList.add('sf-tr-highlight');
+                    }
+                }, 300);
             }
-            // (اگر وجود دارد، تابع renderRows خودش بعد از ساخت ردیف، فوکوس و اسکرول را انجام می‌دهد)
-
-        } catch (err) {
-            window.App.toast('خطا: ' + err.message, 'error');
-        }
+        } catch (err) { _toast('خطا: ' + err.message, 'error'); }
     }
 
-    // ═══ BUILD FORM — ساختار تمیز ═══
+    // ═══ BUILD MAIN HTML ═══
     function buildFormHtml(h) {
         const vazeitOpts = [
             { v: 0, t: 'پیش‌نویس' }, { v: 1, t: 'رسیدگی' }, { v: 2, t: 'قطعی' }
         ].map(o => {
-            let disabled = '';
-            let title = '';
+            let disabled = '', title = '';
             const P = window.App.Permissions;
-
-            // ⭐ چک ایرادات سند
             if (o.v >= 1) {
                 const tb = _state.items.reduce((s, x) => s + (x.mabBed || 0), 0);
                 const ts = _state.items.reduce((s, x) => s + (x.mabBes || 0), 0);
                 const check = _validateVazeit(o.v, tb, ts);
-                if (!check.ok) {
-                    disabled = 'disabled';
-                    title = `title="ابتدا ایرادها را رفع کنید: ${check.issues[0]}"`;
-                }
+                if (!check.ok) { disabled = 'disabled'; title = `title="ابتدا ایرادها را رفع کنید: ${check.issues[0]}"`; }
             }
-
-            // ⭐ چک دسترسی بر اساس وضعیت اصلی سند
             if (!disabled && _state.isEdit && P && _state.originalVazeit !== undefined) {
                 const origV = _state.originalVazeit;
-
-                // برگشت از قطعی → نیاز به 103
-                if (origV === 2 && !P.can(103)) {
-                    disabled = 'disabled';
-                    title = 'title="تغییر سند قطعی نیاز به دسترسی ۱۰۳ دارد"';
-                }
-                // برگشت از رسیدگی → نیاز به 104 یا 105
-                else if (origV === 1 && !(P.can(104) || P.can(105))) {
-                    disabled = 'disabled';
-                    title = 'title="تغییر سند رسیدگی نیاز به دسترسی ۱۰۴ دارد"';
-                }
-                // تغییر سند پیش‌نویس → نیاز به 102
-                else if (origV === 0 && !P.can(102)) {
-                    disabled = 'disabled';
-                    title = 'title="تغییر سند نیاز به دسترسی ۱۰۲ دارد"';
-                }
+                if (origV === 2 && !P.can(103)) { disabled = 'disabled'; title = 'title="نیاز به دسترسی ۱۰۳"'; }
+                else if (origV === 1 && !(P.can(104) || P.can(105))) { disabled = 'disabled'; title = 'title="نیاز به دسترسی ۱۰۴"'; }
+                else if (origV === 0 && !P.can(102)) { disabled = 'disabled'; title = 'title="نیاز به دسترسی ۱۰۲"'; }
             }
-
             return `<option value="${o.v}" ${h.vazeit === o.v ? 'selected' : ''} ${disabled} ${title}>${o.t}${disabled ? ' 🚫' : ''}</option>`;
         }).join('');
+
         const kindOpts = [
             { v: 0, t: 'عادی' }, { v: 1, t: 'افتتاحیه' }, { v: 2, t: 'اختتامیه' },
             { v: 3, t: 'انبار' }, { v: 4, t: 'حقوق' }, { v: 5, t: 'اموال' },
@@ -412,35 +271,18 @@ window.App.Features.SanadForm = (function () {
 
         return `
             <div class="sanad-form" data-help="sanad-form">
-                <!-- ⭐ Datalists برای شرح سند و ردیف -->
                 <datalist id="sfParentSharhList"></datalist>
                 <datalist id="sfRowSharhList"></datalist>
                 <div class="sanad-form-header">
-                    <div class="sf-field">
-                        <label>شماره سند</label>
-                        <input type="text" id="sfNoSanad" value="${H.esc(h.noSanad)}" ${_state.isEdit ? 'readonly' : ''} placeholder="خودکار">
-                    </div>
-                    <div class="sf-field">
-                        <label>تاریخ <span class="req">*</span></label>
-                        <input type="text" id="sfDateIn" value="${H.esc(h.dateIn)}" placeholder="1404/01/01">
-                    </div>
-                    <div class="sf-field">
-                        <label>نوع سند</label>
-                        <select id="sfKindSanad">${kindOpts}</select>
-                    </div>
-                    <div class="sf-field">
-                        <label>وضعیت</label>
-                        <select id="sfVazeit">${vazeitOpts}</select>
-                    </div>
-                    <div class="sf-field sf-field-wide">
-                        <label>شرح سند</label>
-                        <input type="text" id="sfParentSharh" list="sfParentSharhList" value="${H.esc(h.otherParentSharh)}" placeholder="شرح کلی سند">
-                    </div>
-                    <button type="button" class="sf-help-btn" id="sfHelpBtn" title="راهنمای کلیدهای میان‌بر">⌨️</button>
+                    <div class="sf-field"><label>شماره سند</label><input type="text" id="sfNoSanad" value="${H.esc(h.noSanad)}" ${_state.isEdit ? 'readonly' : ''} placeholder="خودکار"></div>
+                    <div class="sf-field"><label>تاریخ <span class="req">*</span></label><input type="text" id="sfDateIn" value="${H.esc(h.dateIn)}" placeholder="1404/01/01"></div>
+                    <div class="sf-field"><label>نوع سند</label><select id="sfKindSanad">${kindOpts}</select></div>
+                    <div class="sf-field"><label>وضعیت</label><select id="sfVazeit">${vazeitOpts}</select></div>
+                    <div class="sf-field sf-field-wide"><label>شرح سند</label><input type="text" id="sfParentSharh" list="sfParentSharhList" value="${H.esc(h.otherParentSharh)}" placeholder="شرح کلی سند"></div>
                 </div>
 
                 <div class="sanad-form-rows-header">
-                    <h4>📋 ردیف‌های سند</h4>
+                    <h4>📋 ردیف‌های سند <span id="sfSummaryCount" style="color:#4F46E5;font-size:13px;font-weight:bold;">(0)</span></h4>
                     <div class="sf-row-actions">
                         <button type="button" class="btn btn-ghost btn-sm" id="sfCopyBtn" title="کپی (Ctrl+F9)">📋</button>
                         <button type="button" class="btn btn-ghost btn-sm" id="sfPasteBtn" title="چسباندن (Ctrl+F10)">📥</button>
@@ -448,1584 +290,617 @@ window.App.Features.SanadForm = (function () {
                     </div>
                 </div>
 
-                <div id="sfRowsWrap"></div>
+                <div id="sfSummaryWrap" class="sf-summary-wrap"></div>
 
                 <div class="sanad-form-sticky">
                     <div class="sanad-form-totals" id="sfTotals"></div>
                     <div class="sanad-form-footer">
-                        <button type="button" class="btn btn-primary" id="sfSaveBtn">💾 ذخیره <span class="kbd-hint">Ctrl+Enter</span></button>
+                        <button type="button" class="btn btn-primary" id="sfSaveBtn">💾 ذخیره سند <span class="kbd-hint">Ctrl+Enter</span></button>
                         <button type="button" class="btn btn-ghost" id="sfCancelBtn">انصراف <span class="kbd-hint">Esc</span></button>
-                        <span class="sanad-row-count" id="sfRowCount"></span>
                     </div>
                 </div>
             </div>`;
     }
-    // ═══ RENDER ROWS ═══
-    function renderRows() {
-        const wrap = document.getElementById('sfRowsWrap');
+
+    // ═══ RENDER SUMMARY TABLE ═══
+    function renderSummary() {
+        const wrap = document.getElementById('sfSummaryWrap');
         if (!wrap) return;
 
-        if (!_state.selectedRows) _state.selectedRows = new Set();
-        _state.selectedRows = new Set([..._state.selectedRows].filter(i => i < _state.items.length));
+        document.getElementById('sfSummaryCount').textContent = `(${_state.items.length})`;
 
-        const allSelected = _state.items.length > 0 && _state.selectedRows.size === _state.items.length;
-
-        const topBar = `
-            <div class="sf-rows-toolbar">
-                <label class="sf-select-all-label">
-                    <input type="checkbox" id="sfSelectAllRows" ${allSelected ? 'checked' : ''}>
-                    <span>انتخاب همه (${_state.items.length} ردیف)</span>
-                </label>
-                <span class="sf-selected-count ${_state.selectedRows.size > 0 ? 'has-selection' : ''}" id="sfSelectedCount">
-                    ${_state.selectedRows.size > 0 ? `${_state.selectedRows.size} ردیف انتخاب شده` : ''}
-                </span>
-                ${_state.selectedRows.size > 0
-                ? `<button type="button" class="sf-clear-sel" id="sfClearSelBtn">✕ لغو انتخاب</button>`
-                : ''}
-            </div>`;
-
-        // ⭐ یک کانتینر خالی می‌سازیم که ردیف‌ها رو تیکه تیکه (Chunk) بهش اضافه کنیم
-        wrap.innerHTML = topBar + `<div id="sfRowsChunkContainer"></div>`;
-        const chunkContainer = document.getElementById('sfRowsChunkContainer');
-
-        const CHUNK_SIZE = 50; // ۵۰ ردیف در هر مرحله
-        let currentIndex = 0;
-
-        function renderChunk() {
-            if (currentIndex >= _state.items.length) {
-                recalcTotals();
-                updateRowCount();
-                updateFocusedRow();
-                updatePasteBtnState();
-
-                // اگر ردیف مورد نظر اصلا پیدا نشد (مثلا آیدی اشتباه بود) ردیف اول را فوکوس کن
-                if (_state.highlightRowId && !_state.scrolledToHighlight) {
-                    focusRow(0, 'bed');
-                    _state.scrolledToHighlight = true;
-                }
-                return;
-            }
-
-            const chunkItems = _state.items.slice(currentIndex, currentIndex + CHUNK_SIZE);
-            let htmlStr = '';
-            for (let i = 0; i < chunkItems.length; i++) {
-                htmlStr += buildRowHtml(chunkItems[i], currentIndex + i);
-            }
-
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = htmlStr;
-
-            const fragment = document.createDocumentFragment();
-            while (tempDiv.firstChild) {
-                fragment.appendChild(tempDiv.firstChild);
-            }
-
-            chunkContainer.appendChild(fragment);
-            currentIndex += CHUNK_SIZE;
-
-            // ⭐⭐ اگر ردیف هایلایت در این تکه (Chunk) رندر شده است، فوکوس و اسکرول کن
-            if (_state.highlightRowId && !_state.scrolledToHighlight) {
-                const targetIdx = _state.items.findIndex(x =>
-                    String(x.sanadId) === String(_state.highlightRowId) ||
-                    String(x.SanadID) === String(_state.highlightRowId)
-                );
-
-                // آیا ردیف مورد نظر در بین ردیف‌هایی است که الان ساخته شدند؟
-                if (targetIdx !== -1 && targetIdx < currentIndex) {
-                    _state.scrolledToHighlight = true; // علامت می‌زنیم که دیگه اسکرول نکنه
-
-                    // یک تاخیر خیلی کوتاه برای اینکه DOM تازه ساخته شده کاملاً لود شود
-                    setTimeout(() => {
-                        focusRow(targetIdx, 'bed');
-                        scrollToRow(targetIdx);
-                    }, 50);
-                }
-            }
-
-            if (currentIndex < _state.items.length) {
-                requestAnimationFrame(renderChunk);
-            } else {
-                recalcTotals();
-                updateRowCount();
-                updateFocusedRow();
-                updatePasteBtnState();
-            }
+        const pasteBtn = document.getElementById('sfPasteBtn');
+        if (pasteBtn) {
+            const n = getClipboard().length;
+            pasteBtn.disabled = n === 0;
+            pasteBtn.title = n > 0 ? `چسباندن ${n} ردیف` : 'بافر خالی';
         }
-        // شروع رندر تدریجی
-        requestAnimationFrame(renderChunk);
+
+        if (_state.items.length === 0) {
+            wrap.innerHTML = `<div class="sf-summary-empty"><div style="font-size:36px;margin-bottom:10px;">📭</div><p>هنوز ردیفی ثبت نشده است</p><button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('sfAddRow').click()">➕ ثبت اولین ردیف</button></div>`;
+            recalcTotals();
+            return;
+        }
+
+        const rows = _state.items.map((it, i) => {
+            const isSel = _state.selectedRows.has(i);
+            const isTik = it.tikRow === 1;
+            const isErr = _detectRowErrors(it).some(e => e.severity === 'error');
+
+            const codeParts = [it.codeCol, it.codeMoein, it.codeTafzil, it.codeTafzili2].filter(x => x > 0).join('-');
+            const name = it.tafzil2Name || it.tafzilName || it.moeinName || it.colName || '';
+
+            return `
+                <tr data-idx="${i}" data-sanad-id="${it.sanadId || ''}" class="${isSel ? 'sf-tr-selected' : ''} ${isTik ? 'sf-tr-tik' : ''} ${isErr ? 'sf-tr-err' : ''}">
+                    <td class="sf-td-check"><input type="checkbox" class="sf-sum-cb" data-idx="${i}" ${isSel ? 'checked' : ''}></td>
+                    <td class="sf-td-num">${i + 1}${isTik ? ' <span style="color:#D97706;font-weight:bold;">✓</span>' : ''}</td>
+                    <td class="sf-td-code"><strong>${codeParts || '-'}</strong> <span class="sf-code-name-txt">${H.esc(name)}</span></td>
+                    <td class="sf-td-sharh">${H.esc(it.otherSharh || '')}</td>
+                    <td class="sf-td-money">${it.mabBed ? H.fmt(it.mabBed) : '-'}</td>
+                    <td class="sf-td-money">${it.mabBes ? H.fmt(it.mabBes) : '-'}</td>
+                    <td class="sf-td-money">${it.meghdar ? parseFloat(it.meghdar.toFixed(4)) : '-'}</td>
+                    <td class="sf-td-actions">
+                        <button type="button" class="sf-act-btn" data-action="edit" title="ویرایش (Enter)">✏️</button>
+                        <button type="button" class="sf-act-btn" data-action="up" title="بالا">▲</button>
+                        <button type="button" class="sf-act-btn" data-action="down" title="پایین">▼</button>
+                        <button type="button" class="sf-act-btn" data-action="swap" title="جابجایی (F7)">⇅</button>
+                        <button type="button" class="sf-act-btn ${isTik ? 'sf-act-tik-active' : ''}" data-action="tik" title="علامت (F8)">✓</button>
+                        <button type="button" class="sf-act-btn" data-action="dup" title="تکثیر">⧉</button>
+                        <button type="button" class="sf-act-btn sf-act-del" data-action="del" title="حذف">🗑️</button>
+                    </td>
+                </tr>`;
+        }).join('');
+
+        wrap.innerHTML = `
+            <table class="sf-summary-table">
+                <thead>
+                    <tr>
+                        <th style="width:36px;"><input type="checkbox" id="sfSumSelectAll" title="انتخاب همه"></th>
+                        <th style="width:40px;">#</th>
+                        <th>کدینگ</th>
+                        <th>شرح ردیف</th>
+                        <th style="width:120px;" class="text-left">بدهکار</th>
+                        <th style="width:120px;" class="text-left">بستانکار</th>
+                        <th style="width:90px;" class="text-left">مقدار</th>
+                        <th style="width:180px;" class="text-center">عملیات</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+
+        const allCb = document.getElementById('sfSumSelectAll');
+        if (allCb) allCb.checked = _state.items.length > 0 && _state.selectedRows.size === _state.items.length;
+
+        recalcTotals();
     }
 
-    function buildRowHtml(item, idx) {
-        const colOpts = ['<option value="0">-- کل --</option>']
-            .concat(_cache.cols.map(c => `<option value="${c.codeCol}" ${item.codeCol === c.codeCol ? 'selected' : ''}>${c.codeCol} - ${H.esc(c.name)}</option>`)).join('');
+    // ═══ اعتبارسنجی وجود کدینگ در سیستم (مثل IsHesabValid دلفی) ═══
+    function validateHesabCodes(data) {
+        // ۱. چک کد کل
+        const col = _cache.cols.find(c => c.codeCol === data.codeCol);
+        if (!col) return `کد کل ${data.codeCol} در سیستم وجود ندارد.`;
 
-        const bed = Number(item.mabBed) || 0;
-        const bes = Number(item.mabBes) || 0;
-        const megh = Number(item.meghdar) || 0;
-        const tafzilName = item.codeTafzil ? findTafzilName(item.codeTafzil) : '';
-        const tafzil2Name = item.codeTafzili2 ? findTafzili2Name(item.codeTafzili2) : '';
-        const currentMoein = item.codeMoein
-            ? (_cache.moeins.find(m => m.codeCol === item.codeCol && m.codeMoein === item.codeMoein) || null)
-            : null;
+        // ۲. چک کد معین
+        if (data.codeMoein > 0) {
+            const moein = _cache.moeins.find(m => m.codeCol === data.codeCol && m.codeMoein === data.codeMoein);
+            if (!moein) return `کد معین ${data.codeMoein} برای کل ${data.codeCol} وجود ندارد.`;
+        }
 
-        const canTafzil1 = !currentMoein || currentMoein.hasTafzili;
-        const canTafzil2 = !currentMoein || currentMoein.hasTafzili2;
-        const isStock = currentMoein?.isStock === true;
+        // ۳. چک کد تفصیلی (تفضیلی ۱)
+        if (data.codeTafzil > 0) {
+            const taf = (_cache.tafzils || []).find(t => t.code === data.codeTafzil);
+            if (!taf) return `کد تفصیلی ${data.codeTafzil} در سیستم وجود ندارد.`;
+        }
 
-        // ⭐ Tafzili2 اجباری — وقتی معین انتخاب‌شده hasTafzili2 داره
-        const requireTafzil2 = !!currentMoein && currentMoein.hasTafzili2 === true;
-        const requireTafzil1 = !!currentMoein && currentMoein.hasTafzili === true;
+        // ۴. چک کد تفصیلی ۲
+        if (data.codeTafzili2 > 0) {
+            const taf2 = (_cache.tafzils2 || []).find(t => t.code === data.codeTafzili2);
+            if (!taf2) return `کد تفصیلی ۲ ${data.codeTafzili2} در سیستم وجود ندارد.`;
+        }
 
-        const bedStr = bed ? bed.toLocaleString('en-US') : '';
-        const besStr = bes ? bes.toLocaleString('en-US') : '';
-        const meghStr = megh ? parseFloat(Number(megh).toFixed(4)).toString() : '';
-        const isTik = (item.tikRow || 0) === 1;
-        const rowIdStr = String(item.sanadId || item.SanadID || '');
-        const targetIdStr = String(_state.highlightRowId || '');
-        const isHighlight = rowIdStr !== '' && targetIdStr !== '' && rowIdStr === targetIdStr;
+        return null; // اگر نال برگرداند یعنی همه چیز معتبر است
+    }
 
-        return `<div class="sf-row ${idx === _state.focusedIdx ? 'sf-row-focused' : ''} ${_state.selectedRows?.has(idx) ? 'sf-row-selected' : ''} ${isTik ? 'sf-row-tik' : ''} ${isHighlight ? 'sf-row-highlight' : ''}" data-row-idx="${idx}">
-                 <div class="sf-row-num">
-                    <input type="checkbox" class="sf-row-check" data-idx="${idx}"
-                    ${_state.selectedRows?.has(idx) ? 'checked' : ''} title="انتخاب برای کپی (Ctrl+F9)">
-                    <span class="sf-row-num-text">${idx + 1}</span>
-                  ${isTik ? '<span class="sf-row-tik-badge" title="ردیف علامت‌گذاری‌شده (F8)">✓</span>' : ''}
+    // ═══════════════════════════════════════════════════════════════
+    //  ROW EDITOR OVERLAY (فرم ثبت/ویرایش دلفی)
+    // ═══════════════════════════════════════════════════════════════
+    function openRowEditor(mode, rowIdx) {
+        document.getElementById('sfRowEditorOverlay')?.remove();
+        let initialData = (mode === 'edit' && rowIdx >= 0 && _state.items[rowIdx]) ? cloneItem(_state.items[rowIdx]) : emptyRow();
+        if (mode !== 'edit') { mode = 'create'; rowIdx = -1; }
+
+        _state.rowEditor = { mode, rowIdx, data: initialData };
+
+        const overlay = document.createElement('div');
+        overlay.id = 'sfRowEditorOverlay';
+        overlay.className = 'sf-re-overlay';
+        overlay.innerHTML = buildRowEditorHtml(mode, initialData);
+        document.body.appendChild(overlay);
+        // ⭐ اضافه کردن این بلوک برای پر کردن لیست شرح‌ها
+        if (_sharhCache.rows && _sharhCache.rows.length > 0) {
+            fillDatalist('sfReSharhList', _sharhCache.rows);
+        } else {
+            ensureSharhLists().then(() => {
+                fillDatalist('sfReSharhList', _sharhCache.rows || []);
+            }).catch(() => { });
+        }
+
+        bindRowEditorEvents();
+        setTimeout(() => {
+            applyRowEditorState();
+            const colInput = document.getElementById('sfReCodeCol');
+            if (colInput) { colInput.focus(); if (mode === 'edit') colInput.select(); }
+        }, 60);
+    }
+
+    function buildRowEditorHtml(mode, data) {
+        const title = mode === 'edit' ? '✏️ ویرایش ردیف' : '➕ ثبت ردیف جدید';
+        return `
+            <div class="sf-re-box">
+                <div class="sf-re-header">
+                    <span class="sf-re-title">${title}</span>
+                    <button type="button" class="sf-re-close" id="sfReCloseBtn" title="انصراف (Esc)">✕</button>
                 </div>
-                <div class="sf-row-body">
-                    <div class="sf-line sf-line-codes">
-                        <div class="sf-field">
-                            <label>کد کل</label>
-                            <select class="sf-col" data-idx="${idx}">${colOpts}</select>
-                        </div>
-                        <div class="sf-field">
-                            <label>کد معین</label>
-                            <div class="sf-input-with-btn">
-                                <input type="text" class="sf-moein-text" data-idx="${idx}"
-                                       value="${item.codeMoein ? item.codeMoein + (currentMoein ? ' - ' + H.esc(currentMoein.name) : '') : ''}"
-                                       placeholder="🔍" readonly style="cursor:pointer; background:#F9FAFB;">
-                                <button type="button" class="sf-pick-btn" data-idx="${idx}" data-pick="moein" title="انتخاب معین">🔍</button>
+                <div class="sf-re-body">
+                   <datalist id="sfReSharhList"></datalist>
+                    <div class="sf-re-line sf-re-codes-line">
+                        <div class="sf-re-field" data-field="col">
+                            <label>کد کل <span class="sf-re-req">*</span></label>
+                            <div class="sf-re-input-with-btn">
+                                <input type="text" id="sfReCodeCol" inputmode="numeric" placeholder="کد" autocomplete="off">
+                                <button type="button" class="sf-re-pick-btn" data-pick="col" title="انتخاب (F3)">🔍</button>
                             </div>
+                            <span class="sf-re-name" id="sfReColName"></span>
                         </div>
-                        <div class="sf-field">
-                            <label>تفصیلی ۱ ${requireTafzil1 ? '<span class="sf-hint sf-stock-req">*</span>' : ''}</label>
-                            <div class="sf-input-with-btn">
-                                <input type="text" inputmode="numeric" class="sf-tafzil num-input" data-idx="${idx}"
-                                       value="${item.codeTafzil || ''}"
-                                       placeholder="${requireTafzil1 ? 'اجباری' : 'کد'}"
-                                       ${canTafzil1 ? '' : 'disabled'}>
-                                <span class="sf-tafzil-name" data-idx="${idx}">${tafzilName ? H.esc(tafzilName) : ''}</span>
-                                ${canTafzil1 ? `<button type="button" class="sf-pick-btn" data-idx="${idx}" data-pick="tafzil">🔍</button>` : ''}
+                        <div class="sf-re-field" data-field="moein">
+                            <label>کد معین <span class="sf-re-req">*</span></label>
+                            <div class="sf-re-input-with-btn">
+                                <input type="text" id="sfReCodeMoein" inputmode="numeric" placeholder="کد" autocomplete="off">
+                                <button type="button" class="sf-re-pick-btn" data-pick="moein" title="انتخاب (F3)">🔍</button>
                             </div>
+                            <span class="sf-re-name" id="sfReMoeinName"></span>
                         </div>
-                        <div class="sf-field">
-                            <label>تفصیلی ۲ ${requireTafzil2 ? '<span class="sf-hint sf-stock-req">*</span>' : ''}</label>
-                            <div class="sf-input-with-btn">
-                                <input type="text" class="sf-tafzil2 sf-tafzil2-text num-input" data-idx="${idx}"
-                                       value="${item.codeTafzili2 ? item.codeTafzili2 + (tafzil2Name ? ' - ' + H.esc(tafzil2Name) : '') : ''}"
-                                       placeholder="${requireTafzil2 ? 'اجباری — 🔍' : (canTafzil2 ? 'کد یا 🔍' : '—')}"
-                                       readonly
-                                       style="cursor:${canTafzil2 ? 'pointer' : 'not-allowed'}; background:${canTafzil2 ? '#fff' : '#F3F4F6'};"
-                                       ${canTafzil2 ? '' : 'disabled'}>
-                                ${canTafzil2 ? `<button type="button" class="sf-pick-btn" data-idx="${idx}" data-pick="tafzil2">🔍</button>` : ''}
+                        <div class="sf-re-field" data-field="tafzil" id="sfReTafzilField">
+                            <label>تفصیلی ۱ <span class="sf-re-req" id="sfReTafzilReq" style="display:none;">*</span></label>
+                            <div class="sf-re-input-with-btn">
+                                <input type="text" id="sfReCodeTafzil" inputmode="numeric" placeholder="کد" autocomplete="off">
+                                <button type="button" class="sf-re-pick-btn" data-pick="tafzil" title="انتخاب">🔍</button>
                             </div>
+                            <span class="sf-re-name" id="sfReTafzilName"></span>
+                        </div>
+                        <div class="sf-re-field" data-field="tafzili2" id="sfReTafzili2Field" style="display:none;">
+                            <label>تفصیلی ۲ <span class="sf-re-req" id="sfReTafzili2Req" style="display:none;">*</span></label>
+                            <div class="sf-re-input-with-btn">
+                                <input type="text" id="sfReCodeTafzili2" readonly placeholder="🔍" style="cursor:pointer;background:#F9FAFB;">
+                                <button type="button" class="sf-re-pick-btn" data-pick="tafzil2" title="انتخاب">🔍</button>
+                            </div>
+                            <span class="sf-re-name" id="sfReTafzili2Name"></span>
                         </div>
                     </div>
 
-                    <div class="sf-line sf-line-values">
-                        <div class="sf-field sf-field-money">
-                            <label>بدهکار</label>
-                            <input type="text" inputmode="numeric" class="sf-bed num-input" data-idx="${idx}"
-                                   value="${bedStr}" placeholder="0">
-                        </div>
-                        <div class="sf-field sf-field-money">
-                            <label>بستانکار</label>
-                            <input type="text" inputmode="numeric" class="sf-bes num-input" data-idx="${idx}"
-                                   value="${besStr}" placeholder="0">
-                        </div>
-                        <div class="sf-field sf-field-meghdar">
-                            <label>مقدار ${isStock ? '<span class="sf-hint sf-stock-req">*</span>' : ''}</label>
-                            <input type="text" inputmode="decimal" class="sf-meghdar num-input ${isStock ? 'sf-required-stock' : ''}" data-idx="${idx}"
-                                   value="${meghStr}" placeholder="${isStock ? 'اجباری' : '0'}"
-                                   ${isStock ? '' : 'disabled'}>
-                        </div>
-                        <div class="sf-field sf-field-sharh">
-                            <label>شرح ردیف</label>
-                            <input type="text" class="sf-sharh" data-idx="${idx}" list="sfRowSharhList" value="${H.esc(item.otherSharh || '')}" placeholder="شرح ردیف">
-                        </div>
-
-                        <div class="sf-field sf-field-dodate">
-                            <label>ت. سر رسید</label>
-                            <input type="text" class="sf-dodate num-input" data-idx="${idx}"
-                                   value="${H.esc(item.doDate || '')}"
-                                   placeholder="1404/01/01" maxlength="10">
-                        </div>
-                        <div class="sf-field sf-field-dook">
-                            <label class="sf-dook-label" title="مورد رسیدگی واقع شد — از گزارش pending حذف می‌شود">
-                                <input type="checkbox" class="sf-dook" data-idx="${idx}"
-                                       ${item.doOK ? 'checked' : ''}>
-                                <span>رسیدگی</span>
-                            </label>
-                        </div>
-                        <div class="sf-row-tools">
-                            <button type="button" class="sf-row-tool" data-idx="${idx}" data-action="up" title="بالا (F6)">▲</button>
-                            <button type="button" class="sf-row-tool" data-idx="${idx}" data-action="down" title="پایین (Ctrl+F6)">▼</button>
-                            <button type="button" class="sf-row-tool" data-idx="${idx}" data-action="swap" title="جابجایی (F7)">⇅</button>
-                            <button type="button" class="sf-row-tool ${isTik ? 'sf-tool-tik-active' : ''}" data-idx="${idx}" data-action="tik" title="علامت‌گذاری (F8)">✓</button>
-                            <button type="button" class="sf-row-tool" data-idx="${idx}" data-action="dup" title="تکثیر">⧉</button>
-                            <button type="button" class="sf-row-tool sf-row-del" data-idx="${idx}" data-action="del" title="حذف (Ctrl+Del)">🗑️</button>
-                        </div>
+                    <div class="sf-re-line sf-re-values-line">
+                        <div class="sf-re-field sf-re-money"><label>بدهکار</label><input type="text" id="sfReBed" inputmode="numeric" placeholder="0"></div>
+                        <div class="sf-re-field sf-re-money"><label>بستانکار</label><input type="text" id="sfReBes" inputmode="numeric" placeholder="0"></div>
+                        <div class="sf-re-field sf-re-meghdar" id="sfReMeghdarField" style="display:none;"><label>مقدار <span class="sf-re-req">*</span></label><input type="text" id="sfReMeghdar" inputmode="decimal" placeholder="0"></div>
+                        <div class="sf-re-field sf-re-sharh"><label>شرح ردیف</label><input type="text" id="sfReSharh" list="sfReSharhList" placeholder="شرح..."></div>
+                        <div class="sf-re-field sf-re-dodate"><label>ت. سررسید</label><input type="text" id="sfReDoDate" maxlength="10" placeholder="1404/01/01"></div>
+                        <div class="sf-re-field sf-re-dook"><label class="sf-re-dook-lbl"><input type="checkbox" id="sfReDoOK"><span>رسیدگی</span></label></div>
                     </div>
+                    <div class="sf-re-hint"><kbd>Enter</kbd> فیلد بعدی · <kbd>F2</kbd> ثبت · <kbd>F3</kbd> انتخاب حساب · <kbd>F7</kbd> جابجایی مبلغ · <kbd>Esc</kbd> انصراف</div>
+                </div>
+                <div class="sf-re-footer">
+                    <button type="button" class="btn btn-primary" id="sfReSaveBtn">💾 ثبت <span class="kbd-hint">Enter/F2</span></button>
+                    <button type="button" class="btn btn-ghost" id="sfReCancelBtn">انصراف <span class="kbd-hint">Esc</span></button>
                 </div>
             </div>`;
     }
-    // ═══ FOCUS ═══
-    function focusRow(idx, fieldClass) {
-        if (idx < 0 || idx >= _state.items.length) return;
-        _state.focusedIdx = idx;
-        updateFocusedRow();
 
-        const targetClass = fieldClass || 'bed';   // ⭐ پیش‌فرض bed
+    function bindRowEditorEvents() {
+        const overlay = document.getElementById('sfRowEditorOverlay');
+        if (!overlay) return;
 
-        setTimeout(() => {
-            const wrap = document.getElementById('sfRowsWrap');
-            if (!wrap) return;
-            const row = wrap.querySelector(`.sf-row[data-row-idx="${idx}"]`);
-            if (!row) return;
-            const el = row.querySelector(`.sf-${targetClass}[data-idx="${idx}"]`);
-            if (el) {
-                el.focus();
-                if (el.select && el.tagName === 'INPUT') el.select();
-            }
-        }, 0);
-    }
+        document.getElementById('sfReSaveBtn')?.addEventListener('click', () => saveRowFromEditor());
+        document.getElementById('sfReCancelBtn')?.addEventListener('click', () => closeRowEditorOverlay());
+        document.getElementById('sfReCloseBtn')?.addEventListener('click', () => closeRowEditorOverlay());
 
-    function updateFocusedRow() {
-        document.querySelectorAll('.sf-row').forEach(el => {
-            const i = parseInt(el.dataset.rowIdx);
-            el.classList.toggle('sf-row-focused', i === _state.focusedIdx);
-        });
-    }
-
-    function getFocusedRowIdx() {
-        const active = document.activeElement;
-        if (active && active.dataset && active.dataset.idx !== undefined) {
-            const i = parseInt(active.dataset.idx);
-            if (!isNaN(i)) return i;
-        }
-        return _state.focusedIdx;
-    }
-
-    // ═══ SCROLL ═══
-    function getScrollContainer() {
-        return document.getElementById('modalBody');
-    }
-
-    function scrollToRow(idx) {
-        setTimeout(() => {
-            const row = document.querySelector(`.sf-row[data-row-idx="${idx}"]`);
-            if (!row) return;
-
-            // اگه آخرین ردیف → به ته فرم
-            const isLast = idx === _state.items.length - 1;
-
-            // روش ۱: scrollIntoView (بهترین — خودش container رو پیدا می‌کنه)
-            try {
-                row.scrollIntoView({
-                    behavior: 'smooth',
-                    block: isLast ? 'end' : 'center'
-                });
-            } catch {
-                // fallback
-                const scroller = document.getElementById('modalBody');
-                if (scroller) {
-                    scroller.scrollTop = isLast
-                        ? scroller.scrollHeight
-                        : row.offsetTop - 100;
-                }
-            }
-        }, 100);
-    }
-    // ═══ ROW OPS ═══
-    function moveRowUp(idx) {
-        if (idx <= 0) { window.App.toast('ردیف اول قابل جابجایی نیست', 'info'); return; }
-        const items = _state.items;
-        [items[idx - 1], items[idx]] = [items[idx], items[idx - 1]];
-
-        const wrap = document.getElementById('sfRowsWrap');
-        const rows = [...wrap.querySelectorAll(':scope > .sf-row')];
-        // ردیف idx رو قبل از ردیف idx-1 بذار
-        wrap.insertBefore(rows[idx], rows[idx - 1]);
-
-        reindexRowsDOM();
-        _state.focusedIdx = idx - 1;
-        _state.dirty = true;
-        updateFocusedRow();
-
-        setTimeout(() => {
-            const newRow = wrap.querySelector(`.sf-row[data-row-idx="${idx - 1}"]`);
-            newRow?.querySelector('.sf-bed')?.focus();
-        }, 30);
-    }
-
-    function moveRowDown(idx) {
-        if (idx >= _state.items.length - 1) { window.App.toast('ردیف آخر قابل جابجایی نیست', 'info'); return; }
-        const items = _state.items;
-        [items[idx], items[idx + 1]] = [items[idx + 1], items[idx]];
-
-        const wrap = document.getElementById('sfRowsWrap');
-        const rows = [...wrap.querySelectorAll(':scope > .sf-row')];
-        // ردیف idx+1 رو قبل از ردیف idx بذار
-        wrap.insertBefore(rows[idx + 1], rows[idx]);
-
-        reindexRowsDOM();
-        _state.focusedIdx = idx + 1;
-        _state.dirty = true;
-        updateFocusedRow();
-
-        setTimeout(() => {
-            const newRow = wrap.querySelector(`.sf-row[data-row-idx="${idx + 1}"]`);
-            newRow?.querySelector('.sf-bed')?.focus();
-        }, 30);
-    }
-    // ⭐ reindex بدون re-render
-    function reindexRowsDOM() {
-        const wrap = document.getElementById('sfRowsWrap');
-        if (!wrap) return;
-        const rows = wrap.querySelectorAll(':scope > .sf-row');
-        rows.forEach((row, i) => {
-            row.dataset.rowIdx = i;
-            // ⭐ فقط شماره‌ی متنی رو تغییر بده، نه چک‌باکس رو
-            const numText = row.querySelector('.sf-row-num-text');
-            if (numText) numText.textContent = i + 1;
-            // ⭐ همه‌ی data-idx ها رو آپدیت کن (شامل چک‌باکس)
-            row.querySelectorAll('[data-idx]').forEach(el => {
-                el.dataset.idx = i;
+        overlay.querySelectorAll('[data-pick]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const pick = btn.dataset.pick;
+                if (pick === 'col') openRowMoeinPicker('col');
+                else if (pick === 'moein') openRowMoeinPicker('moein');
+                else if (pick === 'tafzil') openRowTafzilPicker();
+                else if (pick === 'tafzil2') openRowTafzili2Picker();
             });
         });
+
+        document.getElementById('sfReCodeCol')?.addEventListener('input', onReCodeColInput);
+        document.getElementById('sfReCodeMoein')?.addEventListener('input', onReCodeMoeinInput);
+        document.getElementById('sfReCodeTafzil')?.addEventListener('input', onReCodeTafzilInput);
+        document.getElementById('sfReBed')?.addEventListener('input', onReBedInput);
+        document.getElementById('sfReBes')?.addEventListener('input', onReBesInput);
+        document.getElementById('sfReMeghdar')?.addEventListener('input', onReMeghdarInput);
+
+        document.getElementById('sfReBed')?.addEventListener('keydown', onRePlusKey);
+        document.getElementById('sfReBes')?.addEventListener('keydown', onRePlusKey);
+
+        overlay.addEventListener('keydown', onRowEditorKeyDown);
     }
 
-    function swapBedBes(idx) {
-        const it = _state.items[idx];
-        if (!it) return;
-        [it.mabBed, it.mabBes] = [it.mabBes, it.mabBed];
-
-        // ⭐ آپدیت مستقیم DOM
-        const wrap = document.getElementById('sfRowsWrap');
-        const bedInput = wrap?.querySelector(`.sf-bed[data-idx="${idx}"]`);
-        const besInput = wrap?.querySelector(`.sf-bes[data-idx="${idx}"]`);
-        if (bedInput) bedInput.value = it.mabBed ? it.mabBed.toLocaleString('en-US') : '';
-        if (besInput) besInput.value = it.mabBes ? it.mabBes.toLocaleString('en-US') : '';
-
-        _state.dirty = true;
-        recalcTotals();
-        window.App.toast('بدهکار و بستانکار جابجا شد', 'success');
-    }
-
-    function duplicateRow(idx) {
-        const it = _state.items[idx];
-        if (!it) return;
-        const newItem = cloneItem(it);
-        _state.items.splice(idx + 1, 0, newItem);
-
-        const wrap = document.getElementById('sfRowsWrap');
-        const rows = [...wrap.querySelectorAll(':scope > .sf-row')];
-        const temp = document.createElement('div');
-        temp.innerHTML = buildRowHtml(newItem, idx + 1);
-        const newNode = temp.firstElementChild;
-
-        if (rows[idx + 1]) wrap.insertBefore(newNode, rows[idx + 1]);
-        else wrap.appendChild(newNode);
-
-        reindexRowsDOM();
-        _state.focusedIdx = idx + 1;
-        _state.dirty = true;
-        updateFocusedRow();
-        updateRowCount();
-
-        setTimeout(() => {
-            newNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            newNode.querySelector('.sf-bed')?.focus();
-        }, 80);
-    }
-
-    function deleteRowAt(idx) {
-        if (_state.items.length === 1) {
-            window.App.toast('حداقل یک ردیف باید باشد', 'warn');
-            return;
-        }
-        _state.items.splice(idx, 1);
-
-        const wrap = document.getElementById('sfRowsWrap');
-        const rows = wrap.querySelectorAll(':scope > .sf-row');
-        if (rows[idx]) rows[idx].remove();
-
-        reindexRowsDOM();
-        const newIdx = Math.min(idx, _state.items.length - 1);
-        _state.focusedIdx = newIdx;
-        _state.dirty = true;
-        updateFocusedRow();
-        updateRowCount();
-
-        setTimeout(() => {
-            const row = wrap.querySelector(`.sf-row[data-row-idx="${newIdx}"]`);
-            row?.querySelector('.sf-bed')?.focus();
-        }, 30);
-    }
-
-    function addRowAt(idx) {
-        const newItem = emptyRow();
-        _state.items.splice(idx + 1, 0, newItem);
-
-        const wrap = document.getElementById('sfRowsWrap');
-        const rows = [...wrap.querySelectorAll(':scope > .sf-row')];
-        const temp = document.createElement('div');
-        temp.innerHTML = buildRowHtml(newItem, idx + 1);
-        const newNode = temp.firstElementChild;
-
-        if (rows[idx + 1]) wrap.insertBefore(newNode, rows[idx + 1]);
-        else wrap.appendChild(newNode);
-
-        reindexRowsDOM();
-        _state.focusedIdx = idx + 1;
-        _state.dirty = true;
-        updateFocusedRow();
-        updateRowCount();
-
-        setTimeout(() => {
-            const scroller = document.getElementById('modalBody');
-            if (scroller) scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
-            newNode.querySelector('.sf-bed')?.focus();
-        }, 100);
-    }
-
-    function pasteRows() {
-        const clip = getClipboard();
-        if (clip.length === 0) {
-            window.App.toast('بافر خالی است — ابتدا ردیفی کپی کنید (Ctrl+F9)', 'warn');
-            return;
-        }
-        const idx = getFocusedRowIdx();
-        const newItems = clip.map(cloneItem);
-
-        const wrap = document.getElementById('sfRowsWrap');
-        const rows = [...wrap.querySelectorAll(':scope > .sf-row')];
-
-        // ⭐ درج به‌ترتیب — با tracking آخرین گره درج‌شده
-        let insertAfterNode = rows[idx] || null;
-
-        newItems.forEach((it, k) => {
-            _state.items.splice(idx + 1 + k, 0, it);
-            const temp = document.createElement('div');
-            temp.innerHTML = buildRowHtml(it, idx + 1 + k);
-            const newNode = temp.firstElementChild;
-
-            if (insertAfterNode && insertAfterNode.nextSibling) {
-                wrap.insertBefore(newNode, insertAfterNode.nextSibling);
-            } else {
-                wrap.appendChild(newNode);
-            }
-            insertAfterNode = newNode;   // ⭐ برای تکرار بعدی
-        });
-
-        reindexRowsDOM();
-        _state.focusedIdx = idx + newItems.length;
-        _state.dirty = true;
-        _state.selectedRows.clear();   // ⭐ بعد از paste، پاک کن
-        updateFocusedRow();
-        updateRowCount();
-
-        setTimeout(() => {
-            const targetRow = wrap.querySelector(`.sf-row[data-row-idx="${idx + newItems.length}"]`);
-            targetRow?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            targetRow?.querySelector('.sf-bed')?.focus();
-        }, 100);
-
-        window.App.toast(`${newItems.length} ردیف چسبانده شد`, 'success');
-    }
-
-    function updateRowCount() {
-        const counter = document.getElementById('sfRowCount');
-        if (counter) counter.textContent = `(${_state.items.length} ردیف)`;
-    }
-
-    function updatePasteBtnState() {
-        const btn = document.getElementById('sfPasteBtn');
-        if (!btn) return;
-        const n = getClipboard().length;
-        btn.disabled = n === 0;
-        btn.title = n > 0
-            ? `چسباندن ${n} ردیف (Ctrl+F10)`
-            : 'بافر خالی است — ابتدا Ctrl+F9';
-    }
-
-    function jumpToLastRow() {
-        const lastIdx = _state.items.length - 1;
-        _state.focusedIdx = lastIdx;
-        updateFocusedRow();
-        const wrap = document.getElementById('sfRowsWrap');
-        const row = wrap?.querySelector(`.sf-row[data-row-idx="${lastIdx}"]`);
-        if (row) {
-            row.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            setTimeout(() => {
-                row.querySelector('.sf-bed')?.focus();   // ⭐ bed نه col
-            }, 300);
-        }
-    }
-
-    function jumpToFirstRow() {
-        _state.focusedIdx = 0;
-        updateFocusedRow();
-        const wrap = document.getElementById('sfRowsWrap');
-        const row = wrap?.querySelector(`.sf-row[data-row-idx="0"]`);
-        if (row) {
-            row.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            setTimeout(() => {
-                row.querySelector('.sf-bed')?.focus();   // ⭐ bed نه col
-            }, 300);
-        }
-    }
-
-
-    // ═══ COPY / PASTE ═══
-    function copyRows() {
-        // ⭐ اگه چک‌باکس‌دار هستن، اون‌ها رو کپی کن
-        if (_state.selectedRows && _state.selectedRows.size > 0) {
-            const indices = [..._state.selectedRows].sort((a, b) => a - b);
-            const items = indices
-                .map(i => _state.items[i])
-                .filter(Boolean)
-                .map(cloneItem);
-
-            if (items.length === 0) {
-                window.App.toast('ردیفی برای کپی نیست', 'warn');
-                return;
-            }
-
-            setClipboard(items);   // ⭐ این خط جا افتاده بود
-            window.App.toast(`${items.length} ردیف کپی شد — در سند دیگه هم قابل استفاده‌ست`, 'success');
-            updatePasteBtnState();
-            return;
-        }
-
-        // ⭐ fallback: ردیف جاری (رفتار قبلی)
-        const idx = getFocusedRowIdx();
-        const it = _state.items[idx];
-        if (!it) { window.App.toast('ردیفی برای کپی نیست', 'warn'); return; }
-        setClipboard([cloneItem(it)]);
-        window.App.toast('1 ردیف کپی شد', 'success');
-        updatePasteBtnState();
-    }
-
-    // ⭐⭐ تغییر وضعیت TikRow ردیف
-    function toggleTikRow(idx) {
-        const it = _state.items[idx];
-        if (!it) return;
-
-        // ⭐ toggle
-        it.tikRow = (it.tikRow || 0) === 1 ? 0 : 1;
-        _state.dirty = true;
-
-        // ⭐ آپدیت DOM بدون re-render
-        const wrap = document.getElementById('sfRowsWrap');
-        const row = wrap?.querySelector(`.sf-row[data-row-idx="${idx}"]`);
-        if (row) {
-            row.classList.toggle('sf-row-tik', it.tikRow === 1);
-
-            // آپدیت badge در شماره ردیف
-            const numWrap = row.querySelector('.sf-row-num');
-            if (numWrap) {
-                let badge = numWrap.querySelector('.sf-row-tik-badge');
-                if (it.tikRow === 1 && !badge) {
-                    badge = document.createElement('span');
-                    badge.className = 'sf-row-tik-badge';
-                    badge.title = 'ردیف علامت‌گذاری‌شده (F8)';
-                    badge.textContent = '✓';
-                    numWrap.appendChild(badge);
-                } else if (it.tikRow !== 1 && badge) {
-                    badge.remove();
-                }
-            }
-
-            // آپدیت دکمه ابزار
-            const tikBtn = row.querySelector('.sf-row-tool[data-action="tik"]');
-            if (tikBtn) {
-                tikBtn.classList.toggle('sf-tool-tik-active', it.tikRow === 1);
-            }
-        }
-
-        window.App.toast(
-            it.tikRow === 1 ? 'ردیف علامت‌گذاری شد ✓' : 'علامت‌گذاری برداشته شد',
-            'success',
-            { duration: 1500 }
-        );
-    }
-
-    // ═══ KEYBOARD ═══
-    let _keyHandler = null;
-    let _pickerKeyHandler = null;
-
- async function handleGlobalKey(e) {
-        // ⭐ اگه Picker بازه، هیچ کاری نکن
-    if (document.querySelector('.hp-overlay')) return;
-
-    const active = document.activeElement;
-    const isOnInput = active && (
-        active.tagName === 'INPUT' ||
-        active.tagName === 'SELECT' ||
-        active.tagName === 'TEXTAREA'
-    );
-    const isOnBedOrBes = active && (
-        active.classList.contains('sf-bed') ||
-        active.classList.contains('sf-bes')
-    );
-
-    const isArrowUp = e.key === 'ArrowUp' || e.keyCode === 38;
-    const isArrowDown = e.key === 'ArrowDown' || e.keyCode === 40;
-    const isHome = e.key === 'Home' || e.keyCode === 36;
-    const isEnd = e.key === 'End' || e.keyCode === 35;
-    const isF6 = e.key === 'F6' || e.code === 'F6' || e.keyCode === 117;
-
-    // ⭐⭐⭐ Arrow Up/Down خالی روی فیلد بدهکار/بستانکار خالی → پیمایش ردیف
-    if (isOnBedOrBes && (isArrowUp || isArrowDown) &&
-        !e.ctrlKey && !e.altKey && !e.shiftKey) {
-        const isEmpty = (active.value || '').trim() === '' || active.value === '0';
-        if (isEmpty) {
-            e.preventDefault();
-            e.stopPropagation();
-            const cur = getFocusedRowIdx();
-            if (isArrowUp && cur > 0) {
-                focusRow(cur - 1, 'bed');
-            } else if (isArrowDown && cur < _state.items.length - 1) {
-                focusRow(cur + 1, 'bed');
-            }
-            return;
-        }
-    }
-
-    // ⭐ Ctrl+Home / Alt+↑ → اولین ردیف
-    if ((e.ctrlKey && isHome) || (e.altKey && isArrowUp)) {
-        e.preventDefault();
-        focusRow(0, 'bed');
-        const row = document.querySelector('.sf-row[data-row-idx="0"]');
-        row?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        return;
-    }
-    // ⭐ Ctrl+End / Alt+↓ → آخرین ردیف
-    if ((e.ctrlKey && isEnd) || (e.altKey && isArrowDown)) {
-        e.preventDefault();
-        const last = _state.items.length - 1;
-        focusRow(last, 'bed');
-        const row = document.querySelector(`.sf-row[data-row-idx="${last}"]`);
-        row?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        return;
-    }
-
-    // F6 → انتقال به بالا
-    if (isF6 && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        e.preventDefault(); e.stopPropagation();
-        moveRowUp(getFocusedRowIdx());
-        return;
-    }
-    // Ctrl+F6 → انتقال به پایین
-    if (isF6 && e.ctrlKey && !e.shiftKey && !e.altKey) {
-        e.preventDefault(); e.stopPropagation();
-        moveRowDown(getFocusedRowIdx());
-        return;
-    }
-    // F7 → swap bed/bes
-    if (e.key === 'F7' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        e.preventDefault(); e.stopPropagation();
-        swapBedBes(getFocusedRowIdx());
-        return;
-    }
-     // ⭐ F8 → toggle TikRow
-     if (e.key === 'F8' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-         e.preventDefault(); e.stopPropagation();
-         toggleTikRow(getFocusedRowIdx());
-         return;
-     }
-    // Ctrl+F9 → کپی
-    if (e.key === 'F9' && e.ctrlKey && !e.shiftKey) {
-        e.preventDefault(); copyRows(); return;
-    }
-    // Ctrl+F10 → پیست
-    if (e.key === 'F10' && e.ctrlKey && !e.shiftKey) {
-        e.preventDefault(); pasteRows(); return;
-    }
-    // Insert → افزودن ردیف
-    if (e.key === 'Insert' && !e.ctrlKey && !e.shiftKey) {
-        e.preventDefault(); addRowAt(getFocusedRowIdx()); return;
-    }
-    // Ctrl+Delete → حذف ردیف
-     if (e.key === 'Delete' && e.ctrlKey) {
-        e.preventDefault();
-         const ok = await _askConfirm('این ردیف حذف شود؟', {
-             title: 'حذف ردیف',
-             danger: true,
-             okText: 'حذف کن'
-         });
-        if (ok) deleteRowAt(getFocusedRowIdx());
-        return;
-    }
-    // Ctrl+S / Ctrl+Enter → ذخیره
-    if (e.ctrlKey && (e.key === 's' || e.key === 'S' || e.key === 'Enter')) {
-        e.preventDefault(); save(); return;
-    }
-    // Escape → تأیید خروج
-    if (e.key === 'Escape') {
-        e.preventDefault();
-        handleClose();
-     }
-
-
-  
-    }
-
-    // ⭐ آپدیت UI انتخاب‌ها بدون re-render کل ردیف‌ها
-    function updateSelectionUI() {
-        const counter = document.getElementById('sfSelectedCount');
-        const clearBtn = document.getElementById('sfClearSelBtn');
-        if (!counter) return;
-
-        counter.textContent = _state.selectedRows.size > 0 ? `${_state.selectedRows.size} ردیف انتخاب شده` : '';
-        counter.classList.toggle('has-selection', _state.selectedRows.size > 0);
-
-        if (_state.selectedRows.size > 0 && !clearBtn) {
-            const btn = document.createElement('button');
-            btn.className = 'sf-clear-sel';
-            btn.id = 'sfClearSelBtn';
-            btn.textContent = '✕ لغو انتخاب';
-            counter.parentElement.appendChild(btn);
-        } else if (_state.selectedRows.size === 0 && clearBtn) {
-            clearBtn.remove();
-        }
-    }
-
-    // ═══ BIND ═══
-    function bindEvents() {
-        const mb = document.getElementById('modalBody');
-        if (!mb) return;
-
-        _state.dirty = false;
-
-        document.getElementById('sfAddRow')?.addEventListener('click', () => {
-            addRowAt(_state.items.length - 1);
-        });
-        document.getElementById('sfSaveBtn')?.addEventListener('click', save);
-        document.getElementById('sfCancelBtn')?.addEventListener('click', handleClose);
-        document.getElementById('sfCopyBtn')?.addEventListener('click', copyRows);
-        document.getElementById('sfPasteBtn')?.addEventListener('click', pasteRows);
-        document.getElementById('sfHelpBtn')?.addEventListener('click', toggleHelpPanel);
-
-        mb.addEventListener('change', onFieldChange);
-        mb.addEventListener('input', onFieldInput);
-        mb.addEventListener('click', onRowClick);
-        mb.addEventListener('focusin', onRowFocus);
-        mb.addEventListener('keydown', onMoneyAddZerosKey);
-
-        // ⭐ Event Delegation برای چک‌باکس‌ها (بدون listener به تک تک ردیف‌ها)
-        if (window._sfCheckboxHandler) mb.removeEventListener('change', window._sfCheckboxHandler);
-        window._sfCheckboxHandler = function (e) {
-            const target = e.target;
-
-            if (target.id === 'sfSelectAllRows') {
-                const isChecked = target.checked;
-                if (isChecked) {
-                    _state.items.forEach((_, i) => _state.selectedRows.add(i));
-                } else {
-                    _state.selectedRows.clear();
-                }
-                document.querySelectorAll('#sfRowsWrap .sf-row-check').forEach(cb => cb.checked = isChecked);
-                document.querySelectorAll('#sfRowsWrap .sf-row').forEach(row => row.classList.toggle('sf-row-selected', isChecked));
-                updateSelectionUI();
-            } else if (target.classList.contains('sf-row-check')) {
-                const idx = parseInt(target.dataset.idx);
-                if (target.checked) _state.selectedRows.add(idx);
-                else _state.selectedRows.delete(idx);
-
-                target.closest('.sf-row').classList.toggle('sf-row-selected', target.checked);
-
-                const allCb = document.getElementById('sfSelectAllRows');
-                if (allCb) allCb.checked = _state.items.length > 0 && _state.selectedRows.size === _state.items.length;
-                updateSelectionUI();
-            }
-        };
-        mb.addEventListener('change', window._sfCheckboxHandler);
-
-        // ⭐ Event Delegation برای دکمه لغو انتخاب
-        if (window._sfClearHandler) mb.removeEventListener('click', window._sfClearHandler);
-        window._sfClearHandler = function (e) {
-            if (e.target.id === 'sfClearSelBtn') {
-                _state.selectedRows.clear();
-                document.querySelectorAll('#sfRowsWrap .sf-row-check').forEach(cb => cb.checked = false);
-                document.querySelectorAll('#sfRowsWrap .sf-row').forEach(row => row.classList.remove('sf-row-selected'));
-                const allCb = document.getElementById('sfSelectAllRows');
-                if (allCb) allCb.checked = false;
-                updateSelectionUI();
-            }
-        };
-        mb.addEventListener('click', window._sfClearHandler);
-
-        if (_keyHandler) document.removeEventListener('keydown', _keyHandler, true);
-        _keyHandler = handleGlobalKey;
-        document.addEventListener('keydown', _keyHandler, true);
-
-        if (_pickerKeyHandler) {
-            document.removeEventListener('keydown', _pickerKeyHandler, true);
-        }
-        _pickerKeyHandler = (e) => {
-            if (document.querySelector('.hp-overlay')) return;
-            if (e.key !== 'F3' && e.key !== 'F4') return;
-            if (e.ctrlKey || e.altKey || e.shiftKey) return;
-
-            const mb = document.getElementById('modalBody');
-            if (!mb || !mb.querySelector('.sf-row')) return;
-
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-
-            const idx = getFocusedRowIdx();
-            openMoeinPicker(idx);
-            return false;
-        };
-        document.addEventListener('keydown', _pickerKeyHandler, true);
-
-        updatePasteBtnState();
-    }
-
-
-    // ⭐⭐ کلید + : افزودن 000 به bed/bes
-    function onMoneyAddZerosKey(e) {
-        const t = e.target;
-
-        // فقط روی bed یا bes
-        if (!t.classList.contains('sf-bed') && !t.classList.contains('sf-bes')) return;
-
-        // تشخیص کلید + (main keyboard یا numpad)
-        const isPlus =
-            e.key === '+' ||
-            e.code === 'NumpadAdd' ||
-            (e.shiftKey && e.key === '=');
-
-        if (!isPlus) return;
-
-        e.preventDefault();
+    function onRowEditorKeyDown(e) {
         e.stopPropagation();
+        if (e.key === 'Escape') { e.preventDefault(); closeRowEditorOverlay(); return; }
+        if (e.key === 'F2') { e.preventDefault(); saveRowFromEditor(); return; }
 
-        const idx = parseInt(t.dataset.idx);
-        if (isNaN(idx)) return;
+        if (e.key === 'F7' && !e.ctrlKey) {
+            e.preventDefault();
+            const d = _state.rowEditor.data;
+            [d.mabBed, d.mabBes] = [d.mabBes, d.mabBed];
+            document.getElementById('sfReBed').value = d.mabBed ? Number(d.mabBed).toLocaleString('en-US') : '';
+            document.getElementById('sfReBes').value = d.mabBes ? Number(d.mabBes).toLocaleString('en-US') : '';
+            _toast('مبالغ جابجا شد', 'success', { duration: 1000 }); return;
+        }
 
-        // ⭐ مقدار فعلی (نرمال‌سازی‌شده)
-        const rawVal = (t.value || '').trim();
-        const numVal = parseNum(rawVal);
-
-        // اگه خالی یا صفر → کاری نکن
-        if (!rawVal || numVal === 0) {
-            window.App.toast('ابتدا یک عدد وارد کنید', 'info', { duration: 1500 });
+        if ((e.key === 'F3' || e.key === 'F4') && !e.ctrlKey) {
+            e.preventDefault();
+            const activeId = document.activeElement?.id || '';
+            if (activeId === 'sfReCodeCol') openRowMoeinPicker('col');
+            else if (activeId === 'sfReCodeMoein') openRowMoeinPicker('moein');
+            else if (activeId === 'sfReCodeTafzil') openRowTafzilPicker();
+            else if (activeId === 'sfReCodeTafzili2') openRowTafzili2Picker();
             return;
         }
 
-        // ⭐ ضرب در ۱۰۰۰ (یعنی افزودن 000)
-        const newVal = numVal * 1000;
-        const formatted = newVal.toLocaleString('en-US');
+        if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+            e.preventDefault();
+            const order = ['sfReCodeCol', 'sfReCodeMoein', 'sfReCodeTafzil', 'sfReBed', 'sfReBes', 'sfReMeghdar', 'sfReSharh', 'sfReDoDate'];
+            const activeId = document.activeElement?.id || '';
+            if (activeId === 'sfReCodeCol') {
+                const val = parseInt(document.getElementById('sfReCodeCol').value) || 0;
+                if (val > 0 && !_cache.cols.find(c => c.codeCol === val)) {
+                    _toast('کد کل وارد شده در سیستم وجود ندارد', 'error');
+                    return; // جلوگیری از پرش به فیلد بعدی
+                }
+            } else if (activeId === 'sfReCodeMoein') {
+                const colVal = parseInt(document.getElementById('sfReCodeCol').value) || 0;
+                const val = parseInt(document.getElementById('sfReCodeMoein').value) || 0;
+                if (val > 0 && !_cache.moeins.find(m => m.codeCol === colVal && m.codeMoein === val)) {
+                    _toast('کد معین وارد شده برای این کل وجود ندارد', 'error');
+                    return; // جلوگیری از پرش به فیلد بعدی
+                }
+            } else if (activeId === 'sfReCodeTafzil') {
+                const val = parseInt(document.getElementById('sfReCodeTafzil').value) || 0;
+                if (val > 0 && !_cache.tafzils.find(t => t.code === val)) {
+                    _toast('کد تفصیلی وارد شده در سیستم وجود ندارد', 'error');
+                    return; // جلوگیری از پرش به فیلد بعدی
+                }
+            }
+            const idx = order.indexOf(activeId);
+            if (idx >= 0 && idx < order.length - 1) {
+                for (let j = idx + 1; j < order.length; j++) {
+                    const nextEl = document.getElementById(order[j]);
+                    if (nextEl && nextEl.offsetParent !== null) { nextEl.focus(); if (nextEl.select) nextEl.select(); return; }
+                }
+            }
+            saveRowFromEditor();
+        }
+    }
 
-        t.value = formatted;
+    function applyRowEditorState() {
+        const d = _state.rowEditor?.data;
+        if (!d) return;
+        const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val == null ? '' : val; };
 
-        // کرسر رو ببر به آخر
-        try { t.setSelectionRange(formatted.length, formatted.length); } catch { }
+        setVal('sfReCodeCol', d.codeCol || '');
+        setVal('sfReCodeMoein', d.codeMoein || '');
+        setVal('sfReCodeTafzil', d.codeTafzil || '');
+        setVal('sfReCodeTafzili2', d.codeTafzili2 ? `${d.codeTafzili2} - ${findTafzili2Name(d.codeTafzili2)}` : '');
+        setVal('sfReBed', d.mabBed ? Number(d.mabBed).toLocaleString('en-US') : '');
+        setVal('sfReBes', d.mabBes ? Number(d.mabBes).toLocaleString('en-US') : '');
+        setVal('sfReMeghdar', d.meghdar ? parseFloat(Number(d.meghdar).toFixed(4)) : '');
+        setVal('sfReSharh', d.otherSharh || '');
+        setVal('sfReDoDate', d.doDate || '');
+        if (document.getElementById('sfReDoOK')) document.getElementById('sfReDoOK').checked = !!d.doOK;
 
-        // ⭐ آپدیت state
-        if (t.classList.contains('sf-bed')) {
-            _state.items[idx].mabBed = newVal;
+        updateRowEditorNames();
+        updateRowEditorVisibility();
+    }
+
+    function updateRowEditorNames() {
+        const colEl = document.getElementById('sfReCodeCol'), moeinEl = document.getElementById('sfReCodeMoein'), tafEl = document.getElementById('sfReCodeTafzil');
+        if (!colEl || !moeinEl) return;
+        const codeCol = parseInt(colEl.value) || 0, codeMoein = parseInt(moeinEl.value) || 0, codeTafzil = parseInt(tafEl?.value) || 0;
+
+        document.getElementById('sfReColName').textContent = (_cache.cols.find(c => c.codeCol === codeCol) || {}).name || '';
+        document.getElementById('sfReMoeinName').textContent = (_cache.moeins.find(m => m.codeCol === codeCol && m.codeMoein === codeMoein) || {}).name || '';
+        document.getElementById('sfReTafzilName').textContent = findTafzilName(codeTafzil);
+        document.getElementById('sfReTafzili2Name').textContent = findTafzili2Name(_state.rowEditor?.data?.codeTafzili2);
+    }
+
+    function updateRowEditorVisibility() {
+        const codeCol = parseInt(document.getElementById('sfReCodeCol')?.value) || 0;
+        const codeMoein = parseInt(document.getElementById('sfReCodeMoein')?.value) || 0;
+        const tafField = document.getElementById('sfReTafzilField'), taf2Field = document.getElementById('sfReTafzili2Field'), meghField = document.getElementById('sfReMeghdarField');
+
+        if (!codeCol || !codeMoein) {
+            if (tafField) tafField.style.display = ''; if (taf2Field) taf2Field.style.display = 'none'; if (meghField) meghField.style.display = 'none';
+            return;
+        }
+        const moein = _cache.moeins.find(m => m.codeCol === codeCol && m.codeMoein === codeMoein);
+        if (!moein) return;
+
+        if (tafField) tafField.style.display = moein.hasTafzili ? '' : 'none';
+        if (taf2Field) taf2Field.style.display = moein.hasTafzili2 ? '' : 'none';
+        if (meghField) meghField.style.display = moein.isStock ? '' : 'none';
+    }
+
+    function onReCodeColInput(e) {
+        e.target.value = normalizeDigits(e.target.value).replace(/\D/g, '');
+        _state.rowEditor.data.codeCol = parseInt(e.target.value) || 0;
+        updateRowEditorNames(); updateRowEditorVisibility();
+        if (!e.target.value) { document.getElementById('sfReCodeMoein').value = ''; _state.rowEditor.data.codeMoein = 0; updateRowEditorNames(); }
+    }
+    function onReCodeMoeinInput(e) {
+        e.target.value = normalizeDigits(e.target.value).replace(/\D/g, '');
+        _state.rowEditor.data.codeMoein = parseInt(e.target.value) || 0;
+        updateRowEditorNames(); updateRowEditorVisibility();
+    }
+    function onReCodeTafzilInput(e) {
+        e.target.value = normalizeDigits(e.target.value).replace(/\D/g, '');
+        _state.rowEditor.data.codeTafzil = parseInt(e.target.value) || 0;
+        updateRowEditorNames();
+    }
+    function onReBedInput(e) {
+        applyMoneyFormat(e.target);
+        const v = parseNum(e.target.value); _state.rowEditor.data.mabBed = v;
+        if (v > 0) { _state.rowEditor.data.mabBes = 0; document.getElementById('sfReBes').value = ''; }
+    }
+    function onReBesInput(e) {
+        applyMoneyFormat(e.target);
+        const v = parseNum(e.target.value); _state.rowEditor.data.mabBes = v;
+        if (v > 0) { _state.rowEditor.data.mabBed = 0; document.getElementById('sfReBed').value = ''; }
+    }
+    function onReMeghdarInput(e) {
+        e.target.value = normalizeDigits(e.target.value).replace(/[^\d.]/g, '');
+        _state.rowEditor.data.meghdar = parseNum(e.target.value);
+    }
+    function onRePlusKey(e) {
+        if (e.key === '+' || e.code === 'NumpadAdd') {
+            e.preventDefault();
+            const val = parseNum(e.target.value);
+            if (val) { e.target.value = (val * 1000).toLocaleString('en-US'); if (e.target.id === 'sfReBed') _state.rowEditor.data.mabBed = val * 1000; else _state.rowEditor.data.mabBes = val * 1000; }
+        }
+    }
+
+    async function openRowMoeinPicker(mode) {
+        const d = _state.rowEditor?.data; if (!d) return;
+        const res = await window.App.UI.HesabPicker.open({ mode: mode === 'col' ? 'col' : 'moein', codeCol: d.codeCol || 0 });
+        if (!res) return;
+        d.codeCol = res.codeCol; d.codeMoein = res.codeMoein || 0; d.codeTafzil = 0; d.codeTafzili2 = 0;
+        document.getElementById('sfReCodeCol').value = d.codeCol || '';
+        document.getElementById('sfReCodeMoein').value = d.codeMoein || '';
+        document.getElementById('sfReCodeTafzil').value = ''; document.getElementById('sfReCodeTafzili2').value = '';
+        updateRowEditorNames(); updateRowEditorVisibility();
+        setTimeout(() => { document.getElementById(mode === 'col' ? 'sfReCodeMoein' : 'sfReBed')?.focus(); }, 80);
+    }
+
+    async function openRowTafzilPicker() {
+        const d = _state.rowEditor?.data; if (!d) return;
+        const res = await window.App.UI.HesabPicker.open({ mode: 'tafzil' });
+        if (res) { d.codeTafzil = res.codeTafzil || 0; document.getElementById('sfReCodeTafzil').value = d.codeTafzil; updateRowEditorNames(); document.getElementById('sfReBed')?.focus(); }
+    }
+
+    async function openRowTafzili2Picker() {
+        const d = _state.rowEditor?.data; if (!d) return;
+        const list = _cache.tafzils2 || [];
+        if (!list.length) { _toast('لیست تفصیلی ۲ خالی است', 'warn'); return; }
+
+        const overlay = document.createElement('div');
+        overlay.className = 'hp-overlay'; overlay.style.zIndex = '11000';
+        overlay.innerHTML = `<div class="hp-box" style="width:min(480px,92vw);max-height:80vh;display:flex;flex-direction:column;background:#fff;border-radius:12px;"><div style="padding:12px 16px;background:#4F46E5;color:#fff;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;"><span>🔍 تفصیلی ۲</span><button type="button" data-close="1" style="background:transparent;border:0;color:#fff;cursor:pointer;">✕</button></div><div style="padding:10px;"><input type="text" id="t2s" placeholder="جستجو..." style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;font-family:inherit;"></div><div id="t2l" style="overflow-y:auto;padding:6px;"></div></div>`;
+        document.body.appendChild(overlay);
+
+        const render = (f = '') => {
+            const filtered = list.filter(x => String(x.code).includes(f) || (x.name || '').includes(f)).slice(0, 200);
+            overlay.querySelector('#t2l').innerHTML = filtered.map(x => `<div class="t2item" data-c="${x.code}" data-n="${H.esc(x.name)}" style="padding:8px;cursor:pointer;border-bottom:1px solid #eee;display:flex;gap:10px;"><b style="color:#4F46E5;">${x.code}</b><span>${H.esc(x.name)}</span></div>`).join('');
+        };
+        render();
+        overlay.querySelector('#t2s').oninput = (e) => render(e.target.value);
+        overlay.onclick = (e) => {
+            if (e.target === overlay || e.target.dataset.close) { overlay.remove(); return; }
+            const item = e.target.closest('.t2item');
+            if (item) { d.codeTafzili2 = parseInt(item.dataset.c); document.getElementById('sfReCodeTafzili2').value = d.codeTafzili2 + ' - ' + item.dataset.n; document.getElementById('sfReTafzili2Name').textContent = item.dataset.n; overlay.remove(); document.getElementById('sfReBed').focus(); }
+        };
+        setTimeout(() => overlay.querySelector('#t2s').focus(), 50);
+    }
+
+    function saveRowFromEditor() {
+        const d = _state.rowEditor?.data; if (!d) return;
+        d.codeCol = parseInt(document.getElementById('sfReCodeCol').value) || 0;
+        d.codeMoein = parseInt(document.getElementById('sfReCodeMoein').value) || 0;
+        d.codeTafzil = parseInt(document.getElementById('sfReCodeTafzil').value) || 0;
+        d.mabBed = parseNum(document.getElementById('sfReBed').value);
+        d.mabBes = parseNum(document.getElementById('sfReBes').value);
+        d.meghdar = parseNum(document.getElementById('sfReMeghdar').value);
+        d.otherSharh = document.getElementById('sfReSharh').value;
+        d.doDate = document.getElementById('sfReDoDate').value;
+        d.doOK = document.getElementById('sfReDoOK').checked;
+
+        if (!d.codeCol) { _toast('کد کل اجباری است', 'error'); return; }
+        if (!d.codeMoein) { _toast('کد معین اجباری است', 'error'); return; }
+        if (!d.mabBed && !d.mabBes) { _toast('مبلغ اجباری است', 'error'); return; }
+
+        const hesabError = validateHesabCodes(d);
+        if (hesabError) {
+            _toast(hesabError, 'error');
+            return; // جلوگیری از بسته شدن فرم و ذخیره شدن
+        }
+        enrichItemNames(d);
+
+        if (_state.rowEditor.mode === 'edit') {
+            _state.items[_state.rowEditor.rowIdx] = d;
+            _toast('ردیف به‌روز شد', 'success', { duration: 1500 });
+            closeRowEditorOverlay();
         } else {
-            _state.items[idx].mabBes = newVal;
+            _state.items.push(d);
+            _toast(`ردیف ${_state.items.length} ثبت شد`, 'success', { duration: 1500 });
+            _state.rowEditor.data = emptyRow();
+            ['sfReCodeCol', 'sfReCodeMoein', 'sfReCodeTafzil', 'sfReCodeTafzili2', 'sfReBed', 'sfReBes', 'sfReMeghdar', 'sfReSharh', 'sfReDoDate'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('sfReColName').textContent = ''; document.getElementById('sfReMoeinName').textContent = '';
+            document.getElementById('sfReDoOK').checked = false;
+            setTimeout(() => document.getElementById('sfReCodeCol').focus(), 50);
         }
-
         _state.dirty = true;
-        recalcTotals();
-
-        window.App.toast(`×۱۰۰۰ → ${formatted}`, 'success', { duration: 1200 });
-    }
-  function onRowFocus(e) {
-        const t = e.target;
-        if (t && t.dataset && t.dataset.idx !== undefined) {
-            const idx = parseInt(t.dataset.idx);
-            if (!isNaN(idx)) {
-                _state.focusedIdx = idx;
-                updateFocusedRow();
-            }
-        }
+        renderSummary();
     }
 
-
-  function onFieldInput(e) {
-        
-        const t = e.target;
-        const idx = parseInt(t.dataset.idx);
-        if (isNaN(idx)) return;
-        _state.dirty = true;
-        if (t.classList.contains('sf-sharh')) {
-            _state.items[idx].otherSharh = t.value;
-
-        } else if (t.classList.contains('sf-bed')) {
-            applyMoneyFormat(t);
-            const v = parseNum(t.value);
-            _state.items[idx].mabBed = v;
-            if (v > 0) {
-                _state.items[idx].mabBes = 0;
-                const besInput = document.querySelector(`.sf-bes[data-idx="${idx}"]`);
-                if (besInput) besInput.value = '';
-            }
-            recalcTotals();
-
-        } else if (t.classList.contains('sf-bes')) {
-            applyMoneyFormat(t);
-            const v = parseNum(t.value);
-            _state.items[idx].mabBes = v;
-            if (v > 0) {
-                _state.items[idx].mabBed = 0;
-                const bedInput = document.querySelector(`.sf-bed[data-idx="${idx}"]`);
-                if (bedInput) bedInput.value = '';
-            }
-            recalcTotals();
-
-        } else if (t.classList.contains('sf-meghdar')) {
-            const curPos = t.selectionStart;
-            let raw = normalizeDigits(t.value)
-                .replace(/[٫،]/g, '.')
-                .replace(/[^\d.]/g, '');
-
-            const parts = raw.split('.');
-            if (parts.length > 2) raw = parts[0] + '.' + parts.slice(1).join('');
-
-            const fp = raw.split('.');
-            const intPart = fp[0].slice(0, 8);
-            const decPart = fp.length > 1 ? fp[1].slice(0, 4) : null;
-            const newVal = intPart + (decPart !== null ? '.' + decPart : '');
-
-            if (t.value !== newVal) {
-                t.value = newVal;
-                const newPos = Math.min(curPos, newVal.length);
-                try { t.setSelectionRange(newPos, newPos); } catch { }
-            }
-
-            _state.items[idx].meghdar = parseNum(newVal) || 0;
-        } else if (t.classList.contains('sf-tafzil2')) {
-            _state.items[idx].codeTafzili2 = parseInt(t.value) || 0;
-        } else if (t.classList.contains('sf-tafzil')) {
-            // ⭐ فقط ارقام رو نگه دار
-            const digits = normalizeDigits(t.value).replace(/\D/g, '');
-            const code = parseInt(digits) || 0;
-            _state.items[idx].codeTafzil = code;
-
-            // ⭐ آپدیت زنده‌ی نام کنار input
-            const wrap = document.getElementById('sfRowsWrap');
-            const nameSpan = wrap?.querySelector(`.sf-tafzil-name[data-idx="${idx}"]`);
-            if (nameSpan) {
-                nameSpan.textContent = code ? (findTafzilName(code) || '') : '';
-            }
-        } else if (t.classList.contains('sf-dodate')) {
-          _state.items[idx].doDate = t.value || '';
-        }
-  }
-
-    function onFieldChange(e) {
-        const t = e.target;
-        const idx = parseInt(t.dataset.idx);
-        if (isNaN(idx)) return;
-        _state.dirty = true;
-
-        if (t.classList.contains('sf-col')) {
-            _state.items[idx].codeCol = parseInt(t.value) || 0;
-            _state.items[idx].codeMoein = 0;
-            _state.items[idx].codeTafzil = 0;
-            _state.items[idx].codeTafzili2 = 0;
-
-            // ⭐ فقط همین ردیف رو آپدیت کن — بدون re-render کل
-            const wrap = document.getElementById('sfRowsWrap');
-            const row = wrap?.querySelector(`.sf-row[data-row-idx="${idx}"]`);
-            if (row) {
-                const moeinText = row.querySelector('.sf-moein-text');
-                if (moeinText) moeinText.value = '';
-                const tafzil = row.querySelector('.sf-tafzil');
-                if (tafzil) tafzil.value = '';
-                const tafzili2 = row.querySelector('.sf-tafzil2');
-                if (tafzili2) tafzili2.value = '';
-            }
-        } else if (t.classList.contains('sf-tafzil2')) {
-            _state.items[idx].codeTafzili2 = parseInt(t.value) || 0;
-        } else if (t.classList.contains('sf-tafzil')) {
-            const digits = normalizeDigits(t.value).replace(/\D/g, '');
-            const code = parseInt(digits) || 0;
-            _state.items[idx].codeTafzil = code;
-            // ⭐ reformat روی blur — اگه کاربر چیز اضافه تایپ کرد، تمیز شه
-            t.value = code || '';
-            const wrap = document.getElementById('sfRowsWrap');
-            const nameSpan = wrap?.querySelector(`.sf-tafzil-name[data-idx="${idx}"]`);
-            if (nameSpan) nameSpan.textContent = code ? (findTafzilName(code) || '') : '';
-        } else if (t.classList.contains('sf-dook')) {
-            _state.items[idx].doOK = !!t.checked;
-        }
+    function closeRowEditorOverlay() {
+        document.getElementById('sfRowEditorOverlay')?.remove();
+        _state.rowEditor = null;
     }
 
- async function onRowClick(e) {
-        const tool = e.target.closest('.sf-row-tool');
-        if (tool) {
-            const idx = parseInt(tool.dataset.idx);
-            const action = tool.dataset.action;
-            if (action === 'up') moveRowUp(idx);
-            else if (action === 'down') moveRowDown(idx);
-            else if (action === 'swap') swapBedBes(idx);
-            else if (action === 'tik') toggleTikRow(idx); 
-            else if (action === 'dup') duplicateRow(idx);
-            else if (action === 'del') {
-                const ok = await _askConfirm('این ردیف حذف شود؟', {
-                    title: 'حذف ردیف',
-                    danger: true,
-                    okText: 'حذف کن'
-                });
-                if (ok) deleteRowAt(idx); }
-            return;
-        }
-
-        if (e.target.classList.contains('sf-pick-btn')) {
-            const idx = parseInt(e.target.dataset.idx);
-            const pick = e.target.dataset.pick;
-            if (pick === 'moein') openMoeinPicker(idx);
-            else if (pick === 'tafzil') openTafzilPicker(idx);
-            else if (pick === 'tafzil2') openTafzili2Picker(idx);
-        }
-    }
-
-    // ═══ PICKERS ═══
-    async function openTafzilPicker(rowIdx) {
-        const result = await window.App.UI.HesabPicker.open({ mode: 'tafzil', allowCreate: true });
-        if (!result) return;
-        if (result._create) { await handleCreateFromPicker(rowIdx, result); return; }
-        _state.items[rowIdx].codeTafzil = result.codeTafzil;
-        renderRows();
-        setTimeout(() => {
-            const wrap = document.getElementById('sfRowsWrap');
-            const row = wrap?.querySelector(`.sf-row[data-row-idx="${rowIdx}"]`);
-            row?.querySelector('.sf-tafzil')?.focus();
-        }, 50);
-    }
-
-    async function openMoeinPicker(rowIdx) {
-        const current = _state.items[rowIdx] || {};
-        const result = await window.App.UI.HesabPicker.open({
-            mode: 'moein',
-            codeCol: current.codeCol || 0,
-            allowCreate: true,
-            initial: current.codeMoein ? { codeCol: current.codeCol, codeMoein: current.codeMoein } : null
-        });
-        if (!result) return;
-        if (result._create) { await handleCreateFromPicker(rowIdx, result); return; }
-
-        _state.items[rowIdx].codeCol = result.codeCol;
-        _state.items[rowIdx].codeMoein = result.codeMoein;
-        _state.items[rowIdx].codeTafzil = 0;
-        _state.items[rowIdx].codeTafzili2 = 0;
-        renderRows();
-
-        // ⭐ بعد از انتخاب معین، اگه hasTafzili2 داشت، فوکوس روی فیلد Tafzili2
-        setTimeout(() => {
-            const wrap = document.getElementById('sfRowsWrap');
-            const row = wrap?.querySelector(`.sf-row[data-row-idx="${rowIdx}"]`);
-            if (!row) return;
-
-            if (result.hasTafzili2) {
-                // اجباری — فوکوس روی Tafzili2 و هشدار
-                row.querySelector('.sf-tafzil2-text')?.focus();
-                window.App.toast(
-                    'این معین تفصیلی ۲ دارد — انتخاب تفصیلی ۲ اجباری است',
-                    'info',
-                    { duration: 2500 }
-                );
-            } else if (result.hasTafzili) {
-                row.querySelector('.sf-tafzil')?.focus();
-            } else {
-                row.querySelector('.sf-moein-text')?.focus();
-            }
-        }, 50);
-    }
-    async function handleCreateFromPicker(rowIdx, pickerResult) {
-        const { keyword, mode, codeCol } = pickerResult;
-        const name = prompt(`نام ${mode === 'moein' ? 'معین' : 'تفصیلی'} جدید:`, keyword);
-        if (!name) return;
-        try {
-            const payload = {
-                level: mode, name: name.trim(), mahiat: 1, vaziat: 1,
-                codeCol: mode === 'moein' ? codeCol : null
-            };
-            const r = await window.App.Http.api('/api/hesab', { method: 'POST', body: JSON.stringify(payload) });
-            if (r && r.hesabId) {
-                window.App.UI.HesabPicker.invalidateCache();
-                window.App.toast('حساب جدید ایجاد شد', 'success');
-                if (mode === 'moein') await openMoeinPicker(rowIdx);
-                else await openTafzilPicker(rowIdx);
-            }
-        } catch (err) { window.App.toast('خطا در ایجاد: ' + err.message, 'error'); }
-    }
-
-    async function openTafzili2Picker(rowIdx) {
-        const list = await ensureTafzili2Lookup();
-        if (!list || list.length === 0) { window.App.toast('لیست تفصیلی ۲ در دسترس نیست', 'warn'); return; }
-
-        const currentCode = _state.items[rowIdx].codeTafzili2;
-        const modalBody = document.getElementById('modalBody');
-        document.getElementById('sfTafzil2Picker')?.remove();
-
-        const picker = document.createElement('div');
-        picker.id = 'sfTafzil2Picker';
-        picker.className = 'sf-picker-overlay';
-        picker.innerHTML = `
-            <div class="sf-picker-box">
-                <div class="sf-picker-header">
-                    <span>🔍 انتخاب تفصیلی ۲</span>
-                    <button type="button" class="sf-picker-close">✕</button>
-                </div>
-                <div class="sf-picker-search">
-                    <input type="text" id="sfTafzil2Search" placeholder="جستجو..." autofocus>
-                </div>
-                <div class="sf-picker-list" id="sfTafzil2List"></div>
-            </div>`;
-        modalBody.appendChild(picker);
-
-        const searchInput = picker.querySelector('#sfTafzil2Search');
-        const listWrap = picker.querySelector('#sfTafzil2List');
-
-        function renderList(filter = '') {
-            const f = filter.trim().toLowerCase();
-            const filtered = !f ? list : list.filter(x =>
-                String(x.code).includes(f) || (x.name || '').toLowerCase().includes(f));
-            if (filtered.length === 0) { listWrap.innerHTML = '<div class="sf-picker-empty">یافت نشد</div>'; return; }
-            listWrap.innerHTML = filtered.slice(0, 200).map(x => `
-                <div class="sf-picker-item ${x.code === currentCode ? 'selected' : ''}"
-                     data-code="${x.code}"><span class="sf-picker-code">${x.code}</span>
-                    <span class="sf-picker-name">${H.esc(x.name || '')}</span></div>`).join('');
-        }
-        renderList();
-        searchInput.addEventListener('input', () => renderList(searchInput.value));
-        picker.querySelector('.sf-picker-close').addEventListener('click', () => picker.remove());
-        picker.addEventListener('click', (e) => {
-            if (e.target === picker) { picker.remove(); return; }
-            const item = e.target.closest('.sf-picker-item');
-            if (!item) return;
-            _state.items[rowIdx].codeTafzili2 = parseInt(item.dataset.code);
-            picker.remove();
-            renderRows();
-            setTimeout(() => {
-                const wrap = document.getElementById('sfRowsWrap');
-                const row = wrap?.querySelector(`.sf-row[data-row-idx="${rowIdx}"]`);
-                row?.querySelector('.sf-tafzil2')?.focus();
-            }, 50);
-        });
-        searchInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') picker.remove();
-            if (e.key === 'Enter') { const first = listWrap.querySelector('.sf-picker-item'); if (first) first.click(); }
-        });
-        setTimeout(() => searchInput.focus(), 50);
-    }
-
-    // ═══ TOTALS ═══
+    // ═══ TOTALS & VALIDATION ═══
     function recalcTotals() {
-        const wrap = document.getElementById('sfTotals');
-        if (!wrap) return;
+        const wrap = document.getElementById('sfTotals'); if (!wrap) return;
         let tb = 0, ts = 0;
         _state.items.forEach(it => { tb += it.mabBed || 0; ts += it.mabBes || 0; });
         const diff = tb - ts;
         const bal = Math.abs(diff) < 0.01;
-        const color = bal ? '#059669' : '#DC2626';
         wrap.innerHTML = `
-            <div class="sf-total-item"><span>جمع بدهکار:</span><strong>${H.fmt(tb)}</strong></div>
-            <div class="sf-total-item"><span>جمع بستانکار:</span><strong>${H.fmt(ts)}</strong></div>
-            <div class="sf-total-item" style="color:${color};"><span>تفاوت:</span><strong>${H.fmt(Math.abs(diff))} ${bal ? '✅ تراز' : ''}</strong></div>`;
+            <div class="sf-total-item"><span>جمع بدهکار:</span> <strong>${H.fmt(tb)}</strong></div>
+            <div class="sf-total-item"><span>جمع بستانکار:</span> <strong>${H.fmt(ts)}</strong></div>
+            <div class="sf-total-item" style="color:${bal ? '#059669' : '#DC2626'};"><span>تفاوت:</span> <strong>${H.fmt(Math.abs(diff))} ${bal ? '✅ تراز' : ''}</strong></div>`;
     }
 
-    // ⭐⭐ بررسی ایراد ردیف برای Vazeit
-    function _detectRowErrorsForVazeit(it) {
+    function _detectRowErrors(it) {
         const errs = [];
-        const hasBed = (it.mabBed || 0) > 0;
-        const hasBes = (it.mabBes || 0) > 0;
-        const hasAmount = hasBed || hasBes;
-
-        // ⛔ ایراد جدی — کد کل ندارد ولی مبلغ دارد
-        if ((!it.codeCol || it.codeCol === 0) && hasAmount) {
-            errs.push({ severity: 'error', label: 'کد کل ندارد' });
-        }
-
-        // ⚠️ هشدار — معین ندارد
-        if (it.codeCol > 0 && (!it.codeMoein || it.codeMoein === 0) && hasAmount) {
-            errs.push({ severity: 'warn', label: 'کد معین ندارد' });
-        }
-
-        // ⛔ ایراد جدی — حساب انباری ولی مقدار خالی
-        const currentMoein = it.codeMoein
-            ? (_cache.moeins.find(m => m.codeCol === it.codeCol && m.codeMoein === it.codeMoein) || null)
-            : null;
-        if (currentMoein?.isStock && hasAmount && (!it.meghdar || Math.abs(it.meghdar) === 0)) {
-            errs.push({ severity: 'error', label: 'مقدار انباری ندارد' });
-        }
-
-        // ⭐ جدید — تفصیلی ۱ اجباری
-        if (currentMoein?.hasTafzili && hasAmount && (!it.codeTafzil || it.codeTafzil === 0)) {
-            errs.push({ severity: 'error', label: 'تفصیلی ۱ ندارد (اجباری)' });
-        }
-
-        // ⭐ جدید — تفصیلی ۲ اجباری
-        if (currentMoein?.hasTafzili2 && hasAmount && (!it.codeTafzili2 || it.codeTafzili2 === 0)) {
-            errs.push({ severity: 'error', label: 'تفصیلی ۲ ندارد (اجباری)' });
-        }
-
-        // ⚠️ هشدار — مبلغ صفر
-        if (!hasAmount) {
-            errs.push({ severity: 'warn', label: 'مبلغ صفر است' });
-        }
-
+        const hasAmt = (it.mabBed || 0) > 0 || (it.mabBes || 0) > 0;
+        if (!it.codeCol && hasAmt) errs.push({ severity: 'error', label: 'کد کل ندارد' });
+        if (it.codeCol > 0 && !it.codeMoein && hasAmt) errs.push({ severity: 'warn', label: 'معین ندارد' });
+        const m = _cache.moeins.find(x => x.codeCol === it.codeCol && x.codeMoein === it.codeMoein);
+        if (m?.hasTafzili && hasAmt && !it.codeTafzil) errs.push({ severity: 'error', label: 'تفصیلی ۱ ندارد' });
+        if (m?.hasTafzili2 && hasAmt && !it.codeTafzili2) errs.push({ severity: 'error', label: 'تفصیلی ۲ ندارد' });
+        if (m?.isStock && hasAmt && !it.meghdar) errs.push({ severity: 'error', label: 'مقدار ندارد' });
         return errs;
     }
-    // ⭐⭐ چک کلی سند برای Vazeit
-    function _validateVazeit(vazeit, tb, ts) {
-        if (vazeit === 0) return { ok: true };   // پیش‌نویس → آزاد
 
+    function _validateVazeit(vazeit, tb, ts) {
+        if (vazeit === 0) return { ok: true };
         const issues = [];
         _state.items.forEach((it, i) => {
-            if (it.codeCol === 0 && (it.mabBed || 0) === 0 && (it.mabBes || 0) === 0) return; // ردیف خالی
-            const errs = _detectRowErrorsForVazeit(it);
-            errs.forEach(e => {
-                // برای رسیدگی: فقط error
-                // برای قطعی: error + warn
-                if (vazeit === 1 && e.severity !== 'error') return;
-                issues.push(`ردیف ${i + 1}: ${e.label}`);
-            });
+            if (!it.codeCol && !it.mabBed && !it.mabBes) return;
+            _detectRowErrors(it).forEach(e => { if (vazeit === 1 && e.severity !== 'error') return; issues.push(`ردیف ${i + 1}: ${e.label}`); });
         });
-
-        // برای قطعی: چک تراز
-        if (vazeit === 2) {
-            const diff = Math.abs(tb - ts);
-            if (diff > 0.01) {
-                issues.push(`سند تراز نیست (تفاوت: ${H.fmt(diff)})`);
-            }
-        }
-
+        if (vazeit === 2 && Math.abs(tb - ts) > 0.01) issues.push(`سند تراز نیست (تفاوت: ${H.fmt(Math.abs(tb - ts))})`);
         return { ok: issues.length === 0, issues };
     }
-    // ═══ SAVE ═══
-   async function save() {
-        const btn = document.getElementById('sfSaveBtn');
-        const orig = btn.textContent;
+
+    // ═══ BIND EVENTS (SUMMARY TABLE) ═══
+    let _keyHandler = null;
+
+    function bindEvents() {
+        document.getElementById('sfAddRow')?.addEventListener('click', () => openRowEditor('create', -1));
+        document.getElementById('sfSaveBtn')?.addEventListener('click', save);
+        document.getElementById('sfCancelBtn')?.addEventListener('click', handleClose);
+        document.getElementById('sfCopyBtn')?.addEventListener('click', copyRows);
+        document.getElementById('sfPasteBtn')?.addEventListener('click', pasteRows);
+
+        const wrap = document.getElementById('sfSummaryWrap');
+        wrap.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('sf-sum-cb') || e.target.id === 'sfSumSelectAll') return; // هندل در change
+            const btn = e.target.closest('.sf-act-btn');
+            if (btn) {
+                const tr = btn.closest('tr'); const idx = parseInt(tr.dataset.idx); const action = btn.dataset.action;
+                if (action === 'edit') openRowEditor('edit', idx);
+                else if (action === 'up' && idx > 0) { [_state.items[idx - 1], _state.items[idx]] = [_state.items[idx], _state.items[idx - 1]]; renderSummary(); }
+                else if (action === 'down' && idx < _state.items.length - 1) { [_state.items[idx], _state.items[idx + 1]] = [_state.items[idx + 1], _state.items[idx]]; renderSummary(); }
+                else if (action === 'swap') { const it = _state.items[idx];[it.mabBed, it.mabBes] = [it.mabBes, it.mabBed]; renderSummary(); }
+                else if (action === 'tik') { _state.items[idx].tikRow = _state.items[idx].tikRow === 1 ? 0 : 1; renderSummary(); }
+                else if (action === 'dup') { const c = cloneItem(_state.items[idx]); c.sanadId = 0; _state.items.splice(idx + 1, 0, c); renderSummary(); }
+                else if (action === 'del') { if (await _askConfirm('حذف شود؟', { danger: true })) { _state.items.splice(idx, 1); renderSummary(); } }
+                return;
+            }
+            const tr = e.target.closest('tr[data-idx]');
+            if (tr) openRowEditor('edit', parseInt(tr.dataset.idx));
+        });
+
+        wrap.addEventListener('change', (e) => {
+            if (e.target.id === 'sfSumSelectAll') {
+                if (e.target.checked) _state.items.forEach((_, i) => _state.selectedRows.add(i));
+                else _state.selectedRows.clear();
+                renderSummary();
+            } else if (e.target.classList.contains('sf-sum-cb')) {
+                const idx = parseInt(e.target.dataset.idx);
+                if (e.target.checked) _state.selectedRows.add(idx); else _state.selectedRows.delete(idx);
+                e.target.closest('tr').classList.toggle('sf-tr-selected', e.target.checked);
+            }
+        });
+
+        if (_keyHandler) document.removeEventListener('keydown', _keyHandler, true);
+        _keyHandler = (e) => {
+            if (document.getElementById('sfRowEditorOverlay') || document.querySelector('.hp-overlay')) return;
+
+            if (e.key === 'Insert' && !e.ctrlKey) { e.preventDefault(); openRowEditor('create', -1); return; }
+            if (e.key === 'Escape') { e.preventDefault(); handleClose(); return; }
+            if (e.ctrlKey && (e.key === 's' || e.key === 'Enter')) { e.preventDefault(); save(); return; }
+            if (e.ctrlKey && e.key === 'e') { e.preventDefault(); const tr = wrap.querySelector('tr.sf-tr-selected') || wrap.querySelector('tr'); if (tr) openRowEditor('edit', parseInt(tr.dataset.idx)); return; }
+            if (e.ctrlKey && e.key === 'F9') { e.preventDefault(); copyRows(); return; }
+            if (e.ctrlKey && e.key === 'F10') { e.preventDefault(); pasteRows(); return; }
+        };
+        document.addEventListener('keydown', _keyHandler, true);
+    }
+
+    function copyRows() {
+        const sel = _state.selectedRows.size > 0 ? [..._state.selectedRows].map(i => _state.items[i]) : _state.items;
+        if (!sel.length) return;
+        setClipboard(sel.map(cloneItem));
+        _toast(`${sel.length} ردیف کپی شد`, 'success'); renderSummary();
+    }
+    function pasteRows() {
+        const clip = getClipboard(); if (!clip.length) return;
+        clip.forEach(c => { const n = cloneItem(c); n.sanadId = 0; _state.items.push(n); });
+        _toast(`${clip.length} ردیف الحاق شد`, 'success'); renderSummary();
+    }
+
+    // ═══ SAVE & DELETE ═══
+    async function save() {
+        if (document.getElementById('sfRowEditorOverlay')) { _toast('ابتدا فرم ردیف را ذخیره کنید', 'warn'); return; }
+        const btn = document.getElementById('sfSaveBtn'); const orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ ذخیره...';
 
         const dateIn = document.getElementById('sfDateIn').value.trim();
-        const sharh = document.getElementById('sfParentSharh').value.trim();
-        const vazeit = parseInt(document.getElementById('sfVazeit').value) || 0;
-        const kind = parseInt(document.getElementById('sfKindSanad').value) || 0;
-        const noStr = document.getElementById('sfNoSanad').value.trim();
-       // ⭐⭐ چک دسترسی برای تغییر وضعیت سند
-       if (_state.isEdit && _state.originalVazeit !== undefined && vazeit !== _state.originalVazeit) {
-           const P = window.App.Permissions;
-           if (P) {
-               const origV = _state.originalVazeit;
-
-               // تغییر وضعیت از قطعی (2) → نیاز به 103
-               if (origV === 2 && !P.can(103)) {
-                   window.App.toast('برای تغییر وضعیت سند قطعی به دسترسی ۱۰۳ نیاز دارید', 'error');
-                   return;
-               }
-               // تغییر وضعیت از رسیدگی (1) → نیاز به 104 یا 105
-               if (origV === 1 && !(P.can(104) || P.can(105))) {
-                   window.App.toast('برای تغییر وضعیت سند رسیدگی به دسترسی ۱۰۴ نیاز دارید', 'error');
-                   return;
-               }
-               // تغییر وضعیت از پیش‌نویس (0) → نیاز به 102
-               if (origV === 0 && !P.can(102)) {
-                   window.App.toast('برای تغییر وضعیت سند به دسترسی ۱۰۲ نیاز دارید', 'error');
-                   return;
-               }
-           }
-       }
-
-       if (!dateIn) {
-           console.warn('[save] تاریخ خالی است');
-           window.App.toast('تاریخ سند الزامی است', 'error');
-           return;
+        const valid = _state.items.filter(it => it.codeCol > 0 && (it.mabBed > 0 || it.mabBes > 0));
+        for (let i = 0; i < valid.length; i++) {
+            const err = validateHesabCodes(valid[i]);
+            if (err) {
+                _toast(`ردیف ${i + 1}: ${err}`, 'error');
+                return; // کل عملیات ذخیره متوقف می‌شود
+            }
         }
-
-       const valid = _state.items.filter(it => it.codeCol > 0 && (it.mabBed > 0 || it.mabBes > 0));
-       if (valid.length === 0) {
-           console.warn('[save] هیچ ردیف معتبری نیست');
-           window.App.toast('حداقل یک ردیف با کد کل و مبلغ لازم است', 'error');
-           return;
-       }
-
-       // ⭐ چک Tafzili2 اجباری
-       const missingTafzil2 = [];
-       valid.forEach((it, i) => {
-           const curMoein = _cache.moeins.find(m => m.codeCol === it.codeCol && m.codeMoein === it.codeMoein);
-           if (curMoein?.hasTafzili2 && !it.codeTafzili2) {
-               missingTafzil2.push(i + 1);
-           }
-       });
-       if (missingTafzil2.length > 0) {
-           window.App.toast(
-               `ردیف‌های ${missingTafzil2.join('، ')} — تفصیلی ۲ اجباری است (معین انتخابی تفضیلی ۲ دارد)`,
-               'error',
-               { duration: 4000 }
-           );
-           // فوکوس روی اولین ردیف مشکل‌دار
-           focusRow(missingTafzil2[0] - 1, 'tafzil2');
-           return;
-       }
-
-        let tb = 0, ts = 0;
-        valid.forEach(it => { tb += it.mabBed || 0; ts += it.mabBes || 0; });
-       if (Math.abs(tb - ts) > 0.01) {
-           const diff = Math.abs(tb - ts);
-           const ok = await _askConfirm(
-               `سند تراز نیست!\n\nجمع بدهکار: ${H.fmt(tb)}\nجمع بستانکار: ${H.fmt(ts)}\nتفاوت: ${H.fmt(diff)}\n\nآیا باز هم می‌خواهید ذخیره کنید؟`,
-               {
-                   title: '⚠️ سند تراز نیست',
-                   type: 'warning',
-                   okText: 'بله، ذخیره کن',
-                   cancelText: 'برگشت به ویرایش'
-               }
-           );
-           if (!ok) return;
-       }
-       // ⭐⭐ چک ایراد برای Vazeit > 0
-       if (vazeit >= 1) {
-           const check = _validateVazeit(vazeit, tb, ts);
-
-           if (!check.ok) {
-               const vazeitLabel = vazeit === 1 ? 'رسیدگی' : 'قطعی';
-               const errText = '• ' + check.issues.join('\n• ');
-
-               try {
-                   if (window.App.alert && typeof window.App.alert.error === 'function') {
-                       await window.App.alert.error(
-                           `امکان تغییر وضعیت به «${vazeitLabel}» وجود ندارد.\n\n` +
-                           `ایرادهای زیر باید ابتدا رفع شوند:\n\n${errText}`,
-                           { title: '🚫 سند دارای ایراد', okText: 'برگشت به ویرایش' }
-                       );
-                   } else {
-                       window.App.toast(
-                           `سند دارای ${check.issues.length} ایراد است — ابتدا رفع کنید`,
-                           'error'
-                       );
-                   }
-               } catch { }
-
-               // برگرد به ویرایش
-               return;
-           }
-       }
+        if (!dateIn || !valid.length) { _toast('تاریخ و حداقل یک ردیف معتبر الزامی است', 'error'); btn.disabled = false; btn.textContent = orig; return; }
 
         const payload = {
-            noSanad: noStr && !isNaN(parseInt(noStr)) ? parseInt(noStr) : null,
-            dateIn, otherParentSharh: sharh, parentSharhCode: null, vazeit, kindSanad: kind,
-            items: valid.map((it, i) => ({
-                rowNum: i + 1, codeCol: it.codeCol, codeMoein: it.codeMoein,
-                codeTafzil: it.codeTafzil, codeTafzili2: it.codeTafzili2,
-                tafzili2Id: it.tafzili2Id, codeSharh: it.codeSharh,
-                otherSharh: it.otherSharh, mabBed: it.mabBed, mabBes: it.mabBes,
-                meghdar: Math.abs(it.meghdar || 0), tikRow: it.tikRow || 0,
-                doDate: it.doDate || null,       // ⭐
-                doOk: !!it.doOK                   // ⭐
-            }))
+            noSanad: parseInt(document.getElementById('sfNoSanad').value) || null,
+            dateIn, otherParentSharh: document.getElementById('sfParentSharh').value, vazeit: parseInt(document.getElementById('sfVazeit').value) || 0, kindSanad: parseInt(document.getElementById('sfKindSanad').value) || 0,
+            items: valid.map((it, i) => ({ rowNum: i + 1, codeCol: it.codeCol, codeMoein: it.codeMoein, codeTafzil: it.codeTafzil, codeTafzili2: it.codeTafzili2, tafzili2Id: it.tafzili2Id, codeSharh: it.codeSharh, otherSharh: it.otherSharh, mabBed: it.mabBed, mabBes: it.mabBes, meghdar: Math.abs(it.meghdar || 0), tikRow: it.tikRow || 0, doDate: it.doDate || null, doOk: !!it.doOK }))
         };
 
         try {
-            btn.disabled = true; btn.textContent = '⏳ در حال ذخیره...';
-            if (_state.isEdit) {
-                payload.parentSanadId = _state.parentSanadId;
-                await window.App.Http.api(`/api/sanad/${_state.parentSanadId}`, { method: 'PUT', body: JSON.stringify(payload) });
-                window.App.toast('سند به‌روزرسانی شد', 'success');
-            } else {
-                await window.App.Http.api('/api/sanad', { method: 'POST', body: JSON.stringify(payload) });
-                window.App.toast('سند جدید ثبت شد', 'success');
-            }
-            if (_keyHandler) {
-                document.removeEventListener('keydown', _keyHandler, true);
-                _keyHandler = null;
-            }
-            if (_pickerKeyHandler) {                                // ⭐ جدید
-                document.removeEventListener('keydown', _pickerKeyHandler, true);
-                _pickerKeyHandler = null;
-            }
-            window.App.closeModal();
-
-            const currentPage = window.App.state.currentPage;
-            if (currentPage === 'sanad') {
-                window.App.Features.Sanad.loadList();
-            } else {
-                const feat = window.App.Features[currentPage];
-                if (feat && typeof feat.reload === 'function') feat.reload();
-                else if (feat && typeof feat.loadList === 'function') feat.loadList();
-                else if (feat && typeof feat.run === 'function') feat.run();
-            }
-        } catch (err) {
-            window.App.toast('خطا: ' + err.message, 'error');
-        } finally {
-            btn.disabled = false; btn.textContent = orig;
-        }
+            if (_state.isEdit) { payload.parentSanadId = _state.parentSanadId; await window.App.Http.api(`/api/sanad/${_state.parentSanadId}`, { method: 'PUT', body: JSON.stringify(payload) }); }
+            else { await window.App.Http.api('/api/sanad', { method: 'POST', body: JSON.stringify(payload) }); }
+            _toast('ذخیره شد', 'success'); if (_keyHandler) document.removeEventListener('keydown', _keyHandler, true); window.App.closeModal();
+            if (window.App.state.currentPage === 'sanad') window.App.Features.Sanad.loadList();
+        } catch (e) { _toast('خطا: ' + e.message, 'error'); btn.disabled = false; btn.textContent = orig; }
     }
 
-    // ═══ DELETE ═══
-    async function deleteSanad(id) {
-        if (window.App.Permissions && !window.App.Permissions.can(108)) {
-            window.App.toast('شما برای این عمل سطح دسترسی لازم را ندارید', 'error');
-            return;
-        }
-        try {
-            const vRes = await window.App.Http.api(`/api/sanad/${id}/vazeit`);
-            const vazeit = vRes?.vazeit ?? 0;
-
-            if (vazeit !== 0) {
-                const label = vazeit === 1 ? 'رسیدگی' : 'قطعی';
-                await window.App.alert.warning(
-                    `این سند در وضعیت «${label}» قرار دارد و قابل حذف نیست.\n\n` +
-                    `برای حذف، ابتدا آن را ویرایش کنید و وضعیت را به «پیش‌نویس» تغییر دهید.`,
-                    { title: '🔒 سند قفل شده' }
-                );
-                return;
-            }
-        } catch (err) {
-            window.App.toast('خطا در چک وضعیت: ' + err.message, 'error');
-            return;
-        }
-
-        const ok = await _askConfirm(
-            'آیا از حذف این سند مطمئن هستید؟ این عملیات قابل بازگشت نیست.',
-            {
-                title: 'حذف سند',
-                danger: true,
-                okText: 'بله، حذف کن',
-                cancelText: 'لغو'
-            }
-        );
-        if (!ok) return;
-        try {
-            await window.App.Http.api(`/api/sanad/${id}`, { method: 'DELETE' });
-            window.App.toast('سند حذف شد', 'success');
-            window.App.Features.Sanad.loadList();
-        } catch (err) { window.App.toast('خطا: ' + err.message, 'error'); }
-    }
-    // ═══ Help Modal ═══
-    // ⭐ نمایش راهنما به‌صورت پنل بازشو (نه modal جدید)
-  function toggleHelpPanel() {
-    let panel = document.getElementById('sfHelpInline');
-    if (panel) { panel.remove(); return; }
-
-    const form = document.querySelector('.sanad-form');
-    if (!form) return;
-
-    panel = document.createElement('div');
-    panel.id = 'sfHelpInline';
-    panel.className = 'sf-help-inline';
-    panel.innerHTML = `
-            <div class="sf-hi-header">
-                <span>⌨️ کلیدهای میان‌بر</span>
-                <button type="button" class="sf-hi-close" id="sfHelpClose">✕</button>
-            </div>
-            <div class="sf-hi-grid">
-                <div class="sf-hi-item"><kbd>↑</kbd>/<kbd>↓</kbd><span>پیمایش ردیف (روی فیلد خالی)</span></div>
-                <div class="sf-hi-item"><kbd>F6</kbd><span>انتقال ردیف به بالا</span></div>
-                <div class="sf-hi-item"><kbd>Ctrl</kbd>+<kbd>F6</kbd><span>انتقال ردیف به پایین</span></div>
-                <div class="sf-hi-item"><kbd>F7</kbd><span>جابجایی بدهکار ↔ بستانکار</span></div>
-                <div class="sf-hi-item"><kbd>F8</kbd><span>علامت‌گذاری ردیف (تیک)</span></div>
-                <div class="sf-hi-item"><kbd>+</kbd><span>پاک کردن bed/bes (اگه غیرصفر باشه)</span></div>
-                <div class="sf-hi-item"><kbd>Insert</kbd><span>افزودن ردیف</span></div>
-                <div class="sf-hi-item"><kbd>Ctrl</kbd>+<kbd>Del</kbd><span>حذف ردیف</span></div>
-                <div class="sf-hi-item"><kbd>Ctrl</kbd>+<kbd>F9</kbd><span>کپی ردیف</span></div>
-                <div class="sf-hi-item"><kbd>Ctrl</kbd>+<kbd>F10</kbd><span>چسباندن</span></div>
-                <div class="sf-hi-item"><kbd>Ctrl</kbd>+<kbd>Home</kbd><span>اولین ردیف</span></div>
-                <div class="sf-hi-item"><kbd>Ctrl</kbd>+<kbd>End</kbd><span>آخرین ردیف</span></div>
-                <div class="sf-hi-item"><kbd>Ctrl</kbd>+<kbd>Enter</kbd><span>ذخیره</span></div>
-                <div class="sf-hi-item"><kbd>Esc</kbd><span>بستن فرم</span></div>
-            </div>`;
-
-    const header = form.querySelector('.sanad-form-header');
-    if (header) header.after(panel);
-    else form.insertBefore(panel, form.firstChild);
-
-    panel.querySelector('#sfHelpClose')?.addEventListener('click', () => panel.remove());
-   }
-
-// ⭐⭐ تأیید خروج با prompt داخلی (نه modal)
-    function showCloseConfirm() {
-        return new Promise((resolve) => {
-            const overlay = document.createElement('div');
-            overlay.className = 'sf-confirm-overlay';
-            overlay.innerHTML = `
-                <div class="sf-confirm-box">
-                    <div class="sf-confirm-icon">⚠️</div>
-                    <div class="sf-confirm-title">تغییرات ذخیره نشده است</div>
-                    <div class="sf-confirm-msg">آیا می‌خواهید قبل از خروج، تغییرات را ذخیره کنید؟</div>
-                    <div class="sf-confirm-btns">
-                        <button class="btn btn-primary" data-action="save">💾 ذخیره و بستن</button>
-                        <button class="btn btn-danger" data-action="discard">🗑️ بستن بدون ذخیره</button>
-                        <button class="btn btn-ghost" data-action="cancel">لغو</button>
-                    </div>
-                </div>`;
-
-            document.body.appendChild(overlay);
-
-            // ⭐ cleanup یکسان برای همه راه‌های بستن
-            const cleanup = () => {
-                document.removeEventListener('keydown', escHandler, true);
-                overlay.remove();
-            };
-
-            const escHandler = (e) => {
-                if (e.key === 'Escape') {
-                    e.stopPropagation();
-                    cleanup();
-                    resolve('cancel');
-                }
-            };
-
-            overlay.querySelectorAll('button').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    cleanup();
-                    resolve(btn.dataset.action);
-                });
-            });
-
-            document.addEventListener('keydown', escHandler, true);
-        });
-    }
-    // ⭐ فعال/غیرفعال کردن دکمه چسباندن
- 
     async function handleClose() {
-        if (!_state.dirty) {
-            if (_keyHandler) {
-                document.removeEventListener('keydown', _keyHandler, true);
-                _keyHandler = null;
-            }
-            if (_pickerKeyHandler) {                                    // ⭐ جدید
-                document.removeEventListener('keydown', _pickerKeyHandler, true);
-                _pickerKeyHandler = null;
-            }
-            window.App.closeModal();
-            return;
-        }
+        if (_state.dirty && !await _askConfirm('تغییرات ذخیره نشده است. خارج می‌شوید؟', { danger: true })) return;
+        if (_keyHandler) document.removeEventListener('keydown', _keyHandler, true);
+        window.App.closeModal();
+    }
 
-        const action = await showCloseConfirm();
-
-        if (action === 'save') {
-            save();
-        } else if (action === 'discard') {
-            if (_keyHandler) {
-                document.removeEventListener('keydown', _keyHandler, true);
-                _keyHandler = null;
-            }
-            if (_pickerKeyHandler) {                                    // ⭐ جدید
-                document.removeEventListener('keydown', _pickerKeyHandler, true);
-                _pickerKeyHandler = null;
-            }
-            window.App.closeModal();
-        }
+    async function deleteSanad(id) {
+        if (!await _askConfirm('آیا از حذف سند مطمئن هستید؟', { danger: true })) return;
+        await window.App.Http.api(`/api/sanad/${id}`, { method: 'DELETE' }); _toast('حذف شد', 'success'); window.App.Features.Sanad.loadList();
     }
 
     return { openCreate, openEdit, delete: deleteSanad };

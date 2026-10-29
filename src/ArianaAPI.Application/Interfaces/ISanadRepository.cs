@@ -81,4 +81,8 @@ public interface ISanadRepository
 
     Task<List<string>> GetDistinctRowSharhAsync(
         long orgId, long fyId, CancellationToken ct = default);
+
+    Task<IEnumerable<dynamic>> GetMoghayeratAsnadAsync(long orgId, long fyId, CancellationToken ct = default);
+    Task<IEnumerable<dynamic>> GetTavaliAsnadAsync(long orgId, long fyId, CancellationToken ct = default);
+    Task<IEnumerable<dynamic>> GetMahiyatMandehAsync(long orgId, long fyId, CancellationToken ct = default);
 }

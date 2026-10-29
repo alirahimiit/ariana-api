@@ -1562,4 +1562,135 @@ public class SanadRepository : ISanadRepository
             new CommandDefinition(sql, cancellationToken: ct));
         return list.ToList();
     }
+
+    // ==========================================
+    // گزارش ۱: مغایرت‌گیری اسناد (مثل Delphi)
+    // ==========================================
+    public async Task<IEnumerable<dynamic>> GetMoghayeratAsnadAsync(long orgId, long fyId, CancellationToken ct = default)
+    {
+        // ⭐ تغییر: نام ستون‌ها به camelCase تغییر کرد
+        var sql = @"
+        SELECT 
+            P.ParentSanadID AS parentSanadId,
+            P.No_Sanad AS noSanad, 
+            P.Date_In AS dateIn,
+            P.OtherParentSharh AS sharh,
+            SUM(S.Mab_Bes) AS sumMabBes, 
+            SUM(S.Mab_Bed) AS sumMabBed,
+            ABS(SUM(S.Mab_Bes)) - ABS(SUM(S.Mab_Bed)) AS diff
+        FROM ParentSanad P
+        INNER JOIN Sanad S ON P.ParentSanadID = S.ParentSanadCode
+        GROUP BY P.ParentSanadID, P.No_Sanad, P.Date_In, P.OtherParentSharh
+        HAVING ABS(SUM(S.Mab_Bes)) <> ABS(SUM(S.Mab_Bed))
+        ORDER BY P.No_Sanad";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        return await conn.QueryAsync<dynamic>(new CommandDefinition(sql, cancellationToken: ct));
+    }
+
+    // ==========================================
+    // گزارش ۲: توالی اسناد (دقیقاً مثل دلفی)
+    // ==========================================
+    public async Task<IEnumerable<dynamic>> GetTavaliAsnadAsync(long orgId, long fyId, CancellationToken ct = default)
+    {
+        // واکشی وضعیت سند هم برای اینکه در جدول نمایش دهیم
+        var sql = "SELECT ParentSanadID AS parentSanadId, No_Sanad AS noSanad, Date_In AS dateIn, OtherParentSharh AS sharh, Vazeit as vazeit FROM ParentSanad ORDER BY No_Sanad, Date_In";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        var list = (await conn.QueryAsync<dynamic>(new CommandDefinition(sql, cancellationToken: ct))).ToList();
+
+        var result = new List<dynamic>();
+        int expectedNo = 1;
+        string prevDate = "";
+
+        foreach (var item in list)
+        {
+            int actualNo = (int)item.noSanad;
+            string actualDate = (string)item.dateIn;
+
+            // ۱. چک کردن پرش شماره سند (منطق دلفی: نشان دادن شماره‌های گم‌شده)
+            if (expectedNo < actualNo)
+            {
+                for (int missing = expectedNo; missing < actualNo; missing++)
+                {
+                    result.Add(new
+                    {
+                        parentSanadId = (long?)null,
+                        noSanad = missing,
+                        expectedNo = missing,
+                        dateIn = (string?)null,
+                        sharh = "شماره سند در سیستم ثبت نشده است",
+                        vazeit = (int?)null,
+                        errorType = "پرش شماره",
+                        errorDesc = $"شماره {missing} در توالی اسناد وجود ندارد."
+                    });
+                }
+            }
+
+            // ۲. چک کردن به هم ریختگی تاریخ
+            if (!string.IsNullOrEmpty(prevDate) && string.Compare(actualDate, prevDate) < 0)
+            {
+                result.Add(new
+                {
+                    parentSanadId = (long)item.parentSanadId,
+                    noSanad = actualNo,
+                    expectedNo = actualNo,
+                    dateIn = actualDate,
+                    sharh = (string)item.sharh,
+                    vazeit = (int)item.vazeit,
+                    errorType = "تداخل تاریخ",
+                    errorDesc = $"تاریخ سند از سند قبلی ({prevDate}) کوچکتر است."
+                });
+            }
+
+            prevDate = actualDate;
+            expectedNo = actualNo + 1;
+        }
+
+        return result;
+    }
+
+    // ==========================================
+    // گزارش ۳: ماهیت حساب (دقیقاً مثل دلفی)
+    // ==========================================
+    // ==========================================
+    // گزارش ۳: ماهیت حساب (استفاده از ویو دلفی)
+    // ==========================================
+    public async Task<IEnumerable<dynamic>> GetMahiyatMandehAsync(long orgId, long fyId, CancellationToken ct = default)
+    {
+        // استفاده از ویو VW_SelectHesab که تمام سطوح را دارد
+        var sql = @"
+        SELECT 
+            V.Code_Col AS codeCol,
+            ISNULL(V.Code_Moein, 0) AS codeMoein,
+            ISNULL(V.Code_Tafzil, 0) AS codeTafzil,
+            ISNULL(V.NameCoding, '') AS hesabName,
+            V.Mahiat AS mahiat,
+            ISNULL(S.SumBed, 0) AS sumBed,
+            ISNULL(S.SumBes, 0) AS sumBes
+        FROM VW_SelectHesab V
+        LEFT JOIN (
+            -- تجمیع مبالغ از جدول اسناد (دقیقاً مثل ساب‌کوئری دلفی)
+            SELECT 
+                Code_Col, 
+                ISNULL(Code_Moein, 0) AS Code_Moein, 
+                ISNULL(Code_Tafzil, 0) AS Code_Tafzil,
+                SUM(ISNULL(Mab_Bed, 0)) AS SumBed,
+                SUM(ISNULL(Mab_Bes, 0)) AS SumBes
+            FROM Sanad
+            GROUP BY Code_Col, Code_Moein, Code_Tafzil
+        ) S ON V.Code_Col = S.Code_Col 
+           AND ISNULL(V.Code_Moein, 0) = S.Code_Moein 
+           AND ISNULL(V.Code_Tafzil, 0) = S.Code_Tafzil
+        WHERE 
+            -- منطق دلفی: فقط حساب‌هایی که مانده‌شان (بستانکار - بدهکار) خلاف ماهیت است
+            ( (S.SumBes - S.SumBed) > 0 AND V.Mahiat = 1 )
+            OR 
+            ( (S.SumBes - S.SumBed) < 0 AND V.Mahiat = 2 )
+        ORDER BY V.Code_Col, V.Code_Moein, V.Code_Tafzil";
+
+        await using var conn = _factory.CreateTenantConnection(orgId, fyId);
+        return await conn.QueryAsync<dynamic>(new CommandDefinition(sql, cancellationToken: ct));
+    }
+
 }

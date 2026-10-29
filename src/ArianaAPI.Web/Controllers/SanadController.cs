@@ -402,4 +402,39 @@ public class SanadController : ControllerBase
             return StatusCode(500, new { error = "خطا در ورود اسناد: " + ex.Message });
         }
     }
+
+    // ═══════════════════════════════════════════
+    //  🛡️ کنترل و بررسی اسناد (گزارشات)
+    // ═══════════════════════════════════════════
+
+    [HttpGet("control/moghayerat")]
+    public async Task<IActionResult> GetMoghayerat(CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        // ⭐ استفاده از _repo که در بالای کنترلر تعریف شده
+        var data = await _repo.GetMoghayeratAsnadAsync(orgId, fyId, ct);
+        return Ok(data);
+    }
+
+    [HttpGet("control/tavali")]
+    public async Task<IActionResult> GetTavali(CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        var data = await _repo.GetTavaliAsnadAsync(orgId, fyId, ct);
+        return Ok(data);
+    }
+
+    [HttpGet("control/mahiyat")]
+    public async Task<IActionResult> GetMahiyat(CancellationToken ct)
+    {
+        var orgId = User.GetOrgId();
+        var fyId = User.GetFyId();
+
+        var data = await _repo.GetMahiyatMandehAsync(orgId, fyId, ct);
+        return Ok(data);
+    }
 }
